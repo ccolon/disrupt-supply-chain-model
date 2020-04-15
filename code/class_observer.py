@@ -4,7 +4,7 @@ import pandas as pd
 import networkx as nx
 import geopandas as gpd
 
-from functions import rescale_values, generate_basemap
+from functions import rescale_values
 
 
 class Observer(object):
