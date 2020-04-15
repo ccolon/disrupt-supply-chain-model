@@ -1,7 +1,4 @@
 import networkx as nx
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
 import geopandas as gpd
 import logging
 
@@ -212,28 +209,6 @@ class TransportNetwork(nx.Graph):
                 if commercial_link.pid in self.node[route_segment[0]]['shipments'].keys():
                     del self.node[route_segment[0]]['shipments'][commercial_link.pid]
 
-
-    def plot(self, all_edges_data):
-        fig, ax = plt.subplots(figsize=(12, 12))
-        ax.set_aspect('equal')
-        all_edges_data.plot(ax=ax, color='grey')
-        all_edges_data.loc[all_edges_data['link'].isin(nx.get_edge_attributes(self, "link").values()), :].plot(ax=ax, color='black')
-        plt.show();
-        
-
-    def plot_with_flows(self, all_edges_data, sectors=None):
-        fig, ax = plt.subplots(figsize=(12, 12))
-        ax.set_aspect('equal')
-        all_edges_data.plot(ax=ax, color='grey') # plot all roads
-        self.compute_flow_per_segment(sectors) # compute flow to display
-        edge_to_plot = gpd.GeoDataFrame(data={
-            'geometry': list(nx.get_edge_attributes(self, "geometry").values()), 
-            'flow': list(nx.get_edge_attributes(self, "flow_999").values()), 
-        }).set_geometry('geometry')
-        edge_to_plot.crs = all_edges_data.crs
-        edge_to_plot.plot(ax=ax, color='black', linewidth=rescale_values(edge_to_plot['flow'], 1, 3))
-        plt.show()
-    
     
     def compute_flow_per_segment(self, sectors=['total']):
         for edge in self.edges():

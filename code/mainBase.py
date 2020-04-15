@@ -5,9 +5,6 @@ if (len(sys.argv)<=1):
 # Import modules
 import os
 import networkx as nx
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
 import pandas as pd
 import time
 import random
