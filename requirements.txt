@@ -1,0 +1,6 @@
+Fiona==1.8.4
+geopandas==0.3.0
+networkx==2.1
+numpy==1.15.4
+pandas==0.23.0
+Shapely==1.6.4.post2
