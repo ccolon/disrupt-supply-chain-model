@@ -1,3 +1,4 @@
 input/
 output/
 tmp/
+code/__pycache__/
