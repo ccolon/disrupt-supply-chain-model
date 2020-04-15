@@ -2,7 +2,6 @@ import numpy as np
 import networkx as nx
 import pandas as pd
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import math
 import json
 import os
@@ -293,50 +292,6 @@ def rescale_values(input_list, minimum=0.1, maximum=1, max_val=None, alpha=1):
         return [0.5 * maximum] * len(input_list)
     else:
         return [minimum + (((val - min_val) / (max_val - min_val))**alpha) * (maximum - minimum) for val in input_list]
-
-
-def plot_firm_on_map(all_edges_data, all_nodes_data, firm_list):
-    fig, ax = plt.subplots(figsize=(12, 12))
-    ax.set_aspect('equal')
-    all_edges_data.plot(ax=ax, color='grey', zorder=0) # plot all roads
-    
-    firm_locations = pd.Series([firm.location for firm in firm_list], name="nb_firms")
-    nb_firms_per_location = firm_locations.value_counts().reset_index().rename(columns={"index":"nodenumber"})
-    nodes_to_plot = pd.merge(nb_firms_per_location, all_nodes_data, how='inner', on='nodenumber')[['nb_firms', 'geometry']].set_geometry('geometry')
-    nodes_to_plot.plot(ax=ax, color='blue', markersize=rescale_values(nodes_to_plot['nb_firms'], 10, 30))
-    plt.show()
-
-    
-def prepare_tables_for_plotting(transport_network, firm_list):
-    transport_edges = gpd.GeoDataFrame(data={
-        'type': list(nx.get_edge_attributes(transport_network, "type").values()),
-        'link': list(nx.get_edge_attributes(transport_network, "link").values()),
-        'node_tuple': list(nx.get_edge_attributes(transport_network, "node_tuple").values()), 
-        'geometry': list(nx.get_edge_attributes(transport_network, "geometry").values()) 
-    }).set_geometry('geometry')
-    
-    transport_nodes = gpd.GeoDataFrame(data={
-        'type': list(nx.get_node_attributes(transport_network, "type").values()),
-        'nodenumber': list(nx.get_node_attributes(transport_network, "nodenumber").values()), 
-        'geometry': list(nx.get_node_attributes(transport_network, "geometry").values())
-    }).set_geometry('geometry')
-
-    firm_nodes = gpd.GeoDataFrame(data={
-        'pid': [firm.pid for firm in firm_list], 
-        'geometry': [firm.geometry for firm in firm_list]
-    }).set_geometry('geometry')
-    
-    return {'transport_edges':transport_edges, 'transport_nodes':transport_nodes, 'firm_nodes':firm_nodes}
-
-
-def generate_basemap(transport_network, firm_list, plot_size, plot_firms=True):
-    basemap = prepare_tables_for_plotting(transport_network, firm_list)
-    fig, ax = plt.subplots(figsize=(plot_size, plot_size))
-    ax.set_aspect('equal')
-    basemap['transport_edges'].plot(ax=ax, color='lightgrey', zorder=0) # plot all roads
-    if plot_firms:
-        basemap['firm_nodes'].plot(ax=ax, color='blue', markersize=30, zorder=100)
-    return fig, ax, basemap
 
 
 def compute_distance(x0, y0, x1, y1):
