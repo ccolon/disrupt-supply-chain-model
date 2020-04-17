@@ -25,6 +25,8 @@ from class_observer import Observer
 from class_transport_network import TransportNetwork
 
 ### Start run
+input_folder = "Tanzania"
+
 export = True
 export_per_firm = True
 export_time_series = False
@@ -86,7 +88,7 @@ logging.info('Simulation '+timestamp+' starting')
 
 
 ### Load dictionnaries
-input_IO_filename = os.path.join('input', 'input_IO.xlsx')
+input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 dic = loadDictionnaries(input_IO_filename)
 
 
@@ -98,12 +100,12 @@ variability_coef = 0.44 # USD/hour
 transport_cost_per_tonkm = {'road': {'paved':0.07, 'unpaved':0.1}} #USD/(ton*km)
 
 if sys.argv[1] == "0":
-    road_nodes_filename = os.path.join('input', 'tanroads_nodes_main_all_2017_adj.shp')
-    road_edges_filename = os.path.join('input', 'tanroads_main_all_2017_adj.shp')
+    road_nodes_filename = os.path.join('input', input_folder, 'tanroads_nodes_main_all_2017_adj.shp')
+    road_edges_filename = os.path.join('input', input_folder, 'tanroads_main_all_2017_adj.shp')
     additional_road_edges = None
     pickle_filename = 'transport_network_base_pickle'
     if new_roads:
-        additional_road_edges = os.path.join('input', new_roads_filename)
+        additional_road_edges = os.path.join('input', input_folder, new_roads_filename)
         pickle_filename = 'transport_network_modified_pickle'
     logging.info('Creating transport network. Speeds: '+str(speeds)+', travel_cost_of_time: '+str(travel_cost_of_time))
     T = createTransportNetwork(road_nodes_filename, road_edges_filename, speeds, travel_cost_of_time, variability, variability_coef, transport_cost_per_tonkm, additional_road_edges=additional_road_edges)
@@ -127,8 +129,8 @@ else:
 
 ### Firm and OD table
 nb_sectors = 'all'
-table_district_sector_importance_filaneme = os.path.join('input', 'input_table_district_sector_importance.xlsx')
-odpoint_filename = os.path.join('input', 'input_odpoints.xlsx')
+table_district_sector_importance_filaneme = os.path.join('input', input_folder, 'input_table_district_sector_importance.xlsx')
+odpoint_filename = os.path.join('input', input_folder, 'input_odpoints.xlsx')
 logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', importance_threshold: '+str(importance_threshold))
 firm_table, od_table = rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, nb_top_district_per_sector, dic,\
     export_firm_table=export, export_ODpoint_table=export, exp_folder=exp_folder)
@@ -150,7 +152,7 @@ logging.info('Sectors present are: '+str([dic['sectorId_to_sectorName'][sector_i
 firm_list = loadTechnicalCoefficients(input_IO_filename, firm_list, io_threshold)
 logging.info('Technical coefficient loaded. io_threshold: '+str(io_threshold))
 if safety_days == 'inputed':
-    dic_sector_inventory = pd.read_excel(os.path.join('input', 'input_inventory.xlsx'), encoding='utf-8').set_index(['sector', 'input_sector'])['selected_weekly_inventory']
+    dic_sector_inventory = pd.read_excel(os.path.join('input', input_folder, 'input_inventory.xlsx'), encoding='utf-8').set_index(['sector', 'input_sector'])['selected_weekly_inventory']
     if minimum_invent is not None:
         dic_sector_inventory[dic_sector_inventory<minimum_invent] = minimum_invent
     dic_sector_inventory = dic_sector_inventory.to_dict()
@@ -179,17 +181,17 @@ T_toplot =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!='virt
 
 if nodeedge_tested == 'important':
     if disruption_duration==1:
-        nodes_tested = pd.read_csv(os.path.join('input', 'top_node_short_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', 'top_edge_short_300.csv'), header=None).iloc[:,0].tolist()
+        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_short_300.csv'), header=None).iloc[:,0].tolist()
+        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_short_300.csv'), header=None).iloc[:,0].tolist()
     elif disruption_duration==2:
-        nodes_tested = pd.read_csv(os.path.join('input', 'top_node_duration2_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist()
+        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_duration2_300.csv'), header=None).iloc[:,0].tolist()
+        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist()
     elif disruption_duration==3:
-        nodes_tested = pd.read_csv(os.path.join('input', 'top_node_duration3_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist()
+        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_duration3_300.csv'), header=None).iloc[:,0].tolist()
+        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist()
     else:
-        nodes_tested = pd.read_csv(os.path.join('input', 'top_node_long_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist() #############
+        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_long_300.csv'), header=None).iloc[:,0].tolist()
+        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist() #############
         
 elif nodeedge_tested == 'specific':
     node_tanga = [5305, 5397]
@@ -212,18 +214,18 @@ elif nodeedge_tested == 'all':
     
 elif nodeedge_tested == 'all_sorted':
     if (disruption_duration==1) and (~model_IO):
-        nodes_tested = pd.read_csv(os.path.join('input', 'all_nodes_short_ranked.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', 'all_edges_short_ranked.csv'), header=None).iloc[:,0].tolist()
+        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'all_nodes_short_ranked.csv'), header=None).iloc[:,0].tolist()
+        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'all_edges_short_ranked.csv'), header=None).iloc[:,0].tolist()
     else:
-        nodes_tested = pd.read_csv(os.path.join('input', 'all_nodes_long_ranked.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', 'all_edges_long_ranked.csv'), header=None).iloc[:,0].tolist() #############
+        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'all_nodes_long_ranked.csv'), header=None).iloc[:,0].tolist()
+        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'all_edges_long_ranked.csv'), header=None).iloc[:,0].tolist() #############
     
 if isinstance(skip_first, int):
     nodes_tested = nodes_tested[skip_first:]
     edges_tested = edges_tested[skip_first:]
     
 ### Create agents: Households
-population_filename = os.path.join('input', 'input_population.xlsx')
+population_filename = os.path.join('input', input_folder, 'input_population.xlsx')
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
 firm_table = defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution, dic, export_firm_table=export, exp_folder=exp_folder)
 logging.info('Creating households and loaded their purchase plan')
@@ -238,7 +240,7 @@ logging.info('Tanzanian households are selecting their Tanzanian retailers (dome
 households.select_suppliers(G, firm_list, mode='inputed')
 logging.info('Tanzanian exporters are being selected by purchasing countries (export B2B flows)')
 logging.info('and trading countries are being connected (transit flows)')
-pc_of_exporting_firms_per_sector = pd.read_excel(os.path.join('input', 'input_exportingfirms.xlsx')).set_index('exporting_sector')['percentage']
+pc_of_exporting_firms_per_sector = pd.read_excel(os.path.join('input', input_folder, 'input_exportingfirms.xlsx')).set_index('exporting_sector')['percentage']
 for country in country_list:
     country.select_suppliers(G, firm_list, country_list, pc_of_exporting_firms_per_sector)
 logging.info('Tanzanian firms are selecting their Tanzanian and international suppliers (import B2B flows) (domestric B2B flows). Weight localisation is '+str(weight_localization))
