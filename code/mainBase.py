@@ -30,12 +30,12 @@ export_per_firm = True
 export_time_series = False
 export_flows = False
 
-disruption_duration = 2 #########################
+disruption_duration = 1 #########################
 criticality_on = 'edges'
 congestion = True
 delta_input = True
 
-importance_threshold = 0.003
+importance_threshold = 0.03
 nb_top_district_per_sector = 1
 safety_days = 'inputed'
 added_inventory = 0
