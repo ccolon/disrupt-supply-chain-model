@@ -25,19 +25,26 @@ from class_observer import Observer
 from class_transport_network import TransportNetwork
 
 ### Start run
-input_folder = "Tanzania"
+input_folder = "Tanzania" #parametrized
 
-export = True
-export_per_firm = True
-export_time_series = False
-export_flows = False
+export_log = True #parametrized
+export_criticality = True #parametrized
+export_per_firm = False #parametrized
+export_time_series = False #parametrized
+export_flows = False #parametrized
+export_firm_table = True #parametrized
+export_odpoint_table = True #parametrized
+export_country_table = False #parametrized
+export_edgelist_table = False #parametrized
+export_inventories = False #parametrized
+export_district_sector_table = False #parametrized
 
 disruption_duration = 1 #########################
 criticality_on = 'edges'
 congestion = True
 delta_input = True
 
-importance_threshold = 0.03
+importance_threshold = 0.05 #0.003
 nb_top_district_per_sector = 1
 safety_days = 'inputed'
 added_inventory = 0
@@ -69,9 +76,20 @@ duration_dic = {0:2, 1:5, 2:9, 3:12, 4:15}
 Tfinal = duration_dic[disruption_duration]
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-if export:
+
+# If there is sth to export, then we create the output folder
+exporting_sth = [
+    export_log, export_criticality, export_per_firm, export_time_series, export_flows,
+    export_firm_table, export_odpoint_table, export_country_table, export_edgelist_table,
+    export_inventories, export_district_sector_table
+]
+if any(exporting_sth):
     exp_folder = os.path.join('output', timestamp)
     os.mkdir(exp_folder)
+else:
+    exp_folder = None
+
+if export_log:
     log_filename = os.path.join(exp_folder, 'exp.log')
     importlib.reload(logging)
     logging.basicConfig(
@@ -81,11 +99,10 @@ if export:
         )
     logging.getLogger().addHandler(logging.StreamHandler())
 else:
-    exp_folder = None
     importlib.reload(logging)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logging.info('Simulation '+timestamp+' starting')
 
+logging.info('Simulation '+timestamp+' starting')
 
 ### Load dictionnaries
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
@@ -133,7 +150,7 @@ table_district_sector_importance_filaneme = os.path.join('input', input_folder, 
 odpoint_filename = os.path.join('input', input_folder, 'input_odpoints.xlsx')
 logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', importance_threshold: '+str(importance_threshold))
 firm_table, od_table = rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, nb_top_district_per_sector, dic,\
-    export_firm_table=export, export_ODpoint_table=export, exp_folder=exp_folder)
+    export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
 dic['odPointId_to_districtCode'] = od_table.set_index('od_point')['loc_small_code'].to_dict()
 dic['location_to_region'] = getDicLocationRegion(od_table)
 dic['firmId_to_location'] = getDicIdLocation(firm_table)
@@ -227,7 +244,7 @@ if isinstance(skip_first, int):
 ### Create agents: Households
 population_filename = os.path.join('input', input_folder, 'input_population.xlsx')
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
-firm_table = defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution, dic, export_firm_table=export, exp_folder=exp_folder)
+firm_table = defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution, dic, export_firm_table=export_firm_table, exp_folder=exp_folder)
 logging.info('Creating households and loaded their purchase plan')
 households = createHouseholds(firm_table)
 logging.info('Households created')
@@ -289,9 +306,7 @@ elif criticality_on == 'edges':
     logging.info("Nb of edges tested: "+str(len(nodesedges_tested)))
 logging.info(str(len(nodesedges_tested))+" nodes/edges to be tested: "+str(nodesedges_tested))
 
-export_production_per_firm_ODpoint = True
-
-if export:
+if export_criticality:
     with open(os.path.join(exp_folder, 'criticality.csv'), "w") as myfile:
         myfile.write(
             'disrupted_node' \
@@ -318,7 +333,7 @@ if export:
             + ',' + 'computing_time' \
             + "\n")
     
-    
+
 for disrupted_stuff in nodesedges_tested:
     if criticality_on == 'nodes':
         write_disrupted_stuff = str(disrupted_stuff) + ',' + 'NA'
@@ -331,58 +346,64 @@ for disrupted_stuff in nodesedges_tested:
     T.reinitialize_flows_and_disruptions()
     set_initial_conditions(G, firm_list, households, country_list, "equilibrium")
     obs = Observer(firm_list, Tfinal, exp_folder)
-    #obs.collect_data(firm_list, households, 0)
-    if export_production_per_firm_ODpoint:
-        imports = pd.Series({firm.pid: sum([val for key, val in firm.purchase_plan.items() if str(key)[0]=="C"]) for firm in firm_list}, name='imports')
-        production_table = pd.Series({firm.pid: firm.production_target for firm in firm_list}, name='total_production')
-        b2c_share = pd.Series({firm.pid: firm.clients[-1]['share'] if -1 in firm.clients.keys() else 0 for firm in firm_list}, name='b2c_share')
-        export_share = pd.Series({firm.pid: sum([firm.clients[x]['share'] for x in firm.clients.keys() if isinstance(x, str)]) for firm in firm_list}, name='export_share')
-        production_table = pd.concat([production_table, b2c_share, export_share, imports], axis=1)
-        production_table['production_toC'] = production_table['total_production']*production_table['b2c_share']
-        production_table['production_toB'] = production_table['total_production']-production_table['production_toC']
-        production_table['production_exported'] = production_table['total_production']*production_table['export_share']
-        production_table.index.name = 'id'
-        firm_table = firm_table.merge(production_table.reset_index(), on="id", how="left")
-        firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
-        
-        prod_per_sector_ODpoint_table = firm_table.groupby(['location', 'sector_id'])['total_production'].sum().unstack().fillna(0).reset_index()
-        od_table = od_table.merge(prod_per_sector_ODpoint_table.rename(columns={"location":'od_point'}), on='od_point', how="left")
-        od_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
-        
-        country_table = pd.DataFrame({
-            'country_id':[country.pid for country in country_list],
-            'country_name':[country.pid for country in country_list],
-            'purchases':[sum(country.purchase_plan.values()) for country in country_list],
-            'purchases_from_countries':[sum([value if str(key)[0]=='C' else 0 for key, value in country.purchase_plan.items()]) for country in country_list]
-        })
-        country_table['purchases_from_firms'] = country_table['purchases'] - country_table['purchases_from_countries']
-        country_table.to_excel(os.path.join(exp_folder, 'country_table.xlsx'), index=False)
-        export_production_per_firm_ODpoint = False
-        
-        edgelist_table = pd.DataFrame(extractEdgeList(G))
-        edgelist_table.to_excel(os.path.join(exp_folder, 'edgelist_table.xlsx'), index=False)
-        logging.info("Average distance all: "+str(edgelist_table['distance'].mean()))
-        boolindex = (edgelist_table['supplier_location']!=-1) & (edgelist_table['buyer_location']!=-1)
-        logging.info("Average distance only non virtual: "+str(edgelist_table.loc[boolindex, 'distance'].mean()))
-        logging.info("Average weighted distance: "+str((edgelist_table['distance']*edgelist_table['flow']).sum()/edgelist_table['flow'].sum()))
-        logging.info("Average weighted distance non virtual: "+str((edgelist_table.loc[boolindex, 'distance']*edgelist_table.loc[boolindex, 'flow']).sum()/edgelist_table.loc[boolindex, 'flow'].sum()))
-        
-        # Evaluate total inventory per good type
-        inventories = {}
-        for firm in firm_list:
-            for input_id, inventory in firm.inventory.items():
-                if input_id not in inventories.keys():
-                    inventories[input_id] = inventory
-                else:
-                    inventories[input_id] += inventory
-                    
-        pd.Series(inventories).to_excel(os.path.join(exp_folder, 'inventories.xlsx'))
     logging.info("Initial conditions set")
-    
+    #obs.collect_data(firm_list, households, 0)
 
-    
-    
-    ### Do simulation
+    ### There are a number of export file that we export only once, after setting the initial conditions
+    if disrupted_stuff == nodesedges_tested[0]:
+        logging.info("Exporting files")
+        if export_firm_table or export_odpoint_table:
+            imports = pd.Series({firm.pid: sum([val for key, val in firm.purchase_plan.items() if str(key)[0]=="C"]) for firm in firm_list}, name='imports')
+            production_table = pd.Series({firm.pid: firm.production_target for firm in firm_list}, name='total_production')
+            b2c_share = pd.Series({firm.pid: firm.clients[-1]['share'] if -1 in firm.clients.keys() else 0 for firm in firm_list}, name='b2c_share')
+            export_share = pd.Series({firm.pid: sum([firm.clients[x]['share'] for x in firm.clients.keys() if isinstance(x, str)]) for firm in firm_list}, name='export_share')
+            production_table = pd.concat([production_table, b2c_share, export_share, imports], axis=1)
+            production_table['production_toC'] = production_table['total_production']*production_table['b2c_share']
+            production_table['production_toB'] = production_table['total_production']-production_table['production_toC']
+            production_table['production_exported'] = production_table['total_production']*production_table['export_share']
+            production_table.index.name = 'id'
+            firm_table = firm_table.merge(production_table.reset_index(), on="id", how="left")
+            prod_per_sector_ODpoint_table = firm_table.groupby(['location', 'sector_id'])['total_production'].sum().unstack().fillna(0).reset_index()
+            od_table = od_table.merge(prod_per_sector_ODpoint_table.rename(columns={"location":'od_point'}), on='od_point', how="left")
+
+            if export_firm_table:
+                firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
+            
+            if export_odpoint_table:
+                od_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
+            
+        if export_country_table:
+            country_table = pd.DataFrame({
+                'country_id':[country.pid for country in country_list],
+                'country_name':[country.pid for country in country_list],
+                'purchases':[sum(country.purchase_plan.values()) for country in country_list],
+                'purchases_from_countries':[sum([value if str(key)[0]=='C' else 0 for key, value in country.purchase_plan.items()]) for country in country_list]
+            })
+            country_table['purchases_from_firms'] = country_table['purchases'] - country_table['purchases_from_countries']
+            country_table.to_excel(os.path.join(exp_folder, 'country_table.xlsx'), index=False)
+
+        if export_edgelist_table:
+            edgelist_table = pd.DataFrame(extractEdgeList(G))
+            edgelist_table.to_excel(os.path.join(exp_folder, 'edgelist_table.xlsx'), index=False)
+            logging.info("Average distance all: "+str(edgelist_table['distance'].mean()))
+            boolindex = (edgelist_table['supplier_location']!=-1) & (edgelist_table['buyer_location']!=-1)
+            logging.info("Average distance only non virtual: "+str(edgelist_table.loc[boolindex, 'distance'].mean()))
+            logging.info("Average weighted distance: "+str((edgelist_table['distance']*edgelist_table['flow']).sum()/edgelist_table['flow'].sum()))
+            logging.info("Average weighted distance non virtual: "+str((edgelist_table.loc[boolindex, 'distance']*edgelist_table.loc[boolindex, 'flow']).sum()/edgelist_table.loc[boolindex, 'flow'].sum()))
+            
+        if export_inventories:
+            # Evaluate total inventory per good type
+            inventories = {}
+            for firm in firm_list:
+                for input_id, inventory in firm.inventory.items():
+                    if input_id not in inventories.keys():
+                        inventories[input_id] = inventory
+                    else:
+                        inventories[input_id] += inventory
+                        
+            pd.Series(inventories).to_excel(os.path.join(exp_folder, 'inventories.xlsx'))
+
+    ### Run the simulation
     disruption_time = 2 # cannot be below 2
     obs.disruption_time = disruption_time
     if isinstance(disrupted_stuff, list):
@@ -393,10 +414,10 @@ for disrupted_stuff in nodesedges_tested:
         disrupted_roads = {"edge_link":[], "node_nb":disrupted_stuff}
     elif criticality_on == 'edges':
         disrupted_roads = {"edge_link":disrupted_stuff, "node_nb":[]}
-    print(disrupted_roads)
+
     flow_types_to_observe = present_sectors+['domestic', 'transit', 'import', 'export', 'total']
-    logging.debug('Simulation is supposed to last for '+str(Tfinal)+' time steps.')
-    logging.info('Disruption will occur at time '+str(disruption_time)+
+    logging.debug('Simulation will last '+str(Tfinal)+' time steps.')
+    logging.info('A disruption will occur at time '+str(disruption_time)+
                  ', it will affect '+str(len(disrupted_roads['node_nb']))+
                  ' nodes and '+str(len(disrupted_roads['edge_link']))+ ' edges for '+str(disruption_duration) +' time steps.')
     
@@ -445,16 +466,17 @@ for disrupted_stuff in nodesedges_tested:
         allAgentsReceiveProducts(G, firm_list, households, country_list, T)
         T.update_road_state()
         obs.collect_data2(firm_list, households, country_list, t)
-        if export and export_flows and (t==1) and False:
+        if export_flows and (t==1) and False:
             obs.analyzeFlows(G, firm_list, exp_folder, dic)
         logging.debug('End of t='+str(t))
     logging.info("Time loop completed, "+str((time.time()-t0)/60)+" min")
 
 
     obs.evaluate_results(T, households, disrupted_roads, disruption_duration, per_firm=export_per_firm, export_folder=None)
-    if export and export_time_series:
+    if export_time_series:
         obs.export_time_series(exp_folder)
-    if export:
+
+    if export_criticality:
         with open(os.path.join(exp_folder, 'criticality.csv'), "a") as myfile:
             myfile.write(write_disrupted_stuff \
                 + ',' + str(disruption_duration) \
@@ -477,19 +499,20 @@ for disrupted_stuff in nodesedges_tested:
                 + ',' + str(obs.tonkm_transported_normal) \
                 + ',' + str(obs.tonkm_transported_disruption) \
                 + ',' + str((time.time()-t0)/60) \
+
                 + "\n")
-        if export_per_firm:
-            if disrupted_stuff == nodesedges_tested[0]:
-                logging.debug('export extra spending and consumption with header')
-                with open(os.path.join(exp_folder, 'extra_spending.csv'), 'w') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_extra_spending_per_firm}).transpose().to_csv(f, header=True)
-                with open(os.path.join(exp_folder, 'extra_consumption.csv'), 'w') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=True)
-            else:
-                with open(os.path.join(exp_folder, 'extra_spending.csv'), 'a') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_extra_spending_per_firm}).transpose().to_csv(f, header=False)
-                with open(os.path.join(exp_folder, 'extra_consumption.csv'), 'a') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=False)
+    if export_per_firm:
+        if disrupted_stuff == nodesedges_tested[0]:
+            logging.debug('export extra spending and consumption with header')
+            with open(os.path.join(exp_folder, 'extra_spending.csv'), 'w') as f:
+                pd.DataFrame({str(disrupted_stuff): obs.households_extra_spending_per_firm}).transpose().to_csv(f, header=True)
+            with open(os.path.join(exp_folder, 'extra_consumption.csv'), 'w') as f:
+                pd.DataFrame({str(disrupted_stuff): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=True)
+        else:
+            with open(os.path.join(exp_folder, 'extra_spending.csv'), 'a') as f:
+                pd.DataFrame({str(disrupted_stuff): obs.households_extra_spending_per_firm}).transpose().to_csv(f, header=False)
+            with open(os.path.join(exp_folder, 'extra_consumption.csv'), 'a') as f:
+                pd.DataFrame({str(disrupted_stuff): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=False)
     del obs
     
 logging.info("End of criticality analysis")

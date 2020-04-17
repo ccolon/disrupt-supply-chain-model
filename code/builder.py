@@ -153,7 +153,8 @@ def rescaleNbFirms2(sector_ODpoint_filename, nb_sectors, importance_threshold, e
     
     
     
-def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, top, dic, export_firm_table=False, export_ODpoint_table=False, exp_folder=None):
+def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, top, dic, 
+    export_firm_table=False, export_ODpoint_table=False, export_district_sector_table=False, exp_folder=None):
     
     table_district_sector_importance = pd.read_excel(table_district_sector_importance_filaneme)
     table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['importance']!=0]
@@ -174,7 +175,8 @@ def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename,
             for sector in table_district_sector_importance['sector'].unique()
         ])
         filtered_district_sector = pd.concat([filtered_district_sector, top_district_sector]).drop_duplicates()
-    filtered_district_sector.to_excel(os.path.join(exp_folder, 'filtered_district_sector.xlsx'), index=False)
+    if export_district_sector_table:
+        filtered_district_sector.to_excel(os.path.join(exp_folder, 'filtered_district_sector.xlsx'), index=False)
     
     od_sector_table = pd.merge(table_odpoints, filtered_district_sector, how='inner', on='district')
     od_sector_table['importance'] = od_sector_table['importance'] / od_sector_table['nb_odpoints_same_district']
