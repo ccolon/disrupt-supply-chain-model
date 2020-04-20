@@ -30,7 +30,7 @@ class Observer(object):
         self.spending = pd.DataFrame(index=range(0,Tfinal+1), 
                                    columns=["sector_"+str(sector_id) for sector_id in sector_list]+['total'],
                                    data=0)
-        self.av_safety_days = pd.DataFrame(index=range(0,Tfinal+1), 
+        self.av_inventory_duration = pd.DataFrame(index=range(0,Tfinal+1), 
                                    columns=["firm_"+str(firm.pid) for firm in firm_list]+['average'], 
                                    data=0)
         self.flows_snapshot = {}
@@ -62,7 +62,7 @@ class Observer(object):
             'production': firm.production,
             'profit': firm.profit,
             'transport_cost': firm.finance['costs']['transport'],
-            'safety_days': firm.current_safety_days,
+            'inventory_duration': firm.current_inventory_duration,
             'generalized_transport_cost': firm.generalized_transport_cost,
             'usd_transported': firm.usd_transported,
             'tons_transported': firm.tons_transported,
@@ -85,13 +85,13 @@ class Observer(object):
         firms_production = [firm.production for firm in firm_list]
         firms_delta_price = [firm.delta_price_input for firm in firm_list]
         firms_profit = [firm.profit for firm in firm_list]
-        firms_av_safety_days = [pd.Series(list(firm.current_safety_days.values())).mean() for firm in firm_list]
+        firms_av_inventory_duration = [pd.Series(list(firm.current_inventory_duration.values())).mean() for firm in firm_list]
         self.production.loc[t] = firms_production + [sum(firms_production)]
         self.delta_price.loc[t] = firms_delta_price + [sum(firms_delta_price)/len(firms_delta_price)]
         self.profit.loc[t] = firms_profit + [sum(firms_profit)]
         self.consumption.loc[t] = list(households.consumption_per_sector.values()) + [households.consumption]
         self.spending.loc[t] = list(households.spending_per_sector.values()) + [households.spending]
-        self.av_safety_days.loc[t] = firms_av_safety_days + [pd.Series(firms_av_safety_days).mean()]
+        self.av_inventory_duration.loc[t] = firms_av_inventory_duration + [pd.Series(firms_av_inventory_duration).mean()]
         
         
     def collect_data_flows(self, transport_network, t, sectors=None):
@@ -196,14 +196,14 @@ class Observer(object):
         firm_production_ts = pd.DataFrame({t: {firm_id: val['production'] for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
         firm_profit_ts = pd.DataFrame({t: {firm_id: val['profit'] for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
         firm_transportcost_ts = pd.DataFrame({t: {firm_id: val['transport_cost'] for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
-        firm_avsafetydays_ts = pd.DataFrame({t: {firm_id: sum(val['safety_days'].values())/len(val['safety_days'].values()) for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
+        firm_avinventoryduration_ts = pd.DataFrame({t: {firm_id: sum(val['inventory_duration'].values())/len(val['inventory_duration'].values()) for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
         households_consumption_ts = pd.DataFrame({t: val['consumption'] for t, val in self.households.items()}).transpose()
         households_spending_ts = pd.DataFrame({t: val['spending'] for t, val in self.households.items()}).transpose()
         # Export
         firm_production_ts.to_csv(os.path.join(exp_folder, 'firm_production_ts.csv'), sep=',')
         firm_profit_ts.to_csv(os.path.join(exp_folder, 'firm_profit_ts.csv'), sep=',')
         firm_transportcost_ts.to_csv(os.path.join(exp_folder, 'firm_transportcost_ts.csv'), sep=',')
-        firm_avsafetydays_ts.to_csv(os.path.join(exp_folder, 'firm_avsafetydays_ts.csv'), sep=',')
+        firm_avinventoryduration_ts.to_csv(os.path.join(exp_folder, 'firm_avinventoryduration_ts.csv'), sep=',')
         households_consumption_ts.to_csv(os.path.join(exp_folder, 'households_consumption_ts.csv'), sep=',')
         households_spending_ts.to_csv(os.path.join(exp_folder, 'households_spending_ts.csv'), sep=',')
         # Get aggregate time series
@@ -211,7 +211,7 @@ class Observer(object):
             'firm_production': firm_production_ts.sum(axis=1),
             'firm_profit': firm_profit_ts.sum(axis=1),
             'firm_transportcost': firm_transportcost_ts.mean(axis=1),
-            'firm_avsafetydays': firm_avsafetydays_ts.mean(axis=1),
+            'firm_avinventoryduration': firm_avinventoryduration_ts.mean(axis=1),
             'households_consumption': households_consumption_ts.sum(axis=1),
             'households_spending': households_spending_ts.sum(axis=1)
         })

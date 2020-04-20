@@ -1,4 +1,4 @@
-from functions import purchase_planning_function, production_function, evaluate_safety_days, generate_weights, compute_distance_from_arcmin, rescale_values
+from functions import purchase_planning_function, production_function, evaluate_inventory_duration, generate_weights, compute_distance_from_arcmin, rescale_values
 from class_commerciallink import CommercialLink
 import random
 import networkx as nx
@@ -10,7 +10,7 @@ class Firm(object):
     
     def __init__(self, pid, location=0, sector=0, input_mix=None, target_margin=0.2, utilization_rate=0.8,
                  importance=1, long=None, lat=None, geometry=None,
-                 suppliers=None, clients=None, production=0, safety_days=1, reactivity_rate=1, usd_per_ton=2864):
+                 suppliers=None, clients=None, production=0, inventory_duration_target=1, reactivity_rate=1, usd_per_ton=2864):
         # Parameters depending on data
         self.pid = pid
         self.location = location
@@ -24,9 +24,9 @@ class Firm(object):
 
         # Free parameters
         if input_mix is None:
-            self.safety_days = safety_days
+            self.inventory_duration_target = inventory_duration_target
         else:
-            self.safety_days = {key: safety_days for key in input_mix.keys()}
+            self.inventory_duration_target = {key: inventory_duration_target for key in input_mix.keys()}
         self.reactivity_rate = reactivity_rate
         self.eq_production_capacity = production / utilization_rate
         self.utilization_rate = utilization_rate
@@ -52,7 +52,7 @@ class Firm(object):
         self.input_needs = {}
         self.rationing = 1
         self.eq_needs = {}
-        self.current_safety_days = {}
+        self.current_inventory_duration = {}
         self.inventory = {}
         self.product_stock = 0
         self.profit = 0
@@ -76,7 +76,7 @@ class Firm(object):
         self.input_needs = {}
         self.rationing = 1
         self.eq_needs = {}
-        self.current_safety_days = {}
+        self.current_inventory_duration = {}
         self.inventory = {}
         self.product_stock = 0
         self.profit = 0
@@ -244,16 +244,16 @@ class Firm(object):
             ref_input_needs = self.eq_needs
             
         # Evaluate the current safety days
-        self.current_safety_days = {
-            input_id: (evaluate_safety_days(ref_input_needs[input_id], stock) if input_id in ref_input_needs.keys() else 0)
+        self.current_inventory_duration = {
+            input_id: (evaluate_inventory_duration(ref_input_needs[input_id], stock) if input_id in ref_input_needs.keys() else 0)
             for input_id, stock in self.inventory.items()
         }
 
         # Alert if there is less than a day of an input
         if True:
-            for input_id, safety_days in self.current_safety_days.items():
-                if safety_days is not None:
-                    if safety_days < 1 - 1e-6:
+            for input_id, inventory_duration in self.current_inventory_duration.items():
+                if inventory_duration is not None:
+                    if inventory_duration < 1 - 1e-6:
                         if -1 in self.clients.keys():
                             sales_to_hh = self.clients[-1]['share'] * self.production_target
                         else:
@@ -262,8 +262,8 @@ class Firm(object):
             
         # Evaluate purchase plan for each sector
         purchase_plan_per_sector = {
-            input_id: purchase_planning_function(need, self.inventory[input_id], self.safety_days[input_id], self.reactivity_rate)
-            #input_id: purchase_planning_function(need, self.inventory[input_id], self.safety_days_old, self.reactivity_rate)
+            input_id: purchase_planning_function(need, self.inventory[input_id], self.inventory_duration_target[input_id], self.reactivity_rate)
+            #input_id: purchase_planning_function(need, self.inventory[input_id], self.inventory_duration_old, self.reactivity_rate)
             for input_id, need in ref_input_needs.items()
         }
         # Deduce the purchase plan for each supplier

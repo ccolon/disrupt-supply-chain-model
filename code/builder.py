@@ -229,10 +229,10 @@ def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename,
     
     
     
-def createFirms(firm_data, nb_firms='all', safety_days=2, reactivity_rate=0.1, utilization_rate=0.8):
+def createFirms(firm_data, nb_firms='all', inventory_duration_target=2, reactivity_rate=0.1, utilization_rate=0.8):
 
-    if safety_days=='inputed':
-        safety_days = -1
+    if inventory_duration_target=='inputed':
+        inventory_duration_target = -1
     firm_data = firm_data.set_index('id')
     if nb_firms != 'all':
         firm_data = firm_data.iloc[:nb_firms,:]
@@ -246,7 +246,7 @@ def createFirms(firm_data, nb_firms='all', safety_days=2, reactivity_rate=0.1, u
              geometry=firm_data.loc[i, 'geometry'],
              long=float(firm_data.loc[i, 'long']),
              lat=float(firm_data.loc[i, 'lat']),
-             safety_days=safety_days,
+             inventory_duration_target=inventory_duration_target,
              utilization_rate=utilization_rate
         )
         for i in range(0,n)
@@ -257,37 +257,37 @@ def createFirms(firm_data, nb_firms='all', safety_days=2, reactivity_rate=0.1, u
     return firm_list
     
     
-def loadSectorSpecificInventories(firm_list, default_value, dic_sector_inventory=None, random_draw=False, added_inventory=0, list_input_more_inventories=[]):
+def loadSectorSpecificInventories(firm_list, default_value, dic_sector_inventory=None, random_draw=False, extra_inventory_target=0, inputs_with_extra_inventories=[]):
     if dic_sector_inventory is None:
         for firm in firm_list:
-            firm.safety_days = {input_sector: default_value+added_inventory for input_sector in firm.input_mix.keys()}
+            firm.inventory_duration_target = {input_sector: default_value+extra_inventory_target for input_sector in firm.input_mix.keys()}
     else:
         if random_draw:
             for firm in firm_list:
-                firm.safety_days = {}
+                firm.inventory_duration_target = {}
                 for input_sector in firm.input_mix.keys():
                     mean = dic_sector_inventory[(firm.sector, input_sector)]['mean']
                     sd = dic_sector_inventory[(firm.sector, input_sector)]['sd']
                     mu = math.log(mean/math.sqrt(1+sd**2/mean**2))
                     sigma = math.sqrt(math.log(1+sd**2/mean**2))
                     safety_day = np.random.log(mu, sigma)
-                    firm.safety_days[input_sector] = safety_day
+                    firm.inventory_duration_target[input_sector] = safety_day
         else:
             for firm in firm_list:
-                firm.safety_days = {
-                    input_sector: dic_sector_inventory[(firm.sector, input_sector)]+added_inventory 
-                    if input_sector in list_input_more_inventories else dic_sector_inventory[(firm.sector, input_sector)]
+                firm.inventory_duration_target = {
+                    input_sector: dic_sector_inventory[(firm.sector, input_sector)]+extra_inventory_target 
+                    if input_sector in inputs_with_extra_inventories else dic_sector_inventory[(firm.sector, input_sector)]
                     for input_sector in firm.input_mix.keys() 
                 }
-    #logging.info("Inventories: "+str({firm.pid: firm.safety_days for firm in firm_list}))
+    #logging.info("Inventories: "+str({firm.pid: firm.inventory_duration_target for firm in firm_list}))
     return firm_list
     
 
-def loadTechnicalCoefficients(input_IO_filename, firm_list, io_threshold, imports=True):
+def loadTechnicalCoefficients(input_IO_filename, firm_list, io_cutoff, imports=True):
     # Load technical coefficient matrix from data
-    #tech_coef_matrix = load_sectoral_IOmatrix("full", io_threshold)
+    #tech_coef_matrix = load_sectoral_IOmatrix("full", io_cutoff)
     tech_coef_matrix = pd.read_excel(input_IO_filename, sheet_name='tech_coef')
-    tech_coef_matrix = tech_coef_matrix.mask(tech_coef_matrix<=io_threshold, 0)
+    tech_coef_matrix = tech_coef_matrix.mask(tech_coef_matrix<=io_cutoff, 0)
     
     # Limiting nb of sectors to existing firms
     sector_present = list(set([firm.sector for firm in firm_list]))

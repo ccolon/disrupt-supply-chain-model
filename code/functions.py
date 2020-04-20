@@ -74,10 +74,10 @@ def production_function(inputs, input_mix, function_type="Leontief"):
         raise ValueError("Wrong mode selected")
 
         
-def purchase_planning_function(estimated_need, inventory, safety_days=1, reactivity_rate=1):
+def purchase_planning_function(estimated_need, inventory, inventory_duration_target=1, reactivity_rate=1):
     """Decide the quantity of each input to buy according to a dynamical rule
     """
-    target_inventory = (1 + safety_days) * estimated_need
+    target_inventory = (1 + inventory_duration_target) * estimated_need
     if inventory >= target_inventory + estimated_need:
         return 0
     elif inventory >= target_inventory:
@@ -86,7 +86,7 @@ def purchase_planning_function(estimated_need, inventory, safety_days=1, reactiv
         return (1 - reactivity_rate) * estimated_need + reactivity_rate * (estimated_need + target_inventory - inventory)
 
     
-def evaluate_safety_days(estimated_need, inventory):
+def evaluate_inventory_duration(estimated_need, inventory):
     if estimated_need == 0:
         return None
     else:
@@ -161,7 +161,7 @@ def initilize_at_equilibrium(graph, firm_list, households, country_list):
         firm.production_capacity = firm.eq_production_capacity
         firm.evaluate_input_needs()
         firm.eq_needs = firm.input_needs
-        firm.inventory = {input_id: need * (1+firm.safety_days[input_id]) for input_id, need in firm.input_needs.items()}
+        firm.inventory = {input_id: need * (1+firm.inventory_duration_target[input_id]) for input_id, need in firm.input_needs.items()}
         firm.decide_purchase_plan()
         firm.send_purchase_orders(graph)
         firm.eq_finance['sales'] = firm.production

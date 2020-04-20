@@ -24,56 +24,63 @@ from class_firm import Firm
 from class_observer import Observer
 from class_transport_network import TransportNetwork
 
+# Import parameters
+project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(1, project_path)
+from parameter.parameters_default import *
+from parameter.parameters import *
+
 ### Start run
-input_folder = "Tanzania" #parametrized
+# input_folder = "Tanzania" #parametrized
 
-export_log = True #parametrized
-export_criticality = True #parametrized
-export_per_firm = False #parametrized
-export_time_series = False #parametrized
-export_flows = False #parametrized
-export_firm_table = True #parametrized
-export_odpoint_table = True #parametrized
-export_country_table = False #parametrized
-export_edgelist_table = False #parametrized
-export_inventories = False #parametrized
-export_district_sector_table = False #parametrized
+# export_log = True #parametrized
+# export_criticality = True #parametrized
+# export_per_firm = False #parametrized
+# export_time_series = False #parametrized
+# export_flows = False #parametrized
+# export_firm_table = True #parametrized
+# export_odpoint_table = True #parametrized
+# export_country_table = False #parametrized
+# export_edgelist_table = False #parametrized
+# export_inventories = False #parametrized
+# export_district_sector_table = False #parametrized
 
-disruption_duration = 1 #########################
-criticality_on = 'edges'
-congestion = True
-delta_input = True
+# disruption_duration = 1 #parametrized
+# disrupt_nodes_or_edges = 'edges' #parametrized
+# congestion = True #parametrized
+# propagate_input_price_change = True #parametrized
 
-importance_threshold = 0.05 #0.003
-nb_top_district_per_sector = 1
-safety_days = 'inputed'
-added_inventory = 0
-if added_inventory>0:
-    if sys.argv[2] == 'import':
-        list_input_more_inventories = ['import']
-    elif sys.argv[2] == 'all':
-        list_input_more_inventories = 'all'
-    else:
-        list_input_more_inventories = [int(x) for x in sys.argv[2].split(",")]
-    print(list_input_more_inventories)
-else:
-    list_input_more_inventories=[]
-minimum_invent = None
-reactivity_rate = 0.1
-utilization_rate = 0.8
-io_threshold = 0.01
-rationing_mode = 'household_first'
+# district_sector_cutoff = 0.05 #0.003  #parametrized
+# nb_top_district_per_sector = 1  #parametrized
+# inventory_duration_target = 'inputed'  #parametrized
+# extra_inventory_target = 0  #parametrized
+# inputs_with_extra_inventories = 'all' #parametrized
+# if extra_inventory_target>0:
+#     if sys.argv[2] == 'import':
+#         inputs_with_extra_inventories = ['import']
+#     elif sys.argv[2] == 'all':
+#         inputs_with_extra_inventories = 'all'
+#     else:
+#         inputs_with_extra_inventories = [int(x) for x in sys.argv[2].split(",")]
+#     print(inputs_with_extra_inventories)
+# else:
+#     inputs_with_extra_inventories=[]
+# minimum_invent = None
+# reactivity_rate = 0.1 #parametrized
+# utilization_rate = 0.8 #parametrized
+# io_cutoff = 0.01 #parametrized
+# rationing_mode = 'household_first' #parametrized
 
-nb_suppliers_per_sector = 1
-new_roads = False
-new_roads_filename = 'new_road_edges_T1_T7.shp'
-weight_localization = 1
+# nb_suppliers_per_sector = 1 #parametrized
+# weight_localization = 1 #parametrized
+# new_roads = False #parametrized
+# # new_roads_filename = 'new_road_edges_T1_T7.shp'
 
-nodeedge_tested = 'all_sorted' #####################################
-skip_first = None
-model_IO = False
-duration_dic = {0:2, 1:5, 2:9, 3:12, 4:15}
-Tfinal = duration_dic[disruption_duration]
+# nodeedge_tested = 'all_sorted' #parametrized
+# skip_first = None #parametrized
+# model_IO = False #parametrized
+# duration_dic = {0:2, 1:5, 2:9, 3:12, 4:15} #parametrized
+# Tfinal = duration_dic[disruption_duration] #parametrized
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -148,8 +155,8 @@ else:
 nb_sectors = 'all'
 table_district_sector_importance_filaneme = os.path.join('input', input_folder, 'input_table_district_sector_importance.xlsx')
 odpoint_filename = os.path.join('input', input_folder, 'input_odpoints.xlsx')
-logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', importance_threshold: '+str(importance_threshold))
-firm_table, od_table = rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, nb_top_district_per_sector, dic,\
+logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', district sector cutoff: '+str(district_sector_cutoff))
+firm_table, od_table = rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, district_sector_cutoff, nb_top_district_per_sector, dic,\
     export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
 dic['odPointId_to_districtCode'] = od_table.set_index('od_point')['loc_small_code'].to_dict()
 dic['location_to_region'] = getDicLocationRegion(od_table)
@@ -159,26 +166,27 @@ logging.info('Firm and OD tables generated')
 
 ### Create agents: Firms
 nb_firms = 'all'
-logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+', safety_days: '+str(safety_days)+', added_inventory '+str(added_inventory)+' reactivity_rate: '+str(reactivity_rate)+' utilization_rate: '+str(utilization_rate))
-firm_list = createFirms(firm_table, nb_firms, safety_days, reactivity_rate, utilization_rate)
+logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+', inventory_duration_target: '+str(inventory_duration_target)+', extra_inventory_target '+str(extra_inventory_target)+' reactivity_rate: '+str(reactivity_rate)+' utilization_rate: '+str(utilization_rate))
+firm_list = createFirms(firm_table, nb_firms, inventory_duration_target, reactivity_rate, utilization_rate)
 n = len(firm_list)
 present_sectors = list(set([firm.sector for firm in firm_list]))
 present_sectors.sort()
 logging.info('Firm_list created, size is: '+str(n))
 logging.info('Sectors present are: '+str([dic['sectorId_to_sectorName'][sector_id] for sector_id in present_sectors]))
-firm_list = loadTechnicalCoefficients(input_IO_filename, firm_list, io_threshold)
-logging.info('Technical coefficient loaded. io_threshold: '+str(io_threshold))
-if safety_days == 'inputed':
+firm_list = loadTechnicalCoefficients(input_IO_filename, firm_list, io_cutoff)
+logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
+if inventory_duration_target == 'inputed':
+    ### XXX change xlsx to csv
     dic_sector_inventory = pd.read_excel(os.path.join('input', input_folder, 'input_inventory.xlsx'), encoding='utf-8').set_index(['sector', 'input_sector'])['selected_weekly_inventory']
-    if minimum_invent is not None:
-        dic_sector_inventory[dic_sector_inventory<minimum_invent] = minimum_invent
+    # if minimum_invent is not None:
+    #     dic_sector_inventory[dic_sector_inventory<minimum_invent] = minimum_invent
     dic_sector_inventory = dic_sector_inventory.to_dict()
 else:
     dic_sector_inventory = None
-if list_input_more_inventories == 'all':
-    list_input_more_inventories = present_sectors+['import']
-firm_list = loadSectorSpecificInventories(firm_list, default_value=safety_days, dic_sector_inventory=dic_sector_inventory, random_draw=False, added_inventory=added_inventory, list_input_more_inventories=list_input_more_inventories)
-logging.info('Specific safety days loaded')
+if inputs_with_extra_inventories == 'all':
+    inputs_with_extra_inventories = present_sectors+['import']
+firm_list = loadSectorSpecificInventories(firm_list, default_value=inventory_duration_target, dic_sector_inventory=dic_sector_inventory, random_draw=False, extra_inventory_target=extra_inventory_target, inputs_with_extra_inventories=inputs_with_extra_inventories)
+logging.info('Specific inventory duration days loaded')
 T.locate_firms_on_nodes(firm_list)
 logging.info('Firms located on the transport network')
 
@@ -237,10 +245,14 @@ elif nodeedge_tested == 'all_sorted':
         nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'all_nodes_long_ranked.csv'), header=None).iloc[:,0].tolist()
         edges_tested = pd.read_csv(os.path.join('input', input_folder, 'all_edges_long_ranked.csv'), header=None).iloc[:,0].tolist() #############
     
-if isinstance(skip_first, int):
-    nodes_tested = nodes_tested[skip_first:]
-    edges_tested = edges_tested[skip_first:]
-    
+if isinstance(nodeedge_tested_topn, int):
+    nodes_tested = nodes_tested[:nodeedge_tested_topn]
+    edges_tested = edges_tested[:nodeedge_tested_topn]
+
+if isinstance(nodeedge_tested_skipn, int):
+    nodes_tested = nodes_tested[nodeedge_tested_skipn:]
+    edges_tested = edges_tested[nodeedge_tested_skipn:]
+
 ### Create agents: Households
 population_filename = os.path.join('input', input_folder, 'input_population.xlsx')
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
@@ -298,10 +310,10 @@ logging.info('The supplier--buyer graph is now connected to the transport networ
 
 
 ### Old disruption loop
-if criticality_on == 'nodes':
+if disrupt_nodes_or_edges == 'nodes':
     nodesedges_tested = nodes_tested
     logging.info("Nb of nodes tested: "+str(len(nodesedges_tested)))
-elif criticality_on == 'edges':
+elif disrupt_nodes_or_edges == 'edges':
     nodesedges_tested = edges_tested
     logging.info("Nb of edges tested: "+str(len(nodesedges_tested)))
 logging.info(str(len(nodesedges_tested))+" nodes/edges to be tested: "+str(nodesedges_tested))
@@ -335,9 +347,9 @@ if export_criticality:
     
 
 for disrupted_stuff in nodesedges_tested:
-    if criticality_on == 'nodes':
+    if disrupt_nodes_or_edges == 'nodes':
         write_disrupted_stuff = str(disrupted_stuff) + ',' + 'NA'
-    elif criticality_on == 'edges':
+    elif disrupt_nodes_or_edges == 'edges':
         write_disrupted_stuff = 'NA' + ',' + str(disrupted_stuff)
     t0 = time.time()
     
@@ -410,9 +422,9 @@ for disrupted_stuff in nodesedges_tested:
         disrupted_stuff = disrupted_stuff
     else:
         disrupted_stuff = [disrupted_stuff]
-    if criticality_on == 'nodes':
+    if disrupt_nodes_or_edges == 'nodes':
         disrupted_roads = {"edge_link":[], "node_nb":disrupted_stuff}
-    elif criticality_on == 'edges':
+    elif disrupt_nodes_or_edges == 'edges':
         disrupted_roads = {"edge_link":disrupted_stuff, "node_nb":[]}
 
     flow_types_to_observe = present_sectors+['domestic', 'transit', 'import', 'export', 'total']
@@ -440,7 +452,7 @@ for disrupted_stuff in nodesedges_tested:
             
             
         allFirmsRetrieveOrders(G, firm_list)
-        allFirmsPlanProduction(firm_list, G, price_fct_input=delta_input)
+        allFirmsPlanProduction(firm_list, G, price_fct_input=propagate_input_price_change)
         allFirmsPlanPurchase(firm_list)
         allAgentsSendPurchaseOrders(G, firm_list, households, country_list)
         allFirmsProduce(firm_list)
