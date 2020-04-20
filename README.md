@@ -9,3 +9,12 @@ Create a subdirectory in the `input` directory, whose name should correspond to 
 ### Transport parameters
 
 A yaml file named `transport_parameters.yaml`
+
+### Transport network
+
+#### Roads
+
+Two shapefiles
+- road_nodes
+- road_edges
+

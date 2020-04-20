@@ -15,82 +15,42 @@ from class_country import Country
 
 
 def createTransportNetwork(road_nodes_filename, road_edges_filename, transport_params, additional_road_edges=None):
+    """Create the transport network object
+
+    It uses one shapefile for the nodes and another for the edges.
+    Note that therea are strong constraints on these files, in particular on their attributes. 
+    We can optionally use an additional edge shapefile, which contains extra road segments. Useful for scenario testing.
+    
+    :param road_nodes_filename: Path of the shapefile of the road nodes 
+    :type road_nodes_filename: string
+
+    :param road_edges_filename: Path of the shapefile of the road edges 
+    :type road_edges_filename: string
+
+    :param transport_params: Transport parameters. Should be in a specific format.
+    :type transport_params: dictionary
+
+    :param additional_road_edges: Path of the shapefile of any extra road edges to include. Default to None.
+    :type additional_road_edges: string
+
+    :return: TransportNetwork
+    """
+
+    # Create the transport network object, and set the "unit_cost" parameter, which is the ton.km cost of transporting sth
     T = TransportNetwork()
     T.graph['unit_cost'] = transport_params['transport_cost_per_tonkm']
-    # Load node data
+    
+    # Load node and edge data
     road_nodes = gpd.read_file(road_nodes_filename)
-    # Load edge data
-    road_edges = gpd.read_file(road_edges_filename).iloc[:,:]
-    # repair OIA error in Mpanda
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_MPANDA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # repair OIA error in Kagera
-    road_edges = road_edges[road_edges["link"]!=928]
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_KAGERA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # repair OIA error near Burundi frontier
-    correcting_road_nodes = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_nodes_KAGERO.shp'))
-    correcting_road_nodes.index = [road_nodes.index.max()+1+item for item in list(range(correcting_road_nodes.shape[0]))]
-    road_nodes = road_nodes.append(correcting_road_nodes.reindex(), verify_integrity=True)
-    road_edges.loc[road_edges['link']==2035, 'startumber'] = 8585
-    road_edges.loc[road_edges['link']==2035, 'endnoumber'] = 8428
-    road_edges.loc[road_edges['link']==2050, 'startumber'] = 8430
-    road_edges.loc[road_edges['link']==2050, 'endnoumber'] = 8404
-    # repair OIA error near Kaliua, 5657 is railway not road
-    road_edges = road_edges[road_edges["link"]!=5657]
-    # repair OIA error in Dodoma, missing link
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_DODOMA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # repair OIA error in Tabora, correction of linestring
-    road_edges = road_edges[road_edges["link"]!=3254]
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_TABORA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # repair OIA error in Tabora, double road and wrong nodes
-    road_edges = road_edges[road_edges["link"]!=5506]
-    index_3260 = road_edges[road_edges['link']==3260].index[0]
-    road_edges.loc[index_3260, 'startumber'] = 4539
-    road_edges.loc[index_3260, 'endnoumber'] = 4535
-    # report OIA error in Tabora, inconsistent road junctions
-    road_edges = road_edges[road_edges["link"]!=5592]
-    road_edges = road_edges[road_edges["link"]!=5515]
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_TABORA2.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # repair OIA error in West Tabora, inconsistent road
-    road_edges = road_edges[road_edges["link"]!=3272]
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_WESTTABORA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # repair OIA error in East Kigoma, inconsistent road
-    road_edges = road_edges[road_edges["link"]!=1875]
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_EASTKIGOMA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # repair OIA error in Rungwa, South West Mbeya, inconsistent roads
-    road_edges = road_edges[road_edges["link"]!=1632]
-    road_edges = road_edges[road_edges["link"]!=1633]
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_RUNGWA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
-    # adding node in Mwanza
-    road_edges = road_edges[road_edges["link"]!=1025]
-    road_edges = road_edges[road_edges["link"]!=1030]
-    correcting_road_nodes = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_nodes_MWANZA.shp'))
-    correcting_road_nodes.index = [road_nodes.index.max()+1+item for item in list(range(correcting_road_nodes.shape[0]))]
-    road_nodes = road_nodes.append(correcting_road_nodes.reindex(), verify_integrity=True)
-    correcting_road_edges = gpd.read_file(os.path.join('input', input_folder, 'correcting_road_edges_MWANZA.shp'))
-    correcting_road_edges.index = [road_edges.index.max()+1+item for item in list(range(correcting_road_edges.shape[0]))]
-    road_edges = road_edges.append(correcting_road_edges.reindex(), verify_integrity=True)
+    road_edges = gpd.read_file(road_edges_filename)
 
+    # Add additional edges, if any
     if additional_road_edges is not None:
         new_road_edges = gpd.read_file(additional_road_edges)
         new_road_edges.index = [road_edges.index.max()+1+item for item in list(range(new_road_edges.shape[0]))]
         road_edges = road_edges.append(new_road_edges.reindex(), verify_integrity=True)
-        
+    
+    # Compute how much it costs to transport one USD worth of good on each road edge
     travel_time_paved = road_edges['kmpaved']/transport_params['speeds']['road']['paved']
     travel_time_unpaved = road_edges['kmunpaved']/transport_params["speeds"]['road']['unpaved']
     road_edges['cost_travel_time'] = (travel_time_paved + travel_time_unpaved) * transport_params["travel_cost_of_time"]
@@ -100,6 +60,7 @@ def createTransportNetwork(road_nodes_filename, road_edges_filename, transport_p
         )
     road_edges['time_cost'] = road_edges['cost_travel_time'] + road_edges['cost_variability']
 
+    # Load the nodes and edges on the transport network object
     for road in road_edges['link']:
         T.add_transport_edge_with_nodes(road, road_edges, road_nodes)
     return T

@@ -33,7 +33,6 @@ from parameter.parameters import *
 
 # Start run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-logging.info('Simulation '+timestamp+' starting')
 
 # If there is sth to export, then we create the output folder
 exporting_sth = [
@@ -61,6 +60,8 @@ else:
     importlib.reload(logging)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+logging.info('Simulation '+timestamp+' starting using '+input_folder+' input data.')
+
 ### Load dictionnaries
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 dic = loadDictionnaries(input_IO_filename)
@@ -68,11 +69,11 @@ dic = loadDictionnaries(input_IO_filename)
 
 ### Create transport network
 with open(os.path.join('input', input_folder, 'transport_parameters.yaml'), "r") as yamlfile:
-    transport_params = yaml.load(yamlfile)
+    transport_params = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
 if sys.argv[1] == "0":
-    road_nodes_filename = os.path.join('input', input_folder, 'tanroads_nodes_main_all_2017_adj.shp')
-    road_edges_filename = os.path.join('input', input_folder, 'tanroads_main_all_2017_adj.shp')
+    road_nodes_filename = os.path.join('input', input_folder, 'road_nodes.shp')
+    road_edges_filename = os.path.join('input', input_folder, 'road_edges.shp')
     additional_road_edges = None
     pickle_filename = 'transport_network_base_pickle'
     if new_roads:
