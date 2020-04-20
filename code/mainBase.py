@@ -62,40 +62,44 @@ else:
 
 logging.info('Simulation '+timestamp+' starting using '+input_folder+' input data.')
 
-### Load dictionnaries
+# Load dictionnaries
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 dic = loadDictionnaries(input_IO_filename)
 
 
-### Create transport network
+# Create transport network
 with open(os.path.join('input', input_folder, 'transport_parameters.yaml'), "r") as yamlfile:
     transport_params = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
+## Creating the transport network consumes time
+## To accelerate, we enable storing the transport network as pickle for later reuse
+## With new input data, run the model with first arg = 0, it generates the pickle
+## Then use first arg = 1, to skip network building and use directly the pickle
 if sys.argv[1] == "0":
     road_nodes_filename = os.path.join('input', input_folder, 'road_nodes.shp')
     road_edges_filename = os.path.join('input', input_folder, 'road_edges.shp')
     additional_road_edges = None
     pickle_filename = 'transport_network_base_pickle'
     if new_roads:
-        additional_road_edges = os.path.join('input', input_folder, new_roads_filename)
+        additional_road_edges = os.path.join('input', input_folder, "road_edges_extra.shp")
         pickle_filename = 'transport_network_modified_pickle'
-    logging.info('Creating transport network. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
+        extra_road_log = " with extra roads"
+    else:
+        extra_road_log = ""
+    logging.info('Creating transport network'+extra_road_log+'. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
     T = createTransportNetwork(road_nodes_filename, road_edges_filename, transport_params, additional_road_edges=additional_road_edges)
-    logging.info('Transport network created. Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
+    logging.info('Transport network'+extra_road_log+' created. Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
     pickle.dump(T, open(os.path.join('tmp', pickle_filename), 'wb'))
-    logging.info('Transport network saved in tmp folder: transport_network_pickle')
+    logging.info('Transport network saved in tmp folder: '+pickle_filename)
 else:
     if new_roads:
+        extra_road_log = " with extra roads"
         pickle_filename = 'transport_network_modified_pickle'
     else:
+        extra_road_log = ""
         pickle_filename = 'transport_network_base_pickle'
     T = pickle.load(open(os.path.join('tmp', pickle_filename), 'rb'))
-    logging.info('Transport network generated from temp file. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
-
-if new_roads:
-    logging.info('Transportation network with new roads')
-else:
-    logging.info('Normal transportation network')
+    logging.info('Transport network'+extra_road_log+' generated from temp file. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
     
 
 

@@ -15,6 +15,8 @@ A yaml file named `transport_parameters.yaml`
 #### Roads
 
 Two shapefiles
-- road_nodes
-- road_edges
+- `road_nodes`
+- `road_edges`
+
+If you set `new_roads = True`, the shapefile containing the extra road edges should be `road_edges_extra`.
 
