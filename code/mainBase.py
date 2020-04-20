@@ -18,7 +18,6 @@ import geopandas as gpd
 import pickle
 
 # Import functions and classes
-from handler import *
 from builder import *
 from functions import *
 from class_firm import Firm
@@ -62,11 +61,6 @@ else:
 
 logging.info('Simulation '+timestamp+' starting using '+input_folder+' input data.')
 
-# Load dictionnaries
-input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
-dic = loadDictionnaries(input_IO_filename)
-
-
 # Create transport network
 with open(os.path.join('input', input_folder, 'transport_parameters.yaml'), "r") as yamlfile:
     transport_params = yaml.load(yamlfile, Loader=yaml.FullLoader)
@@ -102,17 +96,14 @@ else:
     logging.info('Transport network'+extra_road_log+' generated from temp file. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
     
 
-
+input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 ### Firm and OD table
 nb_sectors = 'all'
 table_district_sector_importance_filaneme = os.path.join('input', input_folder, 'input_table_district_sector_importance.xlsx')
 odpoint_filename = os.path.join('input', input_folder, 'input_odpoints.xlsx')
 logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', district sector cutoff: '+str(district_sector_cutoff))
-firm_table, od_table = rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, district_sector_cutoff, nb_top_district_per_sector, dic,\
+firm_table, od_table = rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, district_sector_cutoff, nb_top_district_per_sector,\
     export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
-dic['odPointId_to_districtCode'] = od_table.set_index('od_point')['loc_small_code'].to_dict()
-dic['location_to_region'] = getDicLocationRegion(od_table)
-dic['firmId_to_location'] = getDicIdLocation(firm_table)
 logging.info('Firm and OD tables generated')
 
 
@@ -124,7 +115,7 @@ n = len(firm_list)
 present_sectors = list(set([firm.sector for firm in firm_list]))
 present_sectors.sort()
 logging.info('Firm_list created, size is: '+str(n))
-logging.info('Sectors present are: '+str([dic['sectorId_to_sectorName'][sector_id] for sector_id in present_sectors]))
+logging.info('Sectors present are: '+str(present_sectors))
 firm_list = loadTechnicalCoefficients(input_IO_filename, firm_list, io_cutoff)
 logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 if inventory_duration_target == 'inputed':
@@ -208,7 +199,7 @@ if isinstance(nodeedge_tested_skipn, int):
 ### Create agents: Households
 population_filename = os.path.join('input', input_folder, 'input_population.xlsx')
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
-firm_table = defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution, dic, export_firm_table=export_firm_table, exp_folder=exp_folder)
+firm_table = defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution, export_firm_table=export_firm_table, exp_folder=exp_folder)
 logging.info('Creating households and loaded their purchase plan')
 households = createHouseholds(firm_table)
 logging.info('Households created')
@@ -430,8 +421,8 @@ for disrupted_stuff in nodesedges_tested:
         allAgentsReceiveProducts(G, firm_list, households, country_list, T)
         T.update_road_state()
         obs.collect_data2(firm_list, households, country_list, t)
-        if export_flows and (t==1) and False:
-            obs.analyzeFlows(G, firm_list, exp_folder, dic)
+        if export_flows and (t==1) and False: #legacy, should be removed, we shall do these kind of analysis outside of the core model
+            obs.analyzeFlows(G, firm_list, exp_folder)
         logging.debug('End of t='+str(t))
     logging.info("Time loop completed, "+str((time.time()-t0)/60)+" min")
 

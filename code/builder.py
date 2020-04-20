@@ -20,7 +20,7 @@ def createTransportNetwork(road_nodes_filename, road_edges_filename, transport_p
     It uses one shapefile for the nodes and another for the edges.
     Note that therea are strong constraints on these files, in particular on their attributes. 
     We can optionally use an additional edge shapefile, which contains extra road segments. Useful for scenario testing.
-    
+
     :param road_nodes_filename: Path of the shapefile of the road nodes 
     :type road_nodes_filename: string
 
@@ -117,7 +117,7 @@ def rescaleNbFirms2(sector_ODpoint_filename, nb_sectors, importance_threshold, e
     
     
     
-def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, top, dic, 
+def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, top, 
     export_firm_table=False, export_ODpoint_table=False, export_district_sector_table=False, exp_folder=None):
     
     table_district_sector_importance = pd.read_excel(table_district_sector_importance_filaneme)
@@ -147,7 +147,6 @@ def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename,
     
     # remove utilities, transport, and services
     sector_to_eliminate = [43, 44, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56]
-    name_sector_to_eliminate = [dic['sectorId_to_sectorName'][sector_id] for sector_id in sector_to_eliminate]
     od_sector_table = od_sector_table[~od_sector_table['sector'].isin(sector_to_eliminate)]
     
     # To generate the firm table, duplicates rows with 2 firms, divide by 2 firm_importance, and generate a unique id
@@ -159,7 +158,6 @@ def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename,
         "rel_pop": 1/2,
         'importance': 1/2,
         "sector": sector_to_eliminate*2,
-        "sector_name": name_sector_to_eliminate*2,
         "long": 41.550,
         "lat": -6.370
     })
@@ -325,7 +323,7 @@ def createCountries(input_IO_filename, nb_countries, present_sectors, time_resol
     return country_list
 
 
-def defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution='week', dic=None, export_firm_table=False, exp_folder=None):
+def defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution='week', export_firm_table=False, exp_folder=None):
     # Compute population allocated to each od point
     population_per_district = pd.read_excel(population_filename)
     od_table = pd.merge(od_table, population_per_district, on='loc_small_code', how='left')
@@ -358,9 +356,9 @@ def defineFinalDemand(population_filename, input_IO_filename, firm_table, od_tab
     firm_table['final_demand'] = firm_table['final_demand'] * firm_table['final_demand_weight'] / periods[time_resolution]
     logging.info('Every '+time_resolution+', the total final demand is '+str(int(firm_table['final_demand'].sum())))
     actual_final_demand_per_sector = firm_table.groupby('sector_id')['final_demand'].sum()
-    if dic is not None:
-        for sector in actual_final_demand_per_sector.index:
-            logging.debug(dic['sectorId_to_sectorName'][sector]+': '+str(int(actual_final_demand_per_sector[sector])))
+        # for sector in actual_final_demand_per_sector.index:
+        #     logging.debug(dic['sectorId_to_sectorName'][sector]+': '+str(int(actual_final_demand_per_sector[sector])))
+    
     if export_firm_table:
         firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
         logging.info('firm_table.xlsx exported')

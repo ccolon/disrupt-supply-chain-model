@@ -6,12 +6,7 @@ import math
 import json
 import os
 
-
-def load_dictionaries():
-    with open('dictionaries.json', 'r') as fp:
-        dictionaries = json.load(fp)
-    return dictionaries
-                                
+    
                                  
 def load_sectoral_IOmatrix(type='full', threshold=0):
     iomatrix = pd.read_excel('input_IO.xlsx', sheet_name=type+"_iotable")
@@ -19,23 +14,6 @@ def load_sectoral_IOmatrix(type='full', threshold=0):
     return iomatrix
 
 
-def load_sector_color():
-    table = pd.read_excel('input_IO.xlsx', sheet_name="sector_color")
-    dic = table.set_index("sector_id")['color'].to_dict()
-    dic['transit'] = 'darkgrey'
-    dic[999] = 'black'
-    return dic
-
-
-def load_sector_name(nb_sectors='all'):
-    table = pd.read_excel('input_IO.xlsx', sheet_name="sector_name")
-    if nb_sectors!='all':
-        dic = table.set_index("sector_id")['sector_name'].iloc[:nb_sectors].to_dict()
-    else:
-        dic = table.set_index("sector_id")['sector_name'].to_dict()
-    dic[999] = 'Total'
-    dic['transit'] = 'Transit'
-    return dic
 
 
 def load_firm_data():
