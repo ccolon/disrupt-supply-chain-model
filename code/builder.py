@@ -245,9 +245,16 @@ def loadSectorSpecificInventories(firm_list, default_value, dic_sector_inventory
     return firm_list
     
 
-def loadTechnicalCoefficients(input_IO_filename, firm_list, io_cutoff, imports=True):
+def loadTechnicalCoefficients(tech_coef_filename, firm_list, io_cutoff, imports=True):
     # Load technical coefficient matrix from data
-    tech_coef_matrix = pd.read_excel(input_IO_filename, sheet_name='tech_coef')
+    tech_coef_matrix = pd.read_csv(tech_coef_filename, index_col=0)
+    tech_coef_matrix2 = pd.read_excel(os.path.join("input", "Tanzania2", "input_IO.xlsx"), sheet_name="tech_coef")
+    print(tech_coef_matrix.head())
+    print(tech_coef_matrix.columns)
+    print(tech_coef_matrix.index)
+    print(tech_coef_matrix2.head())
+    print(tech_coef_matrix2.columns)
+    print(tech_coef_matrix2.index)
     tech_coef_matrix = tech_coef_matrix.mask(tech_coef_matrix<=io_cutoff, 0)
     
     # Limiting nb of sectors to existing firms

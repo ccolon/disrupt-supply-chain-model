@@ -117,7 +117,8 @@ present_sectors = list(set([firm.sector for firm in firm_list]))
 present_sectors.sort()
 logging.info('Firm_list created, size is: '+str(n))
 logging.info('Sectors present are: '+str(present_sectors))
-firm_list = loadTechnicalCoefficients(input_IO_filename, firm_list, io_cutoff)
+tech_coef_filename = os.path.join('input', input_folder, "tech_coef_matrix.csv")
+firm_list = loadTechnicalCoefficients(tech_coef_filename, firm_list, io_cutoff)
 logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 if inventory_duration_target == 'inputed':
     ### XXX change xlsx to csv
