@@ -14,9 +14,9 @@ from class_transport_network import TransportNetwork
 from class_country import Country
 
 
-def createTransportNetwork(road_nodes_filename, road_edges_filename, speeds, travel_cost_of_time, variability, variability_coef, unit_cost_per_ton, additional_road_edges=None):
+def createTransportNetwork(road_nodes_filename, road_edges_filename, transport_params, additional_road_edges=None):
     T = TransportNetwork()
-    T.graph['unit_cost'] = unit_cost_per_ton
+    T.graph['unit_cost'] = transport_params['transport_cost_per_tonkm']
     # Load node data
     road_nodes = gpd.read_file(road_nodes_filename)
     # Load edge data
@@ -91,10 +91,13 @@ def createTransportNetwork(road_nodes_filename, road_edges_filename, speeds, tra
         new_road_edges.index = [road_edges.index.max()+1+item for item in list(range(new_road_edges.shape[0]))]
         road_edges = road_edges.append(new_road_edges.reindex(), verify_integrity=True)
         
-    travel_time_paved = road_edges['kmpaved']/speeds['road']['paved']
-    travel_time_unpaved = road_edges['kmunpaved']/speeds['road']['unpaved']
-    road_edges['cost_travel_time'] = (travel_time_paved + travel_time_unpaved) * travel_cost_of_time
-    road_edges['cost_variability'] = (travel_time_paved*variability['road']['paved'] + travel_time_unpaved*variability['road']['unpaved']) * variability_coef
+    travel_time_paved = road_edges['kmpaved']/transport_params['speeds']['road']['paved']
+    travel_time_unpaved = road_edges['kmunpaved']/transport_params["speeds"]['road']['unpaved']
+    road_edges['cost_travel_time'] = (travel_time_paved + travel_time_unpaved) * transport_params["travel_cost_of_time"]
+    road_edges['cost_variability'] = transport_params['variability_coef'] * (
+            travel_time_paved*transport_params["variability"]['road']['paved'] + 
+            travel_time_unpaved*transport_params["variability"]['road']['unpaved']
+        )
     road_edges['time_cost'] = road_edges['cost_travel_time'] + road_edges['cost_variability']
 
     for road in road_edges['link']:

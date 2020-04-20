@@ -1,3 +1,4 @@
+# Check that the module is used correctly
 import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
@@ -10,6 +11,7 @@ import time
 import random
 import logging
 import json
+import yaml
 from datetime import datetime
 import importlib
 import geopandas as gpd
@@ -19,7 +21,6 @@ import pickle
 from handler import *
 from builder import *
 from functions import *
-
 from class_firm import Firm
 from class_observer import Observer
 from class_transport_network import TransportNetwork
@@ -30,59 +31,9 @@ sys.path.insert(1, project_path)
 from parameter.parameters_default import *
 from parameter.parameters import *
 
-### Start run
-# input_folder = "Tanzania" #parametrized
-
-# export_log = True #parametrized
-# export_criticality = True #parametrized
-# export_per_firm = False #parametrized
-# export_time_series = False #parametrized
-# export_flows = False #parametrized
-# export_firm_table = True #parametrized
-# export_odpoint_table = True #parametrized
-# export_country_table = False #parametrized
-# export_edgelist_table = False #parametrized
-# export_inventories = False #parametrized
-# export_district_sector_table = False #parametrized
-
-# disruption_duration = 1 #parametrized
-# disrupt_nodes_or_edges = 'edges' #parametrized
-# congestion = True #parametrized
-# propagate_input_price_change = True #parametrized
-
-# district_sector_cutoff = 0.05 #0.003  #parametrized
-# nb_top_district_per_sector = 1  #parametrized
-# inventory_duration_target = 'inputed'  #parametrized
-# extra_inventory_target = 0  #parametrized
-# inputs_with_extra_inventories = 'all' #parametrized
-# if extra_inventory_target>0:
-#     if sys.argv[2] == 'import':
-#         inputs_with_extra_inventories = ['import']
-#     elif sys.argv[2] == 'all':
-#         inputs_with_extra_inventories = 'all'
-#     else:
-#         inputs_with_extra_inventories = [int(x) for x in sys.argv[2].split(",")]
-#     print(inputs_with_extra_inventories)
-# else:
-#     inputs_with_extra_inventories=[]
-# minimum_invent = None
-# reactivity_rate = 0.1 #parametrized
-# utilization_rate = 0.8 #parametrized
-# io_cutoff = 0.01 #parametrized
-# rationing_mode = 'household_first' #parametrized
-
-# nb_suppliers_per_sector = 1 #parametrized
-# weight_localization = 1 #parametrized
-# new_roads = False #parametrized
-# # new_roads_filename = 'new_road_edges_T1_T7.shp'
-
-# nodeedge_tested = 'all_sorted' #parametrized
-# skip_first = None #parametrized
-# model_IO = False #parametrized
-# duration_dic = {0:2, 1:5, 2:9, 3:12, 4:15} #parametrized
-# Tfinal = duration_dic[disruption_duration] #parametrized
-
+# Start run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+logging.info('Simulation '+timestamp+' starting')
 
 # If there is sth to export, then we create the output folder
 exporting_sth = [
@@ -96,6 +47,7 @@ if any(exporting_sth):
 else:
     exp_folder = None
 
+# Set logging parameters
 if export_log:
     log_filename = os.path.join(exp_folder, 'exp.log')
     importlib.reload(logging)
@@ -109,19 +61,14 @@ else:
     importlib.reload(logging)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-logging.info('Simulation '+timestamp+' starting')
-
 ### Load dictionnaries
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 dic = loadDictionnaries(input_IO_filename)
 
 
-### Transport network
-speeds = {'road': {'paved':30, 'unpaved':18}} #km/hour
-variability = {'road': {'paved':0.01, 'unpaved':0.075}} #as fraction of travel time
-travel_cost_of_time = 0.49 # USD/hour
-variability_coef = 0.44 # USD/hour
-transport_cost_per_tonkm = {'road': {'paved':0.07, 'unpaved':0.1}} #USD/(ton*km)
+### Create transport network
+with open(os.path.join('input', input_folder, 'transport_parameters.yaml'), "r") as yamlfile:
+    transport_params = yaml.load(yamlfile)
 
 if sys.argv[1] == "0":
     road_nodes_filename = os.path.join('input', input_folder, 'tanroads_nodes_main_all_2017_adj.shp')
@@ -131,8 +78,8 @@ if sys.argv[1] == "0":
     if new_roads:
         additional_road_edges = os.path.join('input', input_folder, new_roads_filename)
         pickle_filename = 'transport_network_modified_pickle'
-    logging.info('Creating transport network. Speeds: '+str(speeds)+', travel_cost_of_time: '+str(travel_cost_of_time))
-    T = createTransportNetwork(road_nodes_filename, road_edges_filename, speeds, travel_cost_of_time, variability, variability_coef, transport_cost_per_tonkm, additional_road_edges=additional_road_edges)
+    logging.info('Creating transport network. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
+    T = createTransportNetwork(road_nodes_filename, road_edges_filename, transport_params, additional_road_edges=additional_road_edges)
     logging.info('Transport network created. Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
     pickle.dump(T, open(os.path.join('tmp', pickle_filename), 'wb'))
     logging.info('Transport network saved in tmp folder: transport_network_pickle')
@@ -142,7 +89,7 @@ else:
     else:
         pickle_filename = 'transport_network_base_pickle'
     T = pickle.load(open(os.path.join('tmp', pickle_filename), 'rb'))
-    logging.info('Transport network generated from temp file. Speeds: '+str(speeds)+', travel_cost_of_time: '+str(travel_cost_of_time))
+    logging.info('Transport network generated from temp file. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
 
 if new_roads:
     logging.info('Transportation network with new roads')
