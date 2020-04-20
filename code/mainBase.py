@@ -97,6 +97,7 @@ else:
     
 
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
+
 ### Firm and OD table
 nb_sectors = 'all'
 table_district_sector_importance_filaneme = os.path.join('input', input_folder, 'input_table_district_sector_importance.xlsx')

@@ -247,7 +247,6 @@ def loadSectorSpecificInventories(firm_list, default_value, dic_sector_inventory
 
 def loadTechnicalCoefficients(input_IO_filename, firm_list, io_cutoff, imports=True):
     # Load technical coefficient matrix from data
-    #tech_coef_matrix = load_sectoral_IOmatrix("full", io_cutoff)
     tech_coef_matrix = pd.read_excel(input_IO_filename, sheet_name='tech_coef')
     tech_coef_matrix = tech_coef_matrix.mask(tech_coef_matrix<=io_cutoff, 0)
     

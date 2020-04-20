@@ -6,19 +6,6 @@ import math
 import json
 import os
 
-    
-                                 
-def load_sectoral_IOmatrix(type='full', threshold=0):
-    iomatrix = pd.read_excel('input_IO.xlsx', sheet_name=type+"_iotable")
-    iomatrix = iomatrix.mask(iomatrix<=threshold, 0)
-    return iomatrix
-
-
-
-
-def load_firm_data():
-    return pd.read_excel('input_firms.xlsx')
-
 
 def congestion_function(current_traffic, normal_traffic):
     if (current_traffic==0) & (normal_traffic==0):
