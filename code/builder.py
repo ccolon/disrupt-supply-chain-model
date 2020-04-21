@@ -5,6 +5,7 @@ import os
 import networkx as nx
 import math
 import numpy as np
+import yaml
 
 from functions import extract_country_transit_point
 
@@ -14,24 +15,24 @@ from class_transport_network import TransportNetwork
 from class_country import Country
 
 
-def createTransportNetwork(road_nodes_filename, road_edges_filename, transport_params, additional_road_edges=None):
+def createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_params, filepath_extra_road_edges=None):
     """Create the transport network object
 
     It uses one shapefile for the nodes and another for the edges.
     Note that therea are strong constraints on these files, in particular on their attributes. 
     We can optionally use an additional edge shapefile, which contains extra road segments. Useful for scenario testing.
 
-    :param road_nodes_filename: Path of the shapefile of the road nodes 
-    :type road_nodes_filename: string
+    :param filepath_road_nodes: Path of the shapefile of the road nodes 
+    :type filepath_road_nodes: string
 
-    :param road_edges_filename: Path of the shapefile of the road edges 
-    :type road_edges_filename: string
+    :param filepath_road_edges: Path of the shapefile of the road edges 
+    :type filepath_road_edges: string
 
     :param transport_params: Transport parameters. Should be in a specific format.
     :type transport_params: dictionary
 
-    :param additional_road_edges: Path of the shapefile of any extra road edges to include. Default to None.
-    :type additional_road_edges: string
+    :param filepath_extra_road_edges: Path of the shapefile of any extra road edges to include. Default to None.
+    :type filepath_extra_road_edges: string
 
     :return: TransportNetwork
     """
@@ -41,12 +42,12 @@ def createTransportNetwork(road_nodes_filename, road_edges_filename, transport_p
     T.graph['unit_cost'] = transport_params['transport_cost_per_tonkm']
     
     # Load node and edge data
-    road_nodes = gpd.read_file(road_nodes_filename)
-    road_edges = gpd.read_file(road_edges_filename)
+    road_nodes = gpd.read_file(filepath_road_nodes)
+    road_edges = gpd.read_file(filepath_road_edges)
 
     # Add additional edges, if any
-    if additional_road_edges is not None:
-        new_road_edges = gpd.read_file(additional_road_edges)
+    if filepath_extra_road_edges is not None:
+        new_road_edges = gpd.read_file(filepath_extra_road_edges)
         new_road_edges.index = [road_edges.index.max()+1+item for item in list(range(new_road_edges.shape[0]))]
         road_edges = road_edges.append(new_road_edges.reindex(), verify_integrity=True)
     
@@ -117,22 +118,25 @@ def rescaleNbFirms2(sector_ODpoint_filename, nb_sectors, importance_threshold, e
     
     
     
-def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, importance_threshold, top, 
+def rescaleNbFirms3(filepath_district_sector_importance, odpoint_filename, importance_threshold, top, 
+    filepath_special_sectors,
     export_firm_table=False, export_ODpoint_table=False, export_district_sector_table=False, exp_folder=None):
     
-    table_district_sector_importance = pd.read_excel(table_district_sector_importance_filaneme)
+    with open(filepath_special_sectors, "r") as yamlfile:
+        special_sectors = yaml.load(yamlfile, Loader=yaml.FullLoader)
+
+    # Load 
+    table_district_sector_importance = pd.read_csv(filepath_district_sector_importance)
     table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['importance']!=0]
     logging.info('Nb of combinations (od points, sectors): '+str(table_district_sector_importance.shape[0]))
 
-    table_odpoints = pd.read_excel(odpoint_filename)
-    
-    # filter districts with threshold
+    # Filter district-sector combination that are above the cutoff value
     logging.info('Treshold is '+str(importance_threshold/2)+" for agriculture and forestry, "+str(importance_threshold)+" otherwise")
     boolindex_overthreshold = table_district_sector_importance['importance']>= importance_threshold
-    boolindex_agri = (table_district_sector_importance['sector'].isin([1,13])) & (table_district_sector_importance['importance']>= importance_threshold/2)
+    boolindex_agri = (table_district_sector_importance['sector'].isin(special_sectors['agriculture'])) & (table_district_sector_importance['importance']>= importance_threshold/2)
     filtered_district_sector = table_district_sector_importance[boolindex_overthreshold | boolindex_agri].copy()
     
-    # add the top district of each sector
+    # Add the top district of each sector
     if top>0:
         top_district_sector = pd.concat([
             table_district_sector_importance[table_district_sector_importance['sector']==sector].nlargest(top, 'importance')
@@ -142,12 +146,13 @@ def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename,
     if export_district_sector_table:
         filtered_district_sector.to_excel(os.path.join(exp_folder, 'filtered_district_sector.xlsx'), index=False)
     
+    # Generate the OD sector table
+    table_odpoints = pd.read_excel(odpoint_filename)
     od_sector_table = pd.merge(table_odpoints, filtered_district_sector, how='inner', on='district')
     od_sector_table['importance'] = od_sector_table['importance'] / od_sector_table['nb_odpoints_same_district']
     
-    # remove utilities, transport, and services
-    sector_to_eliminate = [43, 44, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56]
-    od_sector_table = od_sector_table[~od_sector_table['sector'].isin(sector_to_eliminate)]
+    # Remove utilities, transport, and services
+    od_sector_table = od_sector_table[~od_sector_table['sector'].isin(special_sectors['services'])]
     
     # To generate the firm table, duplicates rows with 2 firms, divide by 2 firm_importance, and generate a unique id
     firm_table = od_sector_table.copy()
@@ -157,7 +162,7 @@ def rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename,
         "pop_on_node": 42764449/2,
         "rel_pop": 1/2,
         'importance': 1/2,
-        "sector": sector_to_eliminate*2,
+        "sector": special_sectors['services']*2,
         "long": 41.550,
         "lat": -6.370
     })
@@ -247,14 +252,15 @@ def loadSectorSpecificInventories(firm_list, default_value, dic_sector_inventory
 
 def loadTechnicalCoefficients(tech_coef_filename, firm_list, io_cutoff, imports=True):
     # Load technical coefficient matrix from data
-    tech_coef_matrix = pd.read_csv(tech_coef_filename, index_col=0)
-    tech_coef_matrix2 = pd.read_excel(os.path.join("input", "Tanzania2", "input_IO.xlsx"), sheet_name="tech_coef")
-    print(tech_coef_matrix.head())
-    print(tech_coef_matrix.columns)
-    print(tech_coef_matrix.index)
-    print(tech_coef_matrix2.head())
-    print(tech_coef_matrix2.columns)
-    print(tech_coef_matrix2.index)
+    # tech_coef_matrix = pd.read_csv(tech_coef_filename, index_col=0)
+    # tech_coef_matrix.columns = tech_coef_matrix.columns.astype(int)
+    tech_coef_matrix = pd.read_excel(os.path.join("input", "Tanzania2", "input_IO.xlsx"), sheet_name="tech_coef")
+    # print(tech_coef_matrix.head())
+    # print(tech_coef_matrix.columns)
+    # print(tech_coef_matrix.index)
+    # print(tech_coef_matrix2.head())
+    # print(tech_coef_matrix2.columns)
+    # print(tech_coef_matrix2.index)
     tech_coef_matrix = tech_coef_matrix.mask(tech_coef_matrix<=io_cutoff, 0)
     
     # Limiting nb of sectors to existing firms

@@ -24,11 +24,13 @@ from class_firm import Firm
 from class_observer import Observer
 from class_transport_network import TransportNetwork
 
-# Import parameters
+# Import parameters. It should be in this specific order.
 project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, project_path)
 from parameter.parameters_default import *
 from parameter.parameters import *
+from parameter.filepaths_default import *
+from parameter.filepaths import *
 
 # Start run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -62,7 +64,7 @@ else:
 logging.info('Simulation '+timestamp+' starting using '+input_folder+' input data.')
 
 # Create transport network
-with open(os.path.join('input', input_folder, 'transport_parameters.yaml'), "r") as yamlfile:
+with open(filepath_transport_parameters, "r") as yamlfile:
     transport_params = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
 ## Creating the transport network consumes time
@@ -70,18 +72,15 @@ with open(os.path.join('input', input_folder, 'transport_parameters.yaml'), "r")
 ## With new input data, run the model with first arg = 0, it generates the pickle
 ## Then use first arg = 1, to skip network building and use directly the pickle
 if sys.argv[1] == "0":
-    road_nodes_filename = os.path.join('input', input_folder, 'road_nodes.shp')
-    road_edges_filename = os.path.join('input', input_folder, 'road_edges.shp')
     additional_road_edges = None
     pickle_filename = 'transport_network_base_pickle'
     if new_roads:
-        additional_road_edges = os.path.join('input', input_folder, "road_edges_extra.shp")
         pickle_filename = 'transport_network_modified_pickle'
         extra_road_log = " with extra roads"
     else:
         extra_road_log = ""
     logging.info('Creating transport network'+extra_road_log+'. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
-    T = createTransportNetwork(road_nodes_filename, road_edges_filename, transport_params, additional_road_edges=additional_road_edges)
+    T = createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_params, additional_road_edges=filepath_extra_road_edges)
     logging.info('Transport network'+extra_road_log+' created. Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
     pickle.dump(T, open(os.path.join('tmp', pickle_filename), 'wb'))
     logging.info('Transport network saved in tmp folder: '+pickle_filename)
@@ -96,17 +95,22 @@ else:
     logging.info('Transport network'+extra_road_log+' generated from temp file. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
     
 
+
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 
 ### Firm and OD table
 nb_sectors = 'all'
-table_district_sector_importance_filaneme = os.path.join('input', input_folder, 'input_table_district_sector_importance.xlsx')
 odpoint_filename = os.path.join('input', input_folder, 'input_odpoints.xlsx')
 logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', district sector cutoff: '+str(district_sector_cutoff))
-firm_table, od_table = rescaleNbFirms3(table_district_sector_importance_filaneme, odpoint_filename, district_sector_cutoff, nb_top_district_per_sector,\
-    export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
+firm_table, od_table = rescaleNbFirms3(filepath_district_sector_importance, odpoint_filename, 
+    district_sector_cutoff, nb_top_district_per_sector,
+    filepath_special_sectors,
+    export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, 
+    export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
 logging.info('Firm and OD tables generated')
 
+exit()
+### should reimplement sector id as TRIgrammme, easier to debug, makes more sense (import), so mixing of integer and string
 
 ### Create agents: Firms
 nb_firms = 'all'
