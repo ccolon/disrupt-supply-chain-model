@@ -84,6 +84,9 @@ propagate_input_price_change = True
 district_sector_cutoff = 0.003
 
 # For each sector, how many of the most important districts will be kept, whatever the 'district_sector_cutoff' value
+# Possible values:
+# - None: no extra district will be kept using this method
+# - Integer > 0: nb of top district to keep
 nb_top_district_per_sector = 1
 
 # Duration target for the firm inventory
@@ -95,15 +98,23 @@ nb_top_district_per_sector = 1
 inventory_duration_target = 2
 
 # Extend the inventory duration targets of all firms, uniformly
-# Admit an integer value, which represents the number of time steps to add
+# Possible values:
+# - integer, which represents the number of time steps to add
+# - None, no extra inventory
 # The type of inputs for which the inventory is to be extended is determined by the inputs_with_extra_inventories parameter
-extra_inventory_target = 0
+extra_inventory_target = None
 
-# List of input, identified by their producing sector, for which an extra inventory duration target is given
+# List of inputs, identified by their producing sector, for which an extra inventory duration target is given
 # Possible values:
 # - 'all': all types of inputs
-# - list of sector id, e.g., [1,13,15,'import']. Can be an empty list
+# - list of sector id, e.g., ['AGR','FOR','TRD','IMP']
 inputs_with_extra_inventories = "all"
+
+# List of sectors for which an extra inventory duration target is given
+# Possible values:
+# - 'all': all sectors
+# - list of sector id, e.g., ['AGR','FOR','TRD','IMP']
+buying_sectors_with_extra_inventories = "all"
 
 # Determines the speed at which firms try to reach their inventory duration target
 # See Henriet, Hallegatte, and Tabourier 2011 for the formulas

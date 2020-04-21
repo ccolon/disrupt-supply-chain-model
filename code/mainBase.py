@@ -99,44 +99,48 @@ else:
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 
 ### Firm and OD table
+with open(filepath_special_sectors, "r") as yamlfile:
+    special_sectors = yaml.load(yamlfile, Loader=yaml.FullLoader)
+
 nb_sectors = 'all'
 logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', district sector cutoff: '+str(district_sector_cutoff))
 firm_table, od_table = rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
     district_sector_cutoff, nb_top_district_per_sector,
-    filepath_special_sectors,
+    agri_sectors=special_sectors['agriculture'], service_sectors=special_sectors['services'],
     export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, 
     export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
 logging.info('Firm and OD tables generated')
 
-exit()
-### should reimplement sector id as TRIgrammme, easier to debug, makes more sense (import), so mixing of integer and string
 
 ### Create agents: Firms
+# Creating the firms
 nb_firms = 'all'
-logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+', inventory_duration_target: '+str(inventory_duration_target)+', extra_inventory_target '+str(extra_inventory_target)+' reactivity_rate: '+str(reactivity_rate)+' utilization_rate: '+str(utilization_rate))
-firm_list = createFirms(firm_table, nb_firms, inventory_duration_target, reactivity_rate, utilization_rate)
+logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+' reactivity_rate: '+str(reactivity_rate)+' utilization_rate: '+str(utilization_rate))
+firm_list = createFirms(firm_table, nb_firms, reactivity_rate, utilization_rate)
 n = len(firm_list)
 present_sectors = list(set([firm.sector for firm in firm_list]))
 present_sectors.sort()
 logging.info('Firm_list created, size is: '+str(n))
 logging.info('Sectors present are: '+str(present_sectors))
-tech_coef_filename = os.path.join('input', input_folder, "tech_coef_matrix.csv")
-firm_list = loadTechnicalCoefficients(tech_coef_filename, firm_list, io_cutoff)
+
+# Loading the technical coefficients
+firm_list = loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff, special_sectors['imports'])
 logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
-if inventory_duration_target == 'inputed':
-    ### XXX change xlsx to csv
-    dic_sector_inventory = pd.read_excel(os.path.join('input', input_folder, 'input_inventory.xlsx'), encoding='utf-8').set_index(['sector', 'input_sector'])['selected_weekly_inventory']
-    # if minimum_invent is not None:
-    #     dic_sector_inventory[dic_sector_inventory<minimum_invent] = minimum_invent
-    dic_sector_inventory = dic_sector_inventory.to_dict()
-else:
-    dic_sector_inventory = None
-if inputs_with_extra_inventories == 'all':
-    inputs_with_extra_inventories = present_sectors+['import']
-firm_list = loadSectorSpecificInventories(firm_list, default_value=inventory_duration_target, dic_sector_inventory=dic_sector_inventory, random_draw=False, extra_inventory_target=extra_inventory_target, inputs_with_extra_inventories=inputs_with_extra_inventories)
-logging.info('Specific inventory duration days loaded')
+
+# Loading the inventories
+firm_list = loadInventories(firm_list, inventory_duration_target=inventory_duration_target, filepath_inventory_duration_targets=filepath_inventory_duration_targets, 
+    extra_inventory_target=extra_inventory_target, inputs_with_extra_inventories=inputs_with_extra_inventories, buying_sectors_with_extra_inventories=buying_sectors_with_extra_inventories,
+    random_mean_sd=None)
+logging.info('Inventory duration targets loaded, inventory_duration_target: '+str(inventory_duration_target))
+if extra_inventory_target:
+    logging.info("Extra inventory duration: "+str(extra_inventory_target)+\
+        " for inputs "+str(inputs_with_extra_inventories)+\
+        " for buying sectors "+str(buying_sectors_with_extra_inventories))
+
+# Adding the firm id onto the nodes of the transport network
 T.locate_firms_on_nodes(firm_list)
 logging.info('Firms located on the transport network')
+exit()
 
 ### Create agents: Countries
 nb_countries = 13
