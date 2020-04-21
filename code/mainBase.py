@@ -100,9 +100,8 @@ input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 
 ### Firm and OD table
 nb_sectors = 'all'
-odpoint_filename = os.path.join('input', input_folder, 'input_odpoints.xlsx')
 logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', district sector cutoff: '+str(district_sector_cutoff))
-firm_table, od_table = rescaleNbFirms3(filepath_district_sector_importance, odpoint_filename, 
+firm_table, od_table = rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
     district_sector_cutoff, nb_top_district_per_sector,
     filepath_special_sectors,
     export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, 

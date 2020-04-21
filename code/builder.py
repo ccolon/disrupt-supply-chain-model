@@ -118,7 +118,7 @@ def rescaleNbFirms2(sector_ODpoint_filename, nb_sectors, importance_threshold, e
     
     
     
-def rescaleNbFirms3(filepath_district_sector_importance, odpoint_filename, importance_threshold, top, 
+def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, importance_threshold, top, 
     filepath_special_sectors,
     export_firm_table=False, export_ODpoint_table=False, export_district_sector_table=False, exp_folder=None):
     
@@ -147,9 +147,9 @@ def rescaleNbFirms3(filepath_district_sector_importance, odpoint_filename, impor
         filtered_district_sector.to_excel(os.path.join(exp_folder, 'filtered_district_sector.xlsx'), index=False)
     
     # Generate the OD sector table
-    table_odpoints = pd.read_excel(odpoint_filename)
+    table_odpoints = pd.read_csv(filepath_odpoints)
     od_sector_table = pd.merge(table_odpoints, filtered_district_sector, how='inner', on='district')
-    od_sector_table['importance'] = od_sector_table['importance'] / od_sector_table['nb_odpoints_same_district']
+    od_sector_table['importance'] = od_sector_table['importance'] / od_sector_table['nb_points_same_district']
     
     # Remove utilities, transport, and services
     od_sector_table = od_sector_table[~od_sector_table['sector'].isin(special_sectors['services'])]
