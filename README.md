@@ -27,7 +27,7 @@ If you set `new_roads = True`, the shapefile containing the extra road edges sho
 A csv file with the following strucutre.
 
 odpoint | district | geometry | long | lat
---- | --- | --- | --- | --- | ---
+--- | --- | --- | --- | --- 
 7121 | 16-08 | POINT (30.09349 -4.56182) | 30.09349 | -4.56182
 ... | ... | ... | ... | ... 
 
@@ -40,8 +40,8 @@ A csv file with the following strucutre.
 
  | AGI | FOR | ...
 --- | --- | --- | ---
-AGI | 0.11 | 0 | ... 
-FOR | 0.01 | 0.2 | ... 
+**AGI** | 0.11 | 0 | ... 
+**FOR** | 0.01 | 0.2 | ... 
 ... | ... | ... | ... 
 
 
@@ -84,7 +84,7 @@ A csv file representing a double-entry table. Country codes are row and column h
 
  | BDI | COD | ...
 --- | --- | --- 
-BDI | 4563 | 4516
+**BDI** | 4563 | 4516
 ... | ... | ...
 
 
@@ -94,7 +94,7 @@ A csv file representing a double-entry table. Country codes are row headers. Sec
 
  | AGR | FOR | ...
 --- | --- | --- 
-BDI | 132 | 0
+**BDI** | 132 | 0
 ... | ... | ...
 
 
@@ -104,7 +104,7 @@ A csv file representing a double-entry table. Country codes are row headers. Sec
 
  | AGR | FOR | ...
 --- | --- | --- 
-BDI | 2 | 456
+**BDI** | 2 | 456
 ... | ... | ...
 
 
