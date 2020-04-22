@@ -159,60 +159,13 @@ T_noCountries =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!=
 # Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
 # In this case, we use an average.
 firm_list, country_list = loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list)
-exit()
 
 # Creating a version of the transport network without the virtual nodes and edges that connect countries.
+disruption_list = defineDisruptionList(disrupt_nodes_or_edges, nodeedge_tested, transport_network=T_noCountries,
+    nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn)
+print(disruption_list)
+exit()
 
-
-
-if nodeedge_tested == 'important':
-    if disruption_duration==1:
-        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_short_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_short_300.csv'), header=None).iloc[:,0].tolist()
-    elif disruption_duration==2:
-        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_duration2_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist()
-    elif disruption_duration==3:
-        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_duration3_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist()
-    else:
-        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'top_node_long_300.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'top_edge_long_300.csv'), header=None).iloc[:,0].tolist() #############
-        
-elif nodeedge_tested == 'specific':
-    node_tanga = [5305, 5397]
-    node_malinyi = [2338, 2360]
-    node_itakamara = [2310]
-    node_wami = [2344]
-    node_morogoro = [2359, 2358, 2346, 2340, 2325, 2302]
-    node_all_morogoro = node_malinyi + node_itakamara + node_wami + node_morogoro
-    nodes_tested = [node_all_morogoro, node_malinyi, node_itakamara, node_wami, node_morogoro]
-    nodes_tested = [3502]
-    nodes_tested = [1215]
-    nodes_tested = [3510]
-    nodes_tested = [5318]
-    nodes_tested = [node_all_morogoro]
-    nodes_tested = [node_tanga]
-
-elif nodeedge_tested == 'all':
-    nodes_tested = list(T_noCountries.nodes)
-    edges_tested = list(nx.get_edge_attributes(T_noCountries, 'link').values())
-    
-elif nodeedge_tested == 'all_sorted':
-    if (disruption_duration==1) and (~model_IO):
-        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'all_nodes_short_ranked.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'all_edges_short_ranked.csv'), header=None).iloc[:,0].tolist()
-    else:
-        nodes_tested = pd.read_csv(os.path.join('input', input_folder, 'all_nodes_long_ranked.csv'), header=None).iloc[:,0].tolist()
-        edges_tested = pd.read_csv(os.path.join('input', input_folder, 'all_edges_long_ranked.csv'), header=None).iloc[:,0].tolist() #############
-    
-if isinstance(nodeedge_tested_topn, int):
-    nodes_tested = nodes_tested[:nodeedge_tested_topn]
-    edges_tested = edges_tested[:nodeedge_tested_topn]
-
-if isinstance(nodeedge_tested_skipn, int):
-    nodes_tested = nodes_tested[nodeedge_tested_skipn:]
-    edges_tested = edges_tested[nodeedge_tested_skipn:]
 
 ### Create agents: Households
 population_filename = os.path.join('input', input_folder, 'input_population.xlsx')
@@ -272,12 +225,12 @@ logging.info('The supplier--buyer graph is now connected to the transport networ
 
 ### Old disruption loop
 if disrupt_nodes_or_edges == 'nodes':
-    nodesedges_tested = nodes_tested
-    logging.info("Nb of nodes tested: "+str(len(nodesedges_tested)))
+    disruption_list = nodes_tested
+    logging.info("Nb of nodes tested: "+str(len(disruption_list)))
 elif disrupt_nodes_or_edges == 'edges':
-    nodesedges_tested = edges_tested
-    logging.info("Nb of edges tested: "+str(len(nodesedges_tested)))
-logging.info(str(len(nodesedges_tested))+" nodes/edges to be tested: "+str(nodesedges_tested))
+    disruption_list = edges_tested
+    logging.info("Nb of edges tested: "+str(len(disruption_list)))
+logging.info(str(len(disruption_list))+" nodes/edges to be tested: "+str(disruption_list))
 
 if export_criticality:
     with open(os.path.join(exp_folder, 'criticality.csv'), "w") as myfile:
@@ -307,7 +260,7 @@ if export_criticality:
             + "\n")
     
 
-for disrupted_stuff in nodesedges_tested:
+for disrupted_stuff in disruption_list:
     if disrupt_nodes_or_edges == 'nodes':
         write_disrupted_stuff = str(disrupted_stuff) + ',' + 'NA'
     elif disrupt_nodes_or_edges == 'edges':
@@ -323,7 +276,7 @@ for disrupted_stuff in nodesedges_tested:
     #obs.collect_data(firm_list, households, 0)
 
     ### There are a number of export file that we export only once, after setting the initial conditions
-    if disrupted_stuff == nodesedges_tested[0]:
+    if disrupted_stuff == disruption_list[0]:
         logging.info("Exporting files")
         if export_firm_table or export_odpoint_table:
             imports = pd.Series({firm.pid: sum([val for key, val in firm.purchase_plan.items() if str(key)[0]=="C"]) for firm in firm_list}, name='imports')
@@ -475,7 +428,7 @@ for disrupted_stuff in nodesedges_tested:
 
                 + "\n")
     if export_per_firm:
-        if disrupted_stuff == nodesedges_tested[0]:
+        if disrupted_stuff == disruption_list[0]:
             logging.debug('export extra spending and consumption with header')
             with open(os.path.join(exp_folder, 'extra_spending.csv'), 'w') as f:
                 pd.DataFrame({str(disrupted_stuff): obs.households_extra_spending_per_firm}).transpose().to_csv(f, header=True)

@@ -609,3 +609,52 @@ def extractEdgeList(graph):
         'flow':commercial_link.order
     } for key, commercial_link in dic_commercial_links.items()]
     return dic_commercial_links
+
+
+def defineDisruptionList(disrupt_nodes_or_edges, nodeedge_tested, transport_network, nodeedge_tested_topn=None, nodeedge_tested_skipn=None):
+    """Create list of infrastructure to disrupt
+
+    :param disrupt_nodes_or_edges: Whether the nodes or edges of the transport network are to be disrupted
+    :type disrupt_nodes_or_edges: "nodes" or "edges"
+
+    :param nodeedge_tested: Specific the ids of the nodes/edges to disrupt
+    :type nodeedge_tested: "all", list of int, filepath
+
+    :param transport_network: Transport network
+    :type transport_network: TransportNetwork object
+
+    :param nodeedge_tested_topn: Nb of node/edge to test in the list. If None the full list is tested.
+    :type nodeedge_tested_topn: None or integer
+
+    :param nodeedge_tested_topn: Nb of node/edge to skip in the list.
+    :type nodeedge_tested_topn: None or integer
+
+    :return: list of node/edge ids
+    """
+    if isinstance(nodeedge_tested, list):
+        disruption_list = nodeedge_tested
+
+    elif nodeedge_tested == 'all':
+        if disrupt_nodes_or_edges == "nodes":
+            disruption_list = list(transport_network.nodes)
+        elif disrupt_nodes_or_edges == "edges":
+            disruption_list = list(nx.get_edge_attributes(transport_network, 'link').values())
+        else:
+            raise ValueError("'disrupt_nodes_or_edges' should be 'nodes' or 'edges'")
+
+    elif isinstance(nodeedge_tested, str):
+        if nodeedge_tested[-4:] == ".csv":
+            disruption_list = pd.read_csv(nodeedge_tested, header=None).iloc[:,0].tolist()
+        else:
+            raise ValueError("If defining a path to a file in 'nodeedge_tested', it should be a csv")
+
+    else:
+        raise ValueError("'nodeedge_tested' should be list of node/edge ids, a path to a csv file, or 'all'")
+
+    if isinstance(nodeedge_tested_topn, int):
+        disruption_list = disruption_list[:nodeedge_tested_topn]
+
+    if isinstance(nodeedge_tested_skipn, int):
+        disruption_list = disruption_list[nodeedge_tested_skipn:]
+
+    return disruption_list

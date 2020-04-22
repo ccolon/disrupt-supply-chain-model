@@ -170,8 +170,9 @@ weight_localization = 1
 
 # Determines the list of node or edge to disrupt in the criticality loop
 # Possible values are:
-# - "all = test all nodes or edges, ordered by their ID
-# - other values are user defined in the main code, depending on the list of nodes/edges they have generated
+# - "all" = test all nodes or edges, ordered by their ID
+# - a path to a list of node or edges
+# - a list of node/edge ids
 nodeedge_tested = "all"
 
 # Number of nodeedge to test
