@@ -8,9 +8,8 @@ from functions import rescale_values, generate_weights_from_list
 
 class Country(object):
 
-    def __init__(self, name=None, pid=None, qty_sold=None, qty_purchased=None, transit_points=None, purchase_plan=None, transit_from=None, transit_to=None, supply_importance=None, usd_per_ton=None):
+    def __init__(self, pid=None, qty_sold=None, qty_purchased=None, transit_points=None, purchase_plan=None, transit_from=None, transit_to=None, supply_importance=None, usd_per_ton=None):
         # Instrinsic parameters
-        self.name = name
         self.pid = pid
         self.location = pid
         self.usd_per_ton = usd_per_ton

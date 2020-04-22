@@ -74,6 +74,21 @@ congestion = True
 # Whether or not firms should readjust their price to changes in input prices
 propagate_input_price_change = True
 
+# Which sectors to include. Possible values:
+# - 'all': all the sectors are kept
+# - list of sectors
+sectors_to_include = "all"
+
+# Which districts to include. Possible values:
+# - 'all': all the districts are kept
+# - list of districts
+districts_to_include = "all"
+
+# Which countries to include. Possible values:
+# - 'all': all the districts are kept
+# - list of countries
+countries_to_include = "all"
+
 # Any sector in a district that have an importance lower than this value is discarded
 # 2 exceptions apply:
 # - for each sector, the most important district is kept, even if its importance is lower.

@@ -7,8 +7,6 @@ import math
 import numpy as np
 import yaml
 
-from functions import extract_country_transit_point
-
 from class_firm import Firm
 from class_households import Households
 from class_transport_network import TransportNetwork
@@ -120,6 +118,7 @@ def rescaleNbFirms2(sector_ODpoint_filename, nb_sectors, importance_threshold, e
     
 def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
     district_sector_cutoff, nb_top_district_per_sector, 
+    sectors_to_include="all", districts_to_include="all",
     agri_sectors=None, service_sectors=None,
     export_firm_table=False, export_ODpoint_table=False, export_district_sector_table=False, exp_folder=None):
     """Generate the firm data
@@ -138,6 +137,12 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     :param nb_top_district_per_sector: Nb of extra district to keep based on importance rank per sector
     :type nb_top_district_per_sector: None or integer
 
+    :param sectors_to_include: list of the sectors to include. Default to "all"
+    :type sectors_to_include: list of string or 'all'
+
+    :param districts_to_include: list of the districts to include. Default to "all"
+    :type districts_to_include: list of string or 'all'
+
     :param agri_sectors: list of the sectors that pertains to agriculture. If None no special treatment is given to agriculture.
     :type agri_sectors: list of string or None
 
@@ -149,8 +154,23 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
 
     # Load 
     table_district_sector_importance = pd.read_csv(filepath_district_sector_importance)
+
+    # Filter out combination with 0 importance
     table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['importance']!=0]
-    logging.info('Nb of combinations (od points, sectors): '+str(table_district_sector_importance.shape[0]))
+
+    # Keep only selected sectors, if applicable
+    if isinstance(sectors_to_include, list):
+        table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['sector'].isin(sectors_to_include)]
+    elif (sectors_to_include!='all'):
+        raise ValueError("'sectors_to_include' should be a list of string or 'all'")
+
+    # Keep only selected districts, if applicable
+    if isinstance(districts_to_include, list):
+        table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['district'].isin(districts_to_include)]
+    elif (sectors_to_include!='all'):
+        raise ValueError("'districts_to_include' should be a list of string or 'all'")
+
+    logging.info('Nb of combinations (district, sector): '+str(table_district_sector_importance.shape[0]))
 
     # Filter district-sector combination that are above the cutoff value
     if agri_sectors:
@@ -430,45 +450,75 @@ def loadUsdPerTon(input_IO_filename, firm_list, country_list):
     return firm_list, country_list
 
 
-def createCountries(input_IO_filename, nb_countries, present_sectors, time_resolution):
+def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_transit_points,
+    present_sectors, countries_to_include='all', time_resolution="day"):
+    """Create the countries
+
+    :param filepath_imports: path to import table csv
+    :type filepath_imports: string
+
+    :param filepath_exports: path to export table csv
+    :type filepath_exports: string
+
+    :param filepath_transit_matrix: path to transit matrix csv
+    :type filepath_transit_matrix: string
+
+    :param filepath_transit_points: path to the table of transit points csv
+    :type filepath_transit_points: string
+
+    :param present_sectors: list which sectors are included. Output of the rescaleFirms functions.
+    :type present_sectors: list of string
+
+    :param countries_to_include: List of countries to include. Default to "all", which select all sectors.
+    :type countries_to_include: list of string or "all"
+
+    :param time_resolution: The number in the input table are yearly figure. Rescale thoses numbers appropriately.
+    :type time_resolution: 'day', 'week', 'month', 'year'
+
+    :return: list of Countries
+    """
     periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
-    
-    country_data = pd.read_excel(input_IO_filename, sheet_name="country_name", dtype={'transit_points':str}, index_col=0)
-    import_data = pd.read_excel(input_IO_filename, sheet_name="imports")
-    export_data = pd.read_excel(input_IO_filename, sheet_name="exports")
-    transit_data = pd.read_excel(input_IO_filename, sheet_name="transits", index_col=0)
-    present_sectors_as_str = [str(sector) for sector in present_sectors]
-    
-    if nb_countries != 'all':
-        country_to_include = ['C'+str(num) for num in range(nb_countries+1)]
+
+    import_table = pd.read_csv(filepath_imports, index_col=0)
+    export_table = pd.read_csv(filepath_exports, index_col=0)
+    transit_matrix = pd.read_csv(filepath_transit_matrix, index_col=0)
+    transit_point_table = pd.read_csv(filepath_transit_points)
+
+    # Keep only selected countries, if applicable
+    if isinstance(countries_to_include, list):
+        import_table = import_table.loc[countries_to_include, present_sectors]
+        export_table = export_table.loc[countries_to_include, present_sectors]
+        transit_matrix = transit_matrix.loc[countries_to_include, countries_to_include]
+    elif (countries_to_include=='all'):
+        import_table = import_table.loc[:, present_sectors]
+        export_table = export_table.loc[:, present_sectors]
     else:
-        country_to_include = country_data.index.tolist()
-        
-    transit_matrix = transit_data.loc[country_to_include, country_to_include]
+        raise ValueError("'countries_to_include' should be a list of string or 'all'")
+    
     
     country_list = []
-    total_imports = import_data.set_index('country_id').loc[country_to_include, present_sectors_as_str].sum().sum() / periods[time_resolution]
-    for country_id in country_to_include:
-        
-        transit_points = extract_country_transit_point(country_data, country_id)
-        
-        qty_sold = import_data.loc[import_data['country_id'] == country_id, present_sectors_as_str].transpose().iloc[:,0]
-        qty_sold = (qty_sold / periods[time_resolution]).to_dict()
+    total_imports = import_table.sum().sum() / periods[time_resolution]
+
+    for country in import_table.index.tolist():
+        # transit points
+        transit_points = transit_point_table.loc[transit_point_table['country']==country, 'transit_point'].tolist()
+
+        # imports, i.e., sales of countries
+        qty_sold = (import_table.loc[country,:] / periods[time_resolution]).to_dict()
         supply_importance = sum(qty_sold.values()) / total_imports
         
-        qty_purchased = export_data.loc[import_data['country_id'] == country_id, present_sectors_as_str].transpose().iloc[:,0]
-        qty_purchased = (qty_purchased / periods[time_resolution]).to_dict()
-        qty_purchased = {int(key): val for key, val in qty_purchased.items()}
+        # exports, i.e., purchases from countries
+        qty_purchased = (export_table.loc[country,:] / periods[time_resolution]).to_dict()
         
-        transit_from = transit_matrix.loc[:,country_id] / periods[time_resolution]
-        transit_from = transit_from * len(present_sectors) / 22
+        # transits
+        # Note that transit are not given per sector, so, if we only consider a few sector, the full transit flows will still be used
+        transit_from = transit_matrix.loc[:,country] / periods[time_resolution]
         transit_from = transit_from[transit_from>0].to_dict()
-        transit_to = transit_matrix.loc[country_id, :] / periods[time_resolution]
-        transit_to = transit_to * len(present_sectors) / 22
+        transit_to = transit_matrix.loc[country, :] / periods[time_resolution]
         transit_to = transit_to[transit_to>0].to_dict()
         
-        country_list += [Country(name=country_data.loc[country_id, 'country_name'],
-                                pid=country_id,
+        # create the list of Country object
+        country_list += [Country(pid=country,
                                 qty_sold=qty_sold,
                                 qty_purchased=qty_purchased,
                                 transit_points=transit_points,

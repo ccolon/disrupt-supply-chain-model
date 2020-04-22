@@ -98,21 +98,20 @@ else:
 
 input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
 
-### Firm and OD table
+
+### Create firms
+# Filter district sector combination
 with open(filepath_special_sectors, "r") as yamlfile:
     special_sectors = yaml.load(yamlfile, Loader=yaml.FullLoader)
-
-nb_sectors = 'all'
-logging.info('Generating the firm table. nb_sectors: '+str(nb_sectors)+', district sector cutoff: '+str(district_sector_cutoff))
+logging.info('Generating the firm table. Sector included: '+str(sectors_to_include)+', districts included: '+str(districts_to_include)+', district sector cutoff: '+str(district_sector_cutoff))
 firm_table, od_table = rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
     district_sector_cutoff, nb_top_district_per_sector,
+    sectors_to_include=sectors_to_include, districts_to_include=districts_to_include,
     agri_sectors=special_sectors['agriculture'], service_sectors=special_sectors['services'],
     export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, 
     export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
 logging.info('Firm and OD tables generated')
 
-
-### Create agents: Firms
 # Creating the firms
 nb_firms = 'all'
 logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+' reactivity_rate: '+str(reactivity_rate)+' utilization_rate: '+str(utilization_rate))
@@ -140,13 +139,14 @@ if extra_inventory_target:
 # Adding the firm id onto the nodes of the transport network
 T.locate_firms_on_nodes(firm_list)
 logging.info('Firms located on the transport network')
-exit()
+
 
 ### Create agents: Countries
-nb_countries = 13
 time_resolution = 'week'
-logging.info('Creating country_list. nb_countries: '+str(nb_countries))
-country_list = createCountries(input_IO_filename, nb_countries, present_sectors, time_resolution)
+logging.info('Creating country_list. Countries included: '+str(countries_to_include))
+country_list = createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_transit_points, 
+    present_sectors, countries_to_include='all', time_resolution="day")
+exit()
 firm_list, country_list = loadUsdPerTon(input_IO_filename, firm_list, country_list)
 for country in country_list:
     T.connect_country(country)

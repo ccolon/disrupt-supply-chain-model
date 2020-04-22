@@ -18,3 +18,7 @@ filepath_special_sectors = os.path.join('input', input_folder, "special_sectors.
 filepath_odpoints = os.path.join('input', input_folder, "odpoints.csv")
 filepath_tech_coef = os.path.join('input', input_folder, "tech_coef_matrix.csv")
 filepath_inventory_duration_targets = os.path.join('input', input_folder, "inventory_duration_targets.csv")
+filepath_transit_points = os.path.join('input', input_folder, "country_transit_points.csv")
+filepath_imports = os.path.join('input', input_folder, "imports.csv")
+filepath_exports = os.path.join('input', input_folder, "exports.csv")
+filepath_transit_matrix = os.path.join('input', input_folder, "transit_matrix.csv")

@@ -6,22 +6,23 @@ Create an `input` directory in the root of the project
 
 Create a subdirectory in the `input` directory, whose name should correspond to the `input_folder` variable given in the `paramters.py` file
 
-### Transport Parameters
+### Transport
+
+#### Transport Parameters
 
 A yaml file.
 
-### Transport Network
 
-#### Roads
+#### Road Network
 
-Two shapefiles
+Two shapefiles, one for the road nodes, another for the road edges.
 - `road_nodes`
 - `road_edges`
 
 If you set `new_roads = True`, the shapefile containing the extra road edges should be `road_edges_extra`.
 
 
-### Origin--Destination Points (OD points)
+#### Origin--Destination Points (OD points)
 
 A csv file with the following strucutre.
 
@@ -31,7 +32,9 @@ odpoint | district | geometry | long | lat
 ... | ... | ... | ... | ... 
 
 
-### Technical coefficients
+### Production
+
+#### Technical coefficients
 
 A csv file with the following strucutre.
 
@@ -42,7 +45,7 @@ FOR | 0.01 | 0.2 | ...
 ... | ... | ... | ... 
 
 
-### District Sector Importance
+#### District Sector Importance
 
 A csv file with the following strucutre.
 
@@ -52,7 +55,7 @@ district | sector | importance
 ... | ... | ...
 
 
-### Inventory Duration Target (optional)
+#### Inventory Duration Target (optional)
 
 A csv file with the following strucutre.
 
@@ -61,3 +64,44 @@ input_sector | buying_sector | inventory_duration_target
 TRD | AGR | 3.5
 ... | ... | ...
 
+
+### Trade
+
+#### Country Transit Matrix
+
+A csv file representing a double-entry table. Country codes are row and column headers.
+
+ | BDI | COD | ...
+--- | --- | --- 
+BDI | 4563 | 4516
+... | ... | ...
+
+
+#### Import Table
+
+A csv file representing a double-entry table. Country codes are row headers. Sector codes are column headers.
+
+ | AGR | FOR | ...
+--- | --- | --- 
+BDI | 132 | 0
+... | ... | ...
+
+
+#### Export Table
+
+A csv file representing a double-entry table. Country codes are row headers. Sector codes are column headers.
+
+ | AGR | FOR | ...
+--- | --- | --- 
+BDI | 2 | 456
+... | ... | ...
+
+
+#### Country Transit Points
+
+A csv file with the following strucutre.
+
+country | transit_point | weight
+--- | --- | --- 
+BDI | 7112 | 1
+... | ... | ...

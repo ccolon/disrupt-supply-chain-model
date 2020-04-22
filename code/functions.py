@@ -268,13 +268,6 @@ def compute_distance_from_arcmin(x0, y0, x1, y1):
     NS_dist = (y1-y0)*111
     return math.sqrt(EW_dist**2+NS_dist**2)
     
-    
-def extract_country_transit_point(country_data, country_id):
-    transit_point = country_data.loc[country_id, 'transit_point'].split()
-    transit_point = pd.Series(transit_point).str.extract('([0-9]*)\:').iloc[:,0].tolist()
-    transit_point = [int(nodenumber) for nodenumber in transit_point]
-    return transit_point
-
 
 def evaluate_sectoral_shock(firm_table, disrupted_node):
     disrupted_sectoral_production = firm_table[firm_table['location'].isin(disrupted_node)].groupby('sector_id')['total_production'].sum()
