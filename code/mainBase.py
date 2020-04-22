@@ -164,14 +164,15 @@ firm_list, country_list = loadTonUsdEquivalence(filepath_ton_usd_equivalence, fi
 disruption_list = defineDisruptionList(disrupt_nodes_or_edges, nodeedge_tested, transport_network=T_noCountries,
     nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn)
 print(disruption_list)
-exit()
 
 
 ### Create agents: Households
-population_filename = os.path.join('input', input_folder, 'input_population.xlsx')
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
-firm_table = defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution, export_firm_table=export_firm_table, exp_folder=exp_folder)
+firm_table = defineFinalDemand(firm_table, od_table, 
+    filepath_population=filepath_population, filepath_final_demand=filepath_final_demand,
+    time_resolution=time_resolution, export_firm_table=export_firm_table, exp_folder=exp_folder)
 logging.info('Creating households and loaded their purchase plan')
+exit()
 households = createHouseholds(firm_table)
 logging.info('Households created')
 

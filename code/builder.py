@@ -469,7 +469,7 @@ def loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list)
 
 
 def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_transit_points,
-    present_sectors, countries_to_include='all', time_resolution="day"):
+    present_sectors, countries_to_include='all', time_resolution="week"):
     """Create the countries
 
     :param filepath_imports: path to import table csv
@@ -547,39 +547,60 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     return country_list
 
 
-def defineFinalDemand(population_filename, input_IO_filename, firm_table, od_table, time_resolution='week', export_firm_table=False, exp_folder=None):
+def defineFinalDemand(firm_table, od_table, 
+    filepath_population, filepath_final_demand,
+    time_resolution='week', export_firm_table=False, exp_folder=None):
+    """Allocate a final demand to each firm. It updates the firm_table
+
+    :param firm_table: firm_table from rescaleNbFirms function
+    :type firm_table: pandas.DataFrame
+
+    :param od_table: od_table from rescaleNbFirms function
+    :type od_table: pandas.DataFrame
+
+    :param filepath_population: path to population csv
+    :type filepath_population: string
+
+    :param filepath_final_demand: path to final demand csv
+    :type filepath_final_demand: string
+
+    :param time_resolution: The number in the input table are yearly figure. Rescale thoses numbers appropriately.
+    :type time_resolution: 'day', 'week', 'month', 'year'
+
+    :return: firm_table
+    """
     # Compute population allocated to each od point
-    population_per_district = pd.read_excel(population_filename)
-    od_table = pd.merge(od_table, population_per_district, on='loc_small_code', how='left')
+    population_per_district = pd.read_csv(filepath_population)
+    od_table = pd.merge(od_table, population_per_district, on='district', how='left')
     od_table['population'] = od_table['population'] / od_table['nb_points_same_district']
     od_table['perc_population'] = od_table['population'] / od_table['population'].sum()
     logging.info('Population in district with firms: '+str(int(od_table['population'].sum()))+', total population is: '+str(population_per_district['population'].sum()))
     
     # Compute population allocated to each firm
-    col_to_keep = ['id', 'sector_id', 'location', 'firm_importance', 'geometry', 'long', 'lat']
-    firm_table = pd.merge(firm_table[col_to_keep], od_table.rename(columns={'od_point':'location'}), on='location', how='left')
+    col_to_keep = ['id', 'sector', 'od_point', 'importance', 'geometry', 'long', 'lat']
+    firm_table = pd.merge(firm_table[col_to_keep], od_table, on='location', how='left')
     firm_table = pd.merge(firm_table,
-                      firm_table.groupby(['location', 'sector_id'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
-                      on=['location', 'sector_id'],
+                      firm_table.groupby(['location', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
+                      on=['location', 'sector'],
                       how='left')
     firm_table.loc[firm_table['location']==-1, 'perc_population'] = 1
     firm_table['final_demand_weight'] = firm_table['perc_population'] / firm_table['nb_firms_same_point_same_sector']
     
     # Weight will not add up to 1 in some if not all sectors, because not all sectors are present in each od point. We renormalize.
-    firm_table['final_demand_weight'] = firm_table['final_demand_weight'] / firm_table['sector_id'].map(firm_table.groupby('sector_id')['final_demand_weight'].sum())
+    firm_table['final_demand_weight'] = firm_table['final_demand_weight'] / firm_table['sector'].map(firm_table.groupby('sector')['final_demand_weight'].sum())
     
     # Check that weight sum up to 1
-    sum_of_sectoral_final_demand_weight = firm_table.groupby('sector_id')['final_demand_weight'].sum()
+    sum_of_sectoral_final_demand_weight = firm_table.groupby('sector')['final_demand_weight'].sum()
     if ((sum_of_sectoral_final_demand_weight-1.0)>1e-6).any():
         logging.warning('The final demand of some sectors is problematic: '+str(sum_of_sectoral_final_demand_weight))
     
     # Allocate actual final demand, in dollars, using final consumption data of IO table, and take into account a time resolution
     periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
-    final_demand_per_sector = pd.read_excel(input_IO_filename, sheet_name='final_demand')
-    firm_table['final_demand'] = firm_table['sector_id'].map(final_demand_per_sector.set_index('sector_id')['final_demand'])
+    final_demand_per_sector = pd.read_csv(filepath_final_demand)
+    firm_table['final_demand'] = firm_table['sector'].map(final_demand_per_sector.set_index('sector')['final_demand'])
     firm_table['final_demand'] = firm_table['final_demand'] * firm_table['final_demand_weight'] / periods[time_resolution]
     logging.info('Every '+time_resolution+', the total final demand is '+str(int(firm_table['final_demand'].sum())))
-    actual_final_demand_per_sector = firm_table.groupby('sector_id')['final_demand'].sum()
+    actual_final_demand_per_sector = firm_table.groupby('sector')['final_demand'].sum()
         # for sector in actual_final_demand_per_sector.index:
         #     logging.debug(dic['sectorId_to_sectorName'][sector]+': '+str(int(actual_final_demand_per_sector[sector])))
     
@@ -592,7 +613,7 @@ def defineFinalDemand(population_filename, input_IO_filename, firm_table, od_tab
 
 def createHouseholds(firm_data):
     households = Households()
-    households.final_demand_per_sector = firm_data.groupby('sector_id')['final_demand'].sum().to_dict()
+    households.final_demand_per_sector = firm_data.groupby('sector')['final_demand'].sum().to_dict()
     households.purchase_plan = firm_data[['id', 'final_demand']].set_index('id')['final_demand'].to_dict()
     households.extra_spending_per_sector = {key: 0 for key, val in households.final_demand_per_sector.items()}
     return households
