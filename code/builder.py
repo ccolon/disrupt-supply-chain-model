@@ -64,56 +64,6 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_p
         T.add_transport_edge_with_nodes(road, road_edges, road_nodes)
     return T
 
-
-def rescaleNbFirms2(sector_ODpoint_filename, nb_sectors, importance_threshold, export_firm_table=False, export_ODpoint_table=False, exp_folder=None):
-    
-    odpoints_with_firms = pd.read_excel(sector_ODpoint_filename)
-    odpoints_with_firms['nodenumber'] = odpoints_with_firms['nodenumber'].astype(int)
-    logging.info('Nb of combinations (od points, sectors): '+str(odpoints_with_firms.shape[0]))
-    logging.info('Nb of firms if no threshold: '+str(2*odpoints_with_firms.shape[0]))
-    
-    # Remove selected sectors if asked
-    if nb_sectors != 'all':
-        odpoints_with_firms = odpoints_with_firms[odpoints_with_firms['sector_id'] < (nb_sectors+1)]
-    
-    # Put two firms each time firm_importance > threshold, 0 otherwise
-    logging.info('Treshold is '+str(importance_threshold/2)+" for agriculture, "+str(importance_threshold)+" otherwise")
-    odpoints_with_firms['nb_firms'] = 0
-    odpoints_with_firms.loc[odpoints_with_firms['firm_importance2']>=importance_threshold, 'nb_firms'] = 2
-    odpoints_with_firms.loc[(odpoints_with_firms['sector_id']==1) & (odpoints_with_firms['firm_importance2']>=(importance_threshold/2)), 'nb_firms'] = 2
-    
-    # Remove points without firms
-    odpoints_with_firms = odpoints_with_firms[odpoints_with_firms['nb_firms']!=0]
-    
-    # To generate the firm table, duplicates rows with 2 firms, divide by 2 firm_importance, and generate a unique id
-    firm_table = pd.concat([odpoints_with_firms, odpoints_with_firms[odpoints_with_firms['nb_firms']==2]], axis=0)
-    firm_table['firm_importance2'] = firm_table['firm_importance2'] / firm_table['nb_firms']
-    firm_table['firm_importance'] = firm_table['firm_importance2']
-    logging.info('Nb of od points chosen: '+str(len(set(firm_table['nodenumber'])))+', final nb of firms chosen: '+str(firm_table.shape[0]))
-
-    # Create firm table
-    firm_table = pd.concat([firm_table, firm_table['geometry'].astype(str).str.extract('\((?P<long>.*) (?P<lat>.*)\)')], axis=1)
-    firm_table = firm_table.sort_values('firm_importance', ascending=False)
-    firm_table = firm_table.sort_values(['region', 'sector_id'])
-    firm_table['id'] = list(range(firm_table.shape[0]))
-    renaming = {'nodenumber':'location'}
-    col_to_export = ['id', 'sector_id', 'location', 'firm_importance', 'geometry', 'long', 'lat']
-    firm_table = firm_table.rename(columns=renaming)[col_to_export]
-    
-    if export_firm_table:
-        firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
-        logging.info('firm_table.xlsx exported')
-    
-    # Create OD table
-    od_table = odpoints_with_firms.copy()
-    od_table = od_table.rename(columns={'nodenumber':'od_point'})[['od_point', 'loc_small_code', 'nb_points_same_district']]
-    od_table = od_table.drop_duplicates().sort_values('od_point')
-    if export_ODpoint_table:
-        od_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
-        logging.info('odpoint_table.xlsx exported')
-    
-    return firm_table, od_table
-    
     
     
 def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
@@ -577,13 +527,14 @@ def defineFinalDemand(firm_table, od_table,
     logging.info('Population in district with firms: '+str(int(od_table['population'].sum()))+', total population is: '+str(population_per_district['population'].sum()))
     
     # Compute population allocated to each firm
-    col_to_keep = ['id', 'sector', 'od_point', 'importance', 'geometry', 'long', 'lat']
-    firm_table = pd.merge(firm_table[col_to_keep], od_table, on='location', how='left')
+    col_to_keep = ['id', 'sector', 'odpoint', 'importance', 'geometry', 'long', 'lat']
+    print(firm_table.head())
+    firm_table = pd.merge(firm_table[col_to_keep], od_table, on='odpoint', how='left')
     firm_table = pd.merge(firm_table,
-                      firm_table.groupby(['location', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
-                      on=['location', 'sector'],
+                      firm_table.groupby(['odpoint', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
+                      on=['odpoint', 'sector'],
                       how='left')
-    firm_table.loc[firm_table['location']==-1, 'perc_population'] = 1
+    firm_table.loc[firm_table['odpoint']==-1, 'perc_population'] = 1
     firm_table['final_demand_weight'] = firm_table['perc_population'] / firm_table['nb_firms_same_point_same_sector']
     
     # Weight will not add up to 1 in some if not all sectors, because not all sectors are present in each od point. We renormalize.
@@ -601,8 +552,6 @@ def defineFinalDemand(firm_table, od_table,
     firm_table['final_demand'] = firm_table['final_demand'] * firm_table['final_demand_weight'] / periods[time_resolution]
     logging.info('Every '+time_resolution+', the total final demand is '+str(int(firm_table['final_demand'].sum())))
     actual_final_demand_per_sector = firm_table.groupby('sector')['final_demand'].sum()
-        # for sector in actual_final_demand_per_sector.index:
-        #     logging.debug(dic['sectorId_to_sectorName'][sector]+': '+str(int(actual_final_demand_per_sector[sector])))
     
     if export_firm_table:
         firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
@@ -611,7 +560,14 @@ def defineFinalDemand(firm_table, od_table,
     return firm_table
     
 
-def createHouseholds(firm_data):
+def createHouseholds(firm_table):
+    """Create Households objecvt
+
+    :param firm_table: firm_table from rescaleNbFirms and defineFinalDemand functions
+    :type firm_table: pandas.DataFrame
+
+    :return: Households object
+    """
     households = Households()
     households.final_demand_per_sector = firm_data.groupby('sector')['final_demand'].sum().to_dict()
     households.purchase_plan = firm_data[['id', 'final_demand']].set_index('id')['final_demand'].to_dict()

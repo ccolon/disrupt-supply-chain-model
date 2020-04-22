@@ -172,9 +172,10 @@ firm_table = defineFinalDemand(firm_table, od_table,
     filepath_population=filepath_population, filepath_final_demand=filepath_final_demand,
     time_resolution=time_resolution, export_firm_table=export_firm_table, exp_folder=exp_folder)
 logging.info('Creating households and loaded their purchase plan')
-exit()
 households = createHouseholds(firm_table)
 logging.info('Households created')
+exit()
+
 
 
 ### Create network

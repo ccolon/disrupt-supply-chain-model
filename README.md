@@ -76,6 +76,28 @@ AGR | 950
 ... | ... 
 
 
+### Demand
+
+#### Final Demand
+
+A csv file with the yearly final demand per sector.
+
+sector | final_demand
+--- | --- 
+AGR | 1230489103  
+... | ... 
+
+
+#### Population
+
+A csv file with the population per district.
+
+district | population
+--- | --- 
+01-01 | 123456  
+... | ... 
+
+
 
 ### Trade
 
