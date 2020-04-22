@@ -22,3 +22,4 @@ filepath_transit_points = os.path.join('input', input_folder, "country_transit_p
 filepath_imports = os.path.join('input', input_folder, "imports.csv")
 filepath_exports = os.path.join('input', input_folder, "exports.csv")
 filepath_transit_matrix = os.path.join('input', input_folder, "transit_matrix.csv")
+filepath_ton_usd_equivalence = os.path.join('input', input_folder, "ton_usd_equivalence.csv")

@@ -136,7 +136,7 @@ if extra_inventory_target:
         " for inputs "+str(inputs_with_extra_inventories)+\
         " for buying sectors "+str(buying_sectors_with_extra_inventories))
 
-# Adding the firm id onto the nodes of the transport network
+# Adding the firms onto the nodes of the transport network
 T.locate_firms_on_nodes(firm_list)
 logging.info('Firms located on the transport network')
 
@@ -146,13 +146,22 @@ time_resolution = 'week'
 logging.info('Creating country_list. Countries included: '+str(countries_to_include))
 country_list = createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_transit_points, 
     present_sectors, countries_to_include='all', time_resolution="day")
-exit()
-firm_list, country_list = loadUsdPerTon(input_IO_filename, firm_list, country_list)
+logging.info('Country_list created: '+str([country.pid for country in country_list]))
+# Linking the countries to the the transport network via their transit point.
+# This creates "virtual nodes" in the transport network that corresponds to the countries.
+# We create a copy of the transport network without such nodes, it will be used for plotting purposes
 for country in country_list:
     T.connect_country(country)
-logging.info('Country_list created: '+str([country.name for country in country_list]))
+T_noCountries =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!='virtual'])
+
+
+### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
+# Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
+# In this case, we use an average.
+firm_list, country_list = loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list)
+exit()
+
 # Creating a version of the transport network without the virtual nodes and edges that connect countries.
-T_toplot =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!='virtual'])
 
 
 
@@ -186,8 +195,8 @@ elif nodeedge_tested == 'specific':
     nodes_tested = [node_tanga]
 
 elif nodeedge_tested == 'all':
-    nodes_tested = list(T_toplot.nodes)
-    edges_tested = list(nx.get_edge_attributes(T_toplot, 'link').values())
+    nodes_tested = list(T_noCountries.nodes)
+    edges_tested = list(nx.get_edge_attributes(T_noCountries, 'link').values())
     
 elif nodeedge_tested == 'all_sorted':
     if (disruption_duration==1) and (~model_IO):
@@ -423,7 +432,7 @@ for disrupted_stuff in nodesedges_tested:
             for country in country_list:
                 country.add_congestion_malus2(G, T)
         if export_flows:
-            obs.collect_data_flows(T_toplot, t, flow_types_to_observe)
+            obs.collect_data_flows(T_noCountries, t, flow_types_to_observe)
         if export_flows and (t==Tfinal):
             with open(os.path.join(exp_folder, 'flows.json'), 'w') as jsonfile:
                 json.dump(obs.flows_snapshot, jsonfile)

@@ -441,12 +441,30 @@ def loadInventories(firm_list, inventory_duration_target=2, filepath_inventory_d
     
 
 
-def loadUsdPerTon(input_IO_filename, firm_list, country_list):
-    sectorId_to_usdPerTon = pd.read_excel(input_IO_filename, sheet_name='sector_usdperton').set_index('sector_id')['usd_per_ton']
+def loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list):
+    """Load equivalence between usd and ton
+
+    It updates the firm_list and country_list.
+    It updates the 'usd_per_ton' attribute of firms, based on their sector.
+    It updates the 'usd_per_ton' attribute of countries, it gives the average.
+    Note that this will be applied only to goods that are delivered by those agents.
+
+    :param filepath_ton_usd_equivalence: Path to the table providing the equivalence between tons and usd per sector
+    :type filepath_ton_usd_equivalence: string
+
+    :param firm_list: list of firms
+    :type firm_list: list(Firm objects)
+
+    :param country_list: list of countries
+    :type country_list: list(Country objects)
+
+    :return: (list(Firm objects), list(Country objects))
+    """
+    sector_to_usdPerTon = pd.read_csv(filepath_ton_usd_equivalence).set_index('sector')['usd_per_ton']
     for firm in firm_list:
-        firm.usd_per_ton = sectorId_to_usdPerTon[firm.sector]
+        firm.usd_per_ton = sector_to_usdPerTon[firm.sector]
     for country in country_list:
-        country.usd_per_ton = sectorId_to_usdPerTon.mean()
+        country.usd_per_ton = sector_to_usdPerTon.mean()
     return firm_list, country_list
 
 

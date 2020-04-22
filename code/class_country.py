@@ -100,7 +100,7 @@ class Country(object):
             try:
                 quantity_to_buy = self.purchase_plan[edge[0].pid]
             except KeyError:
-                print("Country "+self.name+": No purchase plan for supplier", edge[0].pid)
+                print("Country "+self.pid+": No purchase plan for supplier", edge[0].pid)
                 quantity_to_buy = 0
             graph[edge[0]][self]['object'].order = quantity_to_buy
 
@@ -124,8 +124,8 @@ class Country(object):
                     graph[self][edge[1]]['object'].route_time_cost = route_time_cost
                     graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
                 else:
-                    logging.error('Country '+str(self.name)+': I did not find any route from me to client '+str(edge[1].pid))
-                    raise Exception("\t\tCountry "+str(self.name)+": there is no route between me and client "+str(edge[1].pid))
+                    logging.error('Country '+str(self.pid)+': I did not find any route from me to client '+str(edge[1].pid))
+                    raise Exception("\t\tCountry "+str(self.pid)+": there is no route between me and client "+str(edge[1].pid))
             
             
     def deliver_products(self, graph, transport_network):
@@ -147,7 +147,7 @@ class Country(object):
         """Only apply to B2B flows 
         """
         if len(commercial_link.route)==0:
-            logging.error("Country "+str(self.name)+": commercial link "+str(commercial_link.pid)+" is not associated to any route, I cannot send any shipment to client "+str(commercial_link.pid))
+            logging.error("Country "+str(self.pid)+": commercial link "+str(commercial_link.pid)+" is not associated to any route, I cannot send any shipment to client "+str(commercial_link.pid))
         
         else:
             if self.check_route_avaibility(commercial_link, transport_network, 'main') == 'available':
@@ -212,10 +212,10 @@ class Country(object):
                         commercial_link.current_route = 'alternative'
                     transport_network.transport_shipment(commercial_link)
                     # Print information
-                    logging.debug("Country "+str(self.name)+": found an alternative route to client "+str(commercial_link.buyer_id)+", it is costlier by "+'{:.0f}'.format(100*relative_price_change_transport)+'%'+", price is "+'{:.4f}'.format(commercial_link.price)+" instead of "+'{:.4f}'.format(commercial_link.eq_price))
+                    logging.debug("Country "+str(self.pid)+": found an alternative route to client "+str(commercial_link.buyer_id)+", it is costlier by "+'{:.0f}'.format(100*relative_price_change_transport)+'%'+", price is "+'{:.4f}'.format(commercial_link.price)+" instead of "+'{:.4f}'.format(commercial_link.eq_price))
                 
                 else:
-                    logging.debug("Country "+str(self.name)+": because of disruption, there is no route between me and client "+str(commercial_link.buyer_id))
+                    logging.debug("Country "+str(self.pid)+": because of disruption, there is no route between me and client "+str(commercial_link.buyer_id))
                     # We do not write how the input price would have changed
                     commercial_link.price = commercial_link.eq_price
                     # We do not pay the transporter, so we don't increment the transport cost
@@ -287,7 +287,7 @@ class Country(object):
     def evaluate_commercial_balance(self, graph):
         exports = sum([graph[self][edge[1]]['object'].payment for edge in graph.out_edges(self)])
         imports = sum([graph[edge[0]][self]['object'].payment for edge in graph.in_edges(self)])
-        print("Country "+self.name+": imports "+str(imports)+" from Tanzania and export "+str(exports)+" to Tanzania")
+        print("Country "+self.pid+": imports "+str(imports)+" from Tanzania and export "+str(exports)+" to Tanzania")
         
         
     def add_congestion_malus2(self, graph, transport_network): 

@@ -65,6 +65,17 @@ TRD | AGR | 3.5
 ... | ... | ...
 
 
+#### Ton USD Equivalence
+
+A csv file providing, for each sector, the average monetary value, in USD, of a ton of good.
+
+sector | usd_per_ton
+--- | --- 
+AGR | 950  
+... | ... 
+
+
+
 ### Trade
 
 #### Country Transit Matrix
