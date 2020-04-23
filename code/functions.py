@@ -285,3 +285,6 @@ def apply_sectoral_shocks(sectoral_shock, firm_list):
 def recover_from_sectoral_shocks(firm_list):
     for firm in firm_list:
         firm.production_capacity = firm.eq_production_capacity
+
+
+

@@ -64,6 +64,9 @@ export_district_sector_table = False
 # Should be an integer
 disruption_duration = 1
 
+# Whether or not to export a csv summarizing some topological caracteristics of the supply chain network
+export_sc_network_summary = True
+
 # Whether the criticality should loop on the tranport edges or nodes
 # Admit 2 values: 'edges' or 'nodes'
 disrupt_nodes_or_edges = "edges"
@@ -155,13 +158,13 @@ io_cutoff = 0.01
 # - 'household_first': if the firm sells to both households and other firms, then households are served first 
 rationing_mode = "household_first"
 
-# Set the number of supplier that firms have for each input
+# Set the number of supplier that firms have for each type of input
 # Possible values are:
 # - 1: each firms select one supplier per input
 # - 2: each firms select two suppliers per input
 # - a decimal number between 1 and 2: firms choose either one or two suppliers per input, such that, in average
 # the average number of supplier per sector is equal to the specified number.
-nb_suppliers_per_sector = 1
+nb_suppliers_per_input = 1
 
 # Determines how important it is for firms to choose suppliers close to them
 # The chance of choosing a firm as a supplier for an input, depends on its importance score and on its distance

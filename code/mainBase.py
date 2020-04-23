@@ -39,7 +39,7 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 exporting_sth = [
     export_log, export_criticality, export_per_firm, export_time_series, export_flows,
     export_firm_table, export_odpoint_table, export_country_table, export_edgelist_table,
-    export_inventories, export_district_sector_table
+    export_inventories, export_district_sector_table, export_sc_network_summary
 ]
 if any(exporting_sth):
     exp_folder = os.path.join('output', timestamp)
@@ -172,39 +172,28 @@ households = createHouseholds(firm_table)
 logging.info('Households created')
 
 
-### Create network
-logging.info('The supplier--buyer graph is being created. nb_suppliers_per_sector: '+str(nb_suppliers_per_sector))
+### Create supply chain network
+logging.info('The supply chain graph is being created. nb_suppliers_per_input: '+str(nb_suppliers_per_input))
 G = nx.DiGraph()
+
 logging.info('Tanzanian households are selecting their Tanzanian retailers (domestic B2C flows)')
 households.select_suppliers(G, firm_list, mode='inputed')
+
 logging.info('Tanzanian exporters are being selected by purchasing countries (export B2B flows)')
 logging.info('and trading countries are being connected (transit flows)')
 for country in country_list:
     country.select_suppliers(G, firm_list, country_list, filepath_export_shares)
+
 logging.info('Tanzanian firms are selecting their Tanzanian and international suppliers (import B2B flows) (domestric B2B flows). Weight localisation is '+str(weight_localization))
 for firm in firm_list:
-    firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_sector, weight_localization)
+    firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_input, weight_localization, import_code=special_sectors['imports'])
+
 logging.info('The nodes and edges of the supplier--buyer have been created')
+if export_sc_network_summary:
+    exportSupplyChainNetworkSummary(G, firm_list, exp_folder)
+
 exit()
 
-nb_F2F_links = 0
-nb_F2H_lins = 0
-nb_C2F_links = 0
-nb_F2C_links = 0
-nb_C2C_links = 0
-for edge in G.edges:
-    nb_F2F_links += int(isinstance(edge[0], Firm) and isinstance(edge[1], Firm))
-    nb_F2H_lins += int(isinstance(edge[0], Firm) and isinstance(edge[1], Households))
-    nb_C2F_links += int(isinstance(edge[0], Country) and isinstance(edge[1], Firm))
-    nb_F2C_links += int(isinstance(edge[0], Firm) and isinstance(edge[1], Country))
-    nb_C2C_links += int(isinstance(edge[0], Country) and isinstance(edge[1], Country))
-logging.info("Nb firm to firm links: "+str(nb_F2F_links))
-logging.info("Nb firm to households links: "+str(nb_F2H_lins))
-logging.info("Nb country to firm links: "+str(nb_C2F_links))
-logging.info("Nb firm to country links: "+str(nb_F2C_links))
-logging.info("Nb country to country links: "+str(nb_C2C_links))
-logging.info("Nb firm clients in firm records: "+str(sum([sum([1 if isinstance(client_id, int) else 0 for client_id in firm.clients.keys()]) for firm in firm_list])))
-logging.info("Nb firm suppliers in firm records: "+str(sum([sum([1 if isinstance(supplier_id, int) else 0 for supplier_id in firm.suppliers.keys()]) for firm in firm_list])))
 
 ### Coupling transportation network T and production network G
 logging.info('The supplier--buyer graph is being connected to the transport network')
