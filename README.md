@@ -138,3 +138,13 @@ country | transit_point | weight
 --- | --- | --- 
 BDI | 7112 | 1
 ... | ... | ...
+
+
+#### Export Shares
+
+A csv file with a a table indicating which percentage of the firms that export per sector.
+
+sector | share_exporting_firms
+--- | --- 
+AGR | 0.16  
+... | ...

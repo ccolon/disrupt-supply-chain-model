@@ -191,13 +191,13 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     
     
     
-def createFirms(firm_data, keep_top_n_firms=None, reactivity_rate=0.1, utilization_rate=0.8):
+def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilization_rate=0.8):
     """Create the firms
 
     It uses firm_table from rescaleNbFirms3
 
-    :param firm_data: firm_table from rescaleNbFirms3
-    :type firm_data: pandas.DataFrame
+    :param firm_table: firm_table from rescaleNbFirms3
+    :type firm_table: pandas.DataFrame
 
     :param keep_top_n_firms: (optional) can be specified if we want to keep only the first n firms, for testing purposes
     :type keep_top_n_firms: None (default) or integer
@@ -213,19 +213,19 @@ def createFirms(firm_data, keep_top_n_firms=None, reactivity_rate=0.1, utilizati
     """
 
     if isinstance(keep_top_n_firms, int):
-        firm_data = firm_data.iloc[:keep_top_n_firms,:]
+        firm_table = firm_table.iloc[:keep_top_n_firms,:]
 
     logging.debug('Creating firm_list')
-    ids = firm_data['id'].tolist()
-    firm_data = firm_data.set_index('id')
+    ids = firm_table['id'].tolist()
+    firm_table = firm_table.set_index('id')
     firm_list= [
         Firm(i, 
-             sector=firm_data.loc[i, "sector"], 
-             location=firm_data.loc[i, "odpoint"], 
-             importance=firm_data.loc[i, 'importance'],
-             geometry=firm_data.loc[i, 'geometry'],
-             long=float(firm_data.loc[i, 'long']),
-             lat=float(firm_data.loc[i, 'lat']),
+             sector=firm_table.loc[i, "sector"], 
+             location=firm_table.loc[i, "odpoint"], 
+             importance=firm_table.loc[i, 'importance'],
+             geometry=firm_table.loc[i, 'geometry'],
+             long=float(firm_table.loc[i, 'long']),
+             lat=float(firm_table.loc[i, 'lat']),
              utilization_rate=utilization_rate
         )
         for i in ids
@@ -528,7 +528,6 @@ def defineFinalDemand(firm_table, od_table,
     
     # Compute population allocated to each firm
     col_to_keep = ['id', 'sector', 'odpoint', 'importance', 'geometry', 'long', 'lat']
-    print(firm_table.head())
     firm_table = pd.merge(firm_table[col_to_keep], od_table, on='odpoint', how='left')
     firm_table = pd.merge(firm_table,
                       firm_table.groupby(['odpoint', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
@@ -569,8 +568,8 @@ def createHouseholds(firm_table):
     :return: Households object
     """
     households = Households()
-    households.final_demand_per_sector = firm_data.groupby('sector')['final_demand'].sum().to_dict()
-    households.purchase_plan = firm_data[['id', 'final_demand']].set_index('id')['final_demand'].to_dict()
+    households.final_demand_per_sector = firm_table.groupby('sector')['final_demand'].sum().to_dict()
+    households.purchase_plan = firm_table[['id', 'final_demand']].set_index('id')['final_demand'].to_dict()
     households.extra_spending_per_sector = {key: 0 for key, val in households.final_demand_per_sector.items()}
     return households
     

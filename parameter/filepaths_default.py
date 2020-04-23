@@ -21,6 +21,7 @@ filepath_inventory_duration_targets = os.path.join('input', input_folder, "inven
 filepath_transit_points = os.path.join('input', input_folder, "country_transit_points.csv")
 filepath_imports = os.path.join('input', input_folder, "imports.csv")
 filepath_exports = os.path.join('input', input_folder, "exports.csv")
+filepath_export_shares = os.path.join('input', input_folder, "export_shares.csv")
 filepath_transit_matrix = os.path.join('input', input_folder, "transit_matrix.csv")
 filepath_ton_usd_equivalence = os.path.join('input', input_folder, "ton_usd_equivalence.csv")
 filepath_population = os.path.join('input', input_folder, "population.csv")

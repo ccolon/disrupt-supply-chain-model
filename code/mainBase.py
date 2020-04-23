@@ -95,10 +95,6 @@ else:
     logging.info('Transport network'+extra_road_log+' generated from temp file. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
     
 
-
-input_IO_filename = os.path.join('input', input_folder, 'input_IO.xlsx')
-
-
 ### Create firms
 # Filter district sector combination
 with open(filepath_special_sectors, "r") as yamlfile:
@@ -174,8 +170,6 @@ firm_table = defineFinalDemand(firm_table, od_table,
 logging.info('Creating households and loaded their purchase plan')
 households = createHouseholds(firm_table)
 logging.info('Households created')
-exit()
-
 
 
 ### Create network
@@ -185,13 +179,13 @@ logging.info('Tanzanian households are selecting their Tanzanian retailers (dome
 households.select_suppliers(G, firm_list, mode='inputed')
 logging.info('Tanzanian exporters are being selected by purchasing countries (export B2B flows)')
 logging.info('and trading countries are being connected (transit flows)')
-pc_of_exporting_firms_per_sector = pd.read_excel(os.path.join('input', input_folder, 'input_exportingfirms.xlsx')).set_index('exporting_sector')['percentage']
 for country in country_list:
-    country.select_suppliers(G, firm_list, country_list, pc_of_exporting_firms_per_sector)
+    country.select_suppliers(G, firm_list, country_list, filepath_export_shares)
 logging.info('Tanzanian firms are selecting their Tanzanian and international suppliers (import B2B flows) (domestric B2B flows). Weight localisation is '+str(weight_localization))
 for firm in firm_list:
     firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_sector, weight_localization)
 logging.info('The nodes and edges of the supplier--buyer have been created')
+exit()
 
 nb_F2F_links = 0
 nb_F2H_lins = 0
