@@ -10,5 +10,10 @@ disruption_analysis = {
 disruption_analysis = None
 district_sector_cutoff = 0.1
 
+export_flows = True
+export_sc_flow_analysis = True
+export_agent_data = True
+
+
 # inputs_with_extra_inventories = ['TRD']
 # buying_sectors_with_extra_inventories = ["SUG"]

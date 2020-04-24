@@ -57,7 +57,7 @@ class Observer(object):
         self.tonkm_transported_normal = 0
         self.tonkm_transported_disruption = 0
     
-    def collect_data2(self, firm_list, households, country_list, t):
+    def collect_agent_data(self, firm_list, households, country_list, t):
         self.firms[t] = {firm.pid: {
             'production': firm.production,
             'profit': firm.profit,
@@ -81,25 +81,13 @@ class Observer(object):
             'consumption': households.consumption
         }
         
-    def collect_data(self, firm_list, households, t):
-        firms_production = [firm.production for firm in firm_list]
-        firms_delta_price = [firm.delta_price_input for firm in firm_list]
-        firms_profit = [firm.profit for firm in firm_list]
-        firms_av_inventory_duration = [pd.Series(list(firm.current_inventory_duration.values())).mean() for firm in firm_list]
-        self.production.loc[t] = firms_production + [sum(firms_production)]
-        self.delta_price.loc[t] = firms_delta_price + [sum(firms_delta_price)/len(firms_delta_price)]
-        self.profit.loc[t] = firms_profit + [sum(firms_profit)]
-        self.consumption.loc[t] = list(households.consumption_per_sector.values()) + [households.consumption]
-        self.spending.loc[t] = list(households.spending_per_sector.values()) + [households.spending]
-        self.av_inventory_duration.loc[t] = firms_av_inventory_duration + [pd.Series(firms_av_inventory_duration).mean()]
         
-        
-    def collect_data_flows(self, transport_network, t, sectors=None):
-        self.disrupted_nodes[t] = [node for node, val in nx.get_node_attributes(transport_network, "disruption_duration").items() if val > 0]
-        self.disrupted_edges[t] = [nx.get_edge_attributes(transport_network, "link")[edge] for edge, val in nx.get_edge_attributes(transport_network, "disruption_duration").items() if val > 0]
-        sectors = sectors or ['total']
-        self.flows_snapshot[t] = {
-            str(transport_network[edge[0]][edge[1]]['link']): {str(sector): transport_network[edge[0]][edge[1]]["flow_"+str(sector)] for sector in sectors}
+    def collect_transport_flows(self, transport_network, time_step, flow_types_to_export=None):
+        self.disrupted_nodes[time_step] = [node for node, val in nx.get_node_attributes(transport_network, "disruption_duration").items() if val > 0]
+        self.disrupted_edges[time_step] = [nx.get_edge_attributes(transport_network, "link")[edge] for edge, val in nx.get_edge_attributes(transport_network, "disruption_duration").items() if val > 0]
+        flow_types_to_export = flow_types_to_export or ['total']
+        self.flows_snapshot[time_step] = {
+            str(transport_network[edge[0]][edge[1]]['link']): {str(sector): transport_network[edge[0]][edge[1]]["flow_"+str(sector)] for sector in flow_types_to_export}
             for edge in transport_network.edges
         }
         
@@ -232,87 +220,3 @@ class Observer(object):
 
         
         
-    def analyzeFlows(self, G, firm_list, exp_folder):
-        # Collect all flows
-        io_flows = [[G[edge[0]][edge[1]]['object'].delivery, G[edge[0]][edge[1]]['object'].supplier_id, G[edge[0]][edge[1]]['object'].buyer_id] for edge in G.edges]
-        io_flows = pd.DataFrame(columns=['quantity', 'supplier_id', 'buyer_id'], data=io_flows)
-        
-        # Analyze domestic B2C flows
-        domestic_flows = io_flows[(io_flows['supplier_id'].apply(lambda x: isinstance(x, int))) & (io_flows['buyer_id'].apply(lambda x: isinstance(x, int)))]
-        dic_firmid_to_sectorid = {firm.pid: firm.sector for firm in firm_list}
-        domestic_b2c_flows = domestic_flows[domestic_flows['buyer_id'] == -1].copy()
-        domestic_b2c_flows['from_sector'] = domestic_flows['supplier_id'].map(dic_firmid_to_sectorid)
-        domestic_b2c_flows_per_sector = domestic_b2c_flows.groupby('from_sector')['quantity'].sum().reset_index()
-        
-        # Analyze domestic B2B flows
-        domestic_b2b_flows = domestic_flows[domestic_flows['buyer_id'] >= 0].copy()
-        domestic_b2b_flows['from_sector'] = domestic_b2b_flows['supplier_id'].map(dic_firmid_to_sectorid)
-        domestic_b2b_flows['to_sector'] = domestic_b2b_flows['buyer_id'].map(dic_firmid_to_sectorid)
-        domestic_b2b_flows_per_sector = domestic_b2b_flows.groupby(['from_sector', 'to_sector'])['quantity'].sum().reset_index()
-        
-        # Produce B2B io sector-to-sector matrix
-        domestic_sectors = list(domestic_b2c_flows_per_sector['from_sector'].sort_values())
-        observed_io_matrix = pd.DataFrame(index=domestic_sectors, columns=domestic_sectors, data=0)
-        for i in range(domestic_b2b_flows_per_sector.shape[0]):
-            observed_io_matrix.loc[domestic_b2b_flows_per_sector['from_sector'].iloc[i], domestic_b2b_flows_per_sector['to_sector'].iloc[i]] = domestic_b2b_flows_per_sector['quantity'].iloc[i]
-
-        # Analyze import B2B flows
-        import_flows = io_flows[(io_flows['supplier_id'].apply(lambda x: isinstance(x, str))) & (io_flows['buyer_id'].apply(lambda x: isinstance(x, int)))]
-        import_b2b_flows = import_flows[import_flows['buyer_id'] >= 0].copy()
-        import_b2b_flows_per_country = import_b2b_flows.groupby('supplier_id')['quantity'].sum().reset_index()
-        import_b2b_flows['to_sector'] = import_b2b_flows['buyer_id'].map(dic_firmid_to_sectorid)
-        import_b2b_flows_per_sector = import_b2b_flows.groupby('to_sector')['quantity'].sum().reset_index()
-        
-        # Analyze import B2C flows
-        import_b2c_flows = import_flows[import_flows['buyer_id'] == -1].copy()
-
-        # Analyze export flows
-        export_flows = io_flows[(io_flows['supplier_id'].apply(lambda x: isinstance(x, int))) & (io_flows['buyer_id'].apply(lambda x: isinstance(x, str)))].copy()
-        export_flows_per_country = export_flows.groupby('buyer_id')['quantity'].sum().reset_index()
-        export_flows['from_sector'] = export_flows['supplier_id'].map(dic_firmid_to_sectorid)
-        export_flows_per_sector = export_flows.groupby('from_sector')['quantity'].sum().reset_index()
-
-        # Analyze transit flows
-        transit_flows = io_flows[(io_flows['supplier_id'].apply(lambda x: isinstance(x, str))) & (io_flows['buyer_id'].apply(lambda x: isinstance(x, str)))].copy()
-        transit_countries = pd.Series(list(set(transit_flows['supplier_id']) | set(transit_flows['buyer_id']))).sort_values().tolist()
-        country_to_country_transit_matrix = pd.DataFrame(index=transit_countries, columns=transit_countries, data=0)
-        for i in range(transit_flows.shape[0]):
-            country_to_country_transit_matrix.loc[transit_flows['supplier_id'].iloc[i], transit_flows['buyer_id'].iloc[i]] = transit_flows['quantity'].iloc[i]
-        
-        # Form final consumption
-        final_consumption = domestic_b2c_flows_per_sector.append(pd.DataFrame(index=['import'], data={'from_sector':'import', 'quantity':import_b2c_flows['quantity'].sum()}))
-        
-        # Enrich io matrix with import and export flows
-        observed_io_matrix = pd.concat([
-            pd.concat([
-                observed_io_matrix, 
-                import_b2b_flows_per_sector.set_index('to_sector').rename(columns={'quantity':'total'}).transpose()],
-                axis=0),
-            export_flows_per_sector.set_index('from_sector').rename(columns={'quantity':'total'})],
-            axis=1).fillna(0)
-        
-        # Regional io matrix
-        # legacy, should be removed, we shall do these kind of analysis outside of the core model
-        if False:
-            dic_firmid_to_region = {firm.pid: dic_odpoint_to_region[firm.odpoint] for firm in firm_list}
-
-            domestic_b2b_flows['from_region'] = domestic_b2b_flows['supplier_id'].map(dic_firmid_to_region)
-            domestic_b2b_flows['to_region'] = domestic_b2b_flows['buyer_id'].map(dic_firmid_to_region)
-
-            domestic_b2b_flows_per_region = domestic_b2b_flows.groupby(['from_region', 'to_region'])['quantity'].sum().reset_index()
-
-            regions = pd.Series(list(set(dic_odpoint_to_region.values()))).sort_values().tolist()
-            region_to_region_io_matrix = pd.DataFrame(index=regions, columns=regions, data=0)
-            for i in range(domestic_b2b_flows_per_region.shape[0]):
-                region_to_region_io_matrix.loc[domestic_b2b_flows_per_region['from_region'].iloc[i], domestic_b2b_flows_per_region['to_region'].iloc[i]] = domestic_b2b_flows_per_region['quantity'].iloc[i]
-
-        # Export Report
-        writer = pd.ExcelWriter(os.path.join(exp_folder, 'flow_report.xlsx'))
-        final_consumption.to_excel(writer, 'final_consumption', index=False)
-        observed_io_matrix.to_excel(writer, 'sector_io_matrix', index=True)
-        if False: # legacy, should be removed, we shall do these kind of analysis outside of the core model
-            region_to_region_io_matrix.to_excel(writer, 'region_to_region_io_matrix', index=True)
-        country_to_country_transit_matrix.to_excel(writer, 'transit_matrix', index=True)
-        import_b2b_flows_per_country.to_excel(writer, 'import_b2b_flows_per_country', index=True)
-        export_flows_per_country.to_excel(writer, 'export_flows_per_country', index=True)
-        writer.save()

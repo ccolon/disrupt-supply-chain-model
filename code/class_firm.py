@@ -398,66 +398,67 @@ class Firm(object):
 
     
     def deliver_products(self, graph, transport_network=None, rationing_mode="equal"):
-        # Compute rationing factor
+        # Do nothing if no orders
         if self.total_order == 0:
             logging.info('Firm '+str(self.pid)+': no one ordered to me')
+            return 0
+        
+        # Otherwise compute rationing factor
+        self.rationing = self.product_stock / self.total_order
+        if self.rationing > 1 + 1e-6:
+            logging.debug('Firm '+str(self.pid)+': I have produced too much')
+            self.rationing = 1
+        
+        elif self.rationing >= 1 - 1e-6:
+            quantity_to_deliver = {buyer_id: order for buyer_id, order in self.order_book.items()}
             
         else:
-            self.rationing = self.product_stock / self.total_order
-            if self.rationing > 1 + 1e6:
-                logging.debug('Firm '+str(self.pid)+': I have produced too much')
-                self.rationing = 1
-            
-            if self.rationing >= 1-1e-6:
-                quantity_to_deliver = {buyer_id: order for buyer_id, order in self.order_book.items()}
+            logging.debug('Firm '+str(self.pid)+': I have to ration my clients by '+'{:.2f}'.format((1-self.rationing)*100)+'%')
+            # Evaluate the quantity to deliver to each buyer
+            if rationing_mode=="equal":
+                quantity_to_deliver = {buyer_id: order * self.rationing for buyer_id, order in self.order_book.items()}
                 
-            else:
-                logging.debug('Firm '+str(self.pid)+': I have to ration my clients by '+'{:.2f}'.format((1-self.rationing)*100)+'%')
-                # Evaluate the quantity to deliver to each buyer
-                if rationing_mode=="equal":
+            elif rationing_mode=="household_first":
+                if -1 not in self.order_book.keys(): #no household orders to this firm
                     quantity_to_deliver = {buyer_id: order * self.rationing for buyer_id, order in self.order_book.items()}
-                    
-                elif rationing_mode=="household_first":
-                    if -1 not in self.order_book.keys(): #no household orders to this firm
-                        quantity_to_deliver = {buyer_id: order * self.rationing for buyer_id, order in self.order_book.items()}
-                    elif len(self.order_book.keys())==1: #only households order to this firm
-                        quantity_to_deliver = {-1: self.total_order}
+                elif len(self.order_book.keys())==1: #only households order to this firm
+                    quantity_to_deliver = {-1: self.total_order}
+                else:
+                    order_households = self.order_book[-1]
+                    if order_households < self.product_stock:
+                        remaining_product_stock = self.product_stock - order_households
+                        if (self.total_order-order_households) <= 0:
+                            logging.warning("Firm "+str(self.pid)+': '+str(self.total_order-order_households))
+                        rationing_for_business = remaining_product_stock / (self.total_order-order_households)
+                        quantity_to_deliver = {buyer_id: order * rationing_for_business for buyer_id, order in self.order_book.items() if buyer_id != -1}
+                        quantity_to_deliver[-1] = order_households
                     else:
-                        order_households = self.order_book[-1]
-                        if order_households < self.product_stock:
-                            remaining_product_stock = self.product_stock - order_households
-                            if (self.total_order-order_households) <= 0:
-                                logging.warning("Firm "+str(self.pid)+': '+str(self.total_order-order_households))
-                            rationing_for_business = remaining_product_stock / (self.total_order-order_households)
-                            quantity_to_deliver = {buyer_id: order * rationing_for_business for buyer_id, order in self.order_book.items() if buyer_id != -1}
-                            quantity_to_deliver[-1] = order_households
-                        else:
-                            quantity_to_deliver = {buyer_id: 0 for buyer_id, order in self.order_book.items() if buyer_id != -1}
-                            quantity_to_deliver[-1] = self.product_stock
-                else:
-                    raise ValueError('Wrong rationing_mode chosen')
-            # We initialize transport costs, it will be updated for each shipment
-            self.finance['costs']['transport'] = 0
-            self.generalized_transport_cost = 0
-            self.usd_transported = 0
-            self.tons_transported = 0
-            self.tonkm_transported = 0
+                        quantity_to_deliver = {buyer_id: 0 for buyer_id, order in self.order_book.items() if buyer_id != -1}
+                        quantity_to_deliver[-1] = self.product_stock
+            else:
+                raise ValueError('Wrong rationing_mode chosen')
+        # We initialize transport costs, it will be updated for each shipment
+        self.finance['costs']['transport'] = 0
+        self.generalized_transport_cost = 0
+        self.usd_transported = 0
+        self.tons_transported = 0
+        self.tonkm_transported = 0
+        
+        # For each client, we define the quantity to deliver then send the shipment 
+        for edge in graph.out_edges(self):
+            graph[self][edge[1]]['object'].delivery = quantity_to_deliver[edge[1].pid]
             
-            # For each client, we define the quantity to deliver then send the shipment 
-            for edge in graph.out_edges(self):
-                graph[self][edge[1]]['object'].delivery = quantity_to_deliver[edge[1].pid]
-                
-                # If it's B2B and no service client, we send to the transport network, price will be adjusted according to transport conditions
-                if (self.odpoint != -1) and (edge[1].odpoint != -1) and (edge[1].pid != -1):
-                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
-                
-                # If it's B2C, or B2B with service client, we send directly, and adjust price with input costs. There is still transport costs.
-                elif (self.odpoint == -1) or (edge[1].odpoint == -1) or (edge[1].pid == -1):
-                    self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
-                
-                # If it's B2C, we send directly, and adjust price with input costs. There is still transport costs.
-                else:
-                    logging.error('There should not be this other case.')
+            # If it's B2B and no service client, we send to the transport network, price will be adjusted according to transport conditions
+            if (self.odpoint != -1) and (edge[1].odpoint != -1) and (edge[1].pid != -1):
+                self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+            
+            # If it's B2C, or B2B with service client, we send directly, and adjust price with input costs. There is still transport costs.
+            elif (self.odpoint == -1) or (edge[1].odpoint == -1) or (edge[1].pid == -1):
+                self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
+            
+            # If it's B2C, we send directly, and adjust price with input costs. There is still transport costs.
+            else:
+                logging.error('There should not be this other case.')
                     
                 
     def send_shipment(self, commercial_link, transport_network):

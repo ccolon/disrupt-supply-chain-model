@@ -38,7 +38,7 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 # If there is sth to export, then we create the output folder
 exporting_sth = [
-    export_log, export_criticality, export_per_firm, export_time_series, export_flows,
+    export_log, export_criticality, export_impact_per_firm, export_time_series, export_flows,
     export_firm_table, export_odpoint_table, export_country_table, export_edgelist_table,
     export_inventories, export_district_sector_table, export_sc_network_summary
 ]
@@ -202,6 +202,7 @@ logging.info('The supplier--buyer graph is now connected to the transport networ
 
 if disruption_analysis is None:
     logging.info("No disruption. Simulation of the initial state")
+    t0 = time.time()
 
     logging.info("Setting initial supply-chain conditions")
     T.reinitialize_flows_and_disruptions()
@@ -222,27 +223,25 @@ if disruption_analysis is None:
     if export_inventories:
         exportInventories(firm_list, export_folder=exp_folder)
 
-    exit()
-    ### Run the simulation
-    flow_types_to_observe = present_sectors+['domestic', 'transit', 'import', 'export', 'total']
-                
+    ### Run the simulation              
     allFirmsRetrieveOrders(G, firm_list)
     allFirmsPlanProduction(firm_list, G, price_fct_input=propagate_input_price_change)
     allFirmsPlanPurchase(firm_list)
     allAgentsSendPurchaseOrders(G, firm_list, households, country_list)
     allFirmsProduce(firm_list)
     allAgentsDeliver(G, firm_list, country_list, T, rationing_mode=rationing_mode)
-    if export_flows:
-        T.compute_flow_per_segment(flow_types_to_observe)
-        obs.collect_data_flows(T_noCountries, t, flow_types_to_observe)
-        obs.analyzeFlows(G, firm_list, exp_folder)
-        with open(os.path.join(exp_folder, 'flows.json'), 'w') as jsonfile:
-            json.dump(obs.flows_snapshot, jsonfile)
+    if export_flows: #should be done at this stage, while the goods are on their way
+        flow_types_to_export = present_sectors+['domestic', 'transit', 'import', 'export', 'total']
+        T.compute_flow_per_segment(flow_types_to_export)
+        obs.collect_transport_flows(T_noCountries, time_step=0, flow_types_to_export=flow_types_to_export)
+        exportTransportFlows(obs, exp_folder)
+    if export_sc_flow_analysis: #should be done at this stage, while the goods are on their way
+        analyzeSupplyChainFlows(G, firm_list, exp_folder)
     allAgentsReceiveProducts(G, firm_list, households, country_list, T)
-    T.update_road_state()
-    obs.collect_data2(firm_list, households, country_list, t)
+    if export_agent_data:
+        obs.collect_agent_data(firm_list, households, country_list, t=0)
+        exportAgentData(obs, exp_folder)
     logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
-
 
 
 else:
@@ -251,7 +250,8 @@ else:
     logging.info(str(len(disruption_list))+" "+disrupt_nodes_or_edges+" to be tested: "+str(disruption_list))
 
 
-exit()
+exit() ## do function in "simulations.py". One for initial condition, one for running t0
+
 ### Disruption Loop
 
 if export_criticality:
@@ -296,7 +296,6 @@ for disrupted_stuff in disruption_list:
     set_initial_conditions(G, firm_list, households, country_list, "equilibrium")
     obs = Observer(firm_list, Tfinal, exp_folder)
     logging.info("Initial conditions set")
-    #obs.collect_data(firm_list, households, 0)
 
     ### There are a number of export file that we export only once, after setting the initial conditions
     if disrupted_stuff == disruption_list[0]:
@@ -408,20 +407,20 @@ for disrupted_stuff in disruption_list:
             for country in country_list:
                 country.add_congestion_malus2(G, T)
         if export_flows:
-            obs.collect_data_flows(T_noCountries, t, flow_types_to_observe)
+            obs.collect_transport_flows(T_noCountries, t, flow_types_to_observe)
         if export_flows and (t==Tfinal):
             with open(os.path.join(exp_folder, 'flows.json'), 'w') as jsonfile:
                 json.dump(obs.flows_snapshot, jsonfile)
         allAgentsReceiveProducts(G, firm_list, households, country_list, T)
         T.update_road_state()
-        obs.collect_data2(firm_list, households, country_list, t)
+        obs.collect_agent_data(firm_list, households, country_list, t)
         if export_flows and (t==1) and False: #legacy, should be removed, we shall do these kind of analysis outside of the core model
-            obs.analyzeFlows(G, firm_list, exp_folder)
+            obs.analyzeSupplyChainFlows(G, firm_list, exp_folder)
         logging.debug('End of t='+str(t))
     logging.info("Time loop completed, "+str((time.time()-t0)/60)+" min")
 
 
-    obs.evaluate_results(T, households, disrupted_roads, disruption_duration, per_firm=export_per_firm, export_folder=None)
+    obs.evaluate_results(T, households, disrupted_roads, disruption_duration, per_firm=export_impact_per_firm, export_folder=None)
     if export_time_series:
         obs.export_time_series(exp_folder)
 
@@ -450,7 +449,7 @@ for disrupted_stuff in disruption_list:
                 + ',' + str((time.time()-t0)/60) \
 
                 + "\n")
-    if export_per_firm:
+    if export_impact_per_firm:
         if disrupted_stuff == disruption_list[0]:
             logging.debug('export extra spending and consumption with header')
             with open(os.path.join(exp_folder, 'extra_spending.csv'), 'w') as f:
@@ -464,4 +463,4 @@ for disrupted_stuff in disruption_list:
                 pd.DataFrame({str(disrupted_stuff): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=False)
     del obs
     
-logging.info("End of criticality analysis")
+logging.info("End of simulation")

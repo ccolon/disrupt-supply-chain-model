@@ -14,10 +14,19 @@ export_criticality = True
 # Can be True or False
 export_flows = False
 
+# Export information on aggregate supply chain flow at initial conditions
+# Used only if "disruption_analysis = None"
+# See analyzeSupplyChainFlows function for details
+export_sc_flow_analysis = False
+
+# Whether or not to export data for each agent for each time steps
+# See exportAgentData function for details.
+export_agent_data = False
+
 # Save firm-level impact results
 # It creates an "extra_spending.csv" file and an "extra_consumption.csv" file in the output folder
 # Each line is a simulation, it saves what was disrupted and the corresponding impact for each firm
-export_per_firm = False
+export_impact_per_firm = False
 
 # Save aggregated time series
 # It creates an "aggregate_ts.csv" file in the output folder

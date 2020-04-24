@@ -10,7 +10,7 @@ class Households(object):
     def __init__(self, final_demand=1, purchase_plan=None, final_demand_per_sector=None):
         # Intrinsic parameters
         self.pid = -1
-        self.location = -1
+        self.odpoint = -1
         # Parameters depending on data and network
         self.final_demand = final_demand
         self.final_demand_per_sector = final_demand_per_sector or {}
