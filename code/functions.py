@@ -270,7 +270,7 @@ def compute_distance_from_arcmin(x0, y0, x1, y1):
     
 
 def evaluate_sectoral_shock(firm_table, disrupted_node):
-    disrupted_sectoral_production = firm_table[firm_table['location'].isin(disrupted_node)].groupby('sector_id')['total_production'].sum()
+    disrupted_sectoral_production = firm_table[firm_table['odpoint'].isin(disrupted_node)].groupby('sector_id')['total_production'].sum()
     normal_sectoral_production = firm_table.groupby('sector_id')['total_production'].sum()
     consolidated_table = pd.concat([disrupted_sectoral_production, normal_sectoral_production], axis=1).fillna(0)
     return consolidated_table.iloc[:,0] / consolidated_table.iloc[:,1]

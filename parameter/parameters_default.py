@@ -67,10 +67,6 @@ disruption_duration = 1
 # Whether or not to export a csv summarizing some topological caracteristics of the supply chain network
 export_sc_network_summary = True
 
-# Whether the criticality should loop on the tranport edges or nodes
-# Admit 2 values: 'edges' or 'nodes'
-disrupt_nodes_or_edges = "edges"
-
 # Whether or not to model congestion
 congestion = True
 
@@ -171,12 +167,21 @@ nb_suppliers_per_input = 1
 # It is (importance) / (distance)^w where w is the weight_localization parameter
 weight_localization = 1
 
-# Determines the list of node or edge to disrupt in the criticality loop
+# Determines the type of disruption analysis to be done
 # Possible values are:
-# - "all" = test all nodes or edges, ordered by their ID
-# - a path to a list of node or edges
-# - a list of node/edge ids
-nodeedge_tested = "all"
+# - None: no disruption is made. The model is only initialized at t=0, and stops.
+# Metrics describing the initial state are exported.
+# - a dic: {
+#       "disrupt_nodes_or_edges": "nodes" or "edges", 
+#        "nodeedge_tested": object
+#   }
+# "disrupt_nodes_or_edges" determines whether nodes or edges are to be dirupted.
+# "nodeedge_tested" determines" what is disrupted. Possible values are:
+#   - integer: a single node or edge ID. The time series are exported.
+#   - a list of node/edge ids. Criticality exports.
+#   - "all": test all nodes or edges, ordered by their ID. Criticality exports.
+#   - a path to a list of node or edges. Criticality exports.
+disruption_analysis = None#("nodes", all")
 
 # Number of nodeedge to test
 # It will take only the first N in the list of nodes or edges of the criticality loop

@@ -117,11 +117,11 @@ class TransportNetwork(nx.Graph):
         for node_id in self.nodes:
             self.node[node_id]['firms_there'] = []
         for firm in firm_list:
-            if firm.location != -1:
+            if firm.odpoint != -1:
                 try:
-                    self.node[firm.location]['firms_there'].append(firm.pid)
+                    self.node[firm.odpoint]['firms_there'].append(firm.pid)
                 except KeyError:
-                    logging.error('Transport network has no node numbered: '+str(firm.location))
+                    logging.error('Transport network has no node numbered: '+str(firm.odpoint))
     
     
     def provide_shortest_route(self, origin_node, destination_node):

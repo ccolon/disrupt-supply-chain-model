@@ -20,6 +20,7 @@ import pickle
 # Import functions and classes
 from builder import *
 from functions import *
+from export_functions import *
 from class_firm import Firm
 from class_observer import Observer
 from class_transport_network import TransportNetwork
@@ -100,7 +101,7 @@ else:
 with open(filepath_special_sectors, "r") as yamlfile:
     special_sectors = yaml.load(yamlfile, Loader=yaml.FullLoader)
 logging.info('Generating the firm table. Sector included: '+str(sectors_to_include)+', districts included: '+str(districts_to_include)+', district sector cutoff: '+str(district_sector_cutoff))
-firm_table, od_table = rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
+firm_table, odpoint_table = rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
     district_sector_cutoff, nb_top_district_per_sector,
     sectors_to_include=sectors_to_include, districts_to_include=districts_to_include,
     agri_sectors=special_sectors['agriculture'], service_sectors=special_sectors['services'],
@@ -156,15 +157,9 @@ T_noCountries =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!=
 # In this case, we use an average.
 firm_list, country_list = loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list)
 
-# Creating a version of the transport network without the virtual nodes and edges that connect countries.
-disruption_list = defineDisruptionList(disrupt_nodes_or_edges, nodeedge_tested, transport_network=T_noCountries,
-    nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn)
-print(disruption_list)
-
-
 ### Create agents: Households
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
-firm_table = defineFinalDemand(firm_table, od_table, 
+firm_table = defineFinalDemand(firm_table, odpoint_table, 
     filepath_population=filepath_population, filepath_final_demand=filepath_final_demand,
     time_resolution=time_resolution, export_firm_table=export_firm_table, exp_folder=exp_folder)
 logging.info('Creating households and loaded their purchase plan')
@@ -192,9 +187,6 @@ logging.info('The nodes and edges of the supplier--buyer have been created')
 if export_sc_network_summary:
     exportSupplyChainNetworkSummary(G, firm_list, exp_folder)
 
-exit()
-
-
 ### Coupling transportation network T and production network G
 logging.info('The supplier--buyer graph is being connected to the transport network')
 logging.info('Each B2B and transit edge is being linked to a route of the transport network')
@@ -203,19 +195,64 @@ for country in country_list:
     country.decide_routes(G, T)
 logging.info('Routes for export flows and B2B domestic flows are being selected by Tanzanian firms finding routes to their clients')
 for firm in firm_list:
-    if firm.location != -1:
+    if firm.odpoint != -1:
         firm.decide_routes(G, T)
 logging.info('The supplier--buyer graph is now connected to the transport network')
 
 
-### Old disruption loop
-if disrupt_nodes_or_edges == 'nodes':
-    disruption_list = nodes_tested
-    logging.info("Nb of nodes tested: "+str(len(disruption_list)))
-elif disrupt_nodes_or_edges == 'edges':
-    disruption_list = edges_tested
-    logging.info("Nb of edges tested: "+str(len(disruption_list)))
-logging.info(str(len(disruption_list))+" nodes/edges to be tested: "+str(disruption_list))
+if disruption_analysis is None:
+    logging.info("No disruption. Simulation of the initial state")
+
+    logging.info("Setting initial supply-chain conditions")
+    T.reinitialize_flows_and_disruptions()
+    set_initial_conditions(G, firm_list, households, country_list, "equilibrium")
+    obs = Observer(firm_list, Tfinal, exp_folder)
+    logging.info("Initial supply-chain conditions set")
+
+    if export_firm_table or export_odpoint_table:
+        exportFirmODPointTable(firm_list, firm_table, odpoint_table,
+    export_firm_table=export_firm_table, export_odpoint_table=export_odpoint_table, export_folder=exp_folder)
+
+    if export_country_table:
+        exportCountryTable(country_list, export_folder=exp_folder)
+
+    if export_edgelist_table:
+        exportEdgelistTable(supply_chain_network=G, export_folder=exp_folder)
+
+    if export_inventories:
+        exportInventories(firm_list, export_folder=exp_folder)
+
+    exit()
+    ### Run the simulation
+    flow_types_to_observe = present_sectors+['domestic', 'transit', 'import', 'export', 'total']
+                
+    allFirmsRetrieveOrders(G, firm_list)
+    allFirmsPlanProduction(firm_list, G, price_fct_input=propagate_input_price_change)
+    allFirmsPlanPurchase(firm_list)
+    allAgentsSendPurchaseOrders(G, firm_list, households, country_list)
+    allFirmsProduce(firm_list)
+    allAgentsDeliver(G, firm_list, country_list, T, rationing_mode=rationing_mode)
+    if export_flows:
+        T.compute_flow_per_segment(flow_types_to_observe)
+        obs.collect_data_flows(T_noCountries, t, flow_types_to_observe)
+        obs.analyzeFlows(G, firm_list, exp_folder)
+        with open(os.path.join(exp_folder, 'flows.json'), 'w') as jsonfile:
+            json.dump(obs.flows_snapshot, jsonfile)
+    allAgentsReceiveProducts(G, firm_list, households, country_list, T)
+    T.update_road_state()
+    obs.collect_data2(firm_list, households, country_list, t)
+    logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
+
+
+
+else:
+    disruption_list = defineDisruptionList(disruption_analysis, transport_network=T_noCountries,
+        nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn)
+    logging.info(str(len(disruption_list))+" "+disrupt_nodes_or_edges+" to be tested: "+str(disruption_list))
+
+
+exit()
+### Disruption Loop
 
 if export_criticality:
     with open(os.path.join(exp_folder, 'criticality.csv'), "w") as myfile:
@@ -246,10 +283,11 @@ if export_criticality:
     
 
 for disrupted_stuff in disruption_list:
-    if disrupt_nodes_or_edges == 'nodes':
+    if disruption_analysis['disrupt_nodes_or_edges'] == 'nodes':
         write_disrupted_stuff = str(disrupted_stuff) + ',' + 'NA'
-    elif disrupt_nodes_or_edges == 'edges':
+    elif disruption_analysis['disrupt_nodes_or_edges'] == 'edges':
         write_disrupted_stuff = 'NA' + ',' + str(disrupted_stuff)
+
     t0 = time.time()
     
     ### Set initial conditions and create observer
@@ -274,14 +312,14 @@ for disrupted_stuff in disruption_list:
             production_table['production_exported'] = production_table['total_production']*production_table['export_share']
             production_table.index.name = 'id'
             firm_table = firm_table.merge(production_table.reset_index(), on="id", how="left")
-            prod_per_sector_ODpoint_table = firm_table.groupby(['location', 'sector_id'])['total_production'].sum().unstack().fillna(0).reset_index()
-            od_table = od_table.merge(prod_per_sector_ODpoint_table.rename(columns={"location":'od_point'}), on='od_point', how="left")
+            prod_per_sector_ODpoint_table = firm_table.groupby(['odpoint', 'sector_id'])['total_production'].sum().unstack().fillna(0).reset_index()
+            odpoint_table = odpoint_table.merge(prod_per_sector_ODpoint_table.rename(columns={"odpoint":'od_point'}), on='od_point', how="left")
 
             if export_firm_table:
                 firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
             
             if export_odpoint_table:
-                od_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
+                odpoint_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
             
         if export_country_table:
             country_table = pd.DataFrame({
@@ -297,7 +335,7 @@ for disrupted_stuff in disruption_list:
             edgelist_table = pd.DataFrame(extractEdgeList(G))
             edgelist_table.to_excel(os.path.join(exp_folder, 'edgelist_table.xlsx'), index=False)
             logging.info("Average distance all: "+str(edgelist_table['distance'].mean()))
-            boolindex = (edgelist_table['supplier_location']!=-1) & (edgelist_table['buyer_location']!=-1)
+            boolindex = (edgelist_table['supplier_odpoint']!=-1) & (edgelist_table['buyer_odpoint']!=-1)
             logging.info("Average distance only non virtual: "+str(edgelist_table.loc[boolindex, 'distance'].mean()))
             logging.info("Average weighted distance: "+str((edgelist_table['distance']*edgelist_table['flow']).sum()/edgelist_table['flow'].sum()))
             logging.info("Average weighted distance non virtual: "+str((edgelist_table.loc[boolindex, 'distance']*edgelist_table.loc[boolindex, 'flow']).sum()/edgelist_table.loc[boolindex, 'flow'].sum()))

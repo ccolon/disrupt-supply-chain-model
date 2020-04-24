@@ -171,21 +171,20 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     firm_table['id'] = list(range(firm_table.shape[0]))
     firm_table = firm_table[['id', 'sector', 'odpoint', 'importance', 'district', 'geometry', 'long', 'lat']]
     
-    if export_firm_table:
-        firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
-        logging.info('firm_table.xlsx exported')
+    # if export_firm_table:
+    #     firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
+    #     logging.info('firm_table.xlsx exported')
     
     # Create OD table
     od_table = od_sector_table.copy()
     od_table = od_table[['odpoint', 'district', 'nb_points_same_district', 'geometry', 'long', 'lat']]
     od_table = od_table.drop_duplicates().sort_values('odpoint')
-    if export_ODpoint_table:
-        od_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
-        logging.info('odpoint_table.xlsx exported')
-    
+    # if export_ODpoint_table:
+    #     od_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
+    #     logging.info('odpoint_table.xlsx exported')
+
     logging.info('Nb of od points chosen: '+str(len(set(firm_table['odpoint'])))+
         ', final nb of firms chosen: '+str(firm_table.shape[0]))
-
 
     return firm_table, od_table
     
@@ -221,7 +220,7 @@ def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilizat
     firm_list= [
         Firm(i, 
              sector=firm_table.loc[i, "sector"], 
-             location=firm_table.loc[i, "odpoint"], 
+             odpoint=firm_table.loc[i, "odpoint"], 
              importance=firm_table.loc[i, 'importance'],
              geometry=firm_table.loc[i, 'geometry'],
              long=float(firm_table.loc[i, 'long']),
@@ -238,9 +237,6 @@ def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilizat
     return firm_list
     
     
-
-
-
 def loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff=0.1, import_sector_name=None):
     """Load the input mix of the firms' Leontief function
 
@@ -527,10 +523,10 @@ def defineFinalDemand(firm_table, od_table,
     logging.info('Population in district with firms: '+str(int(od_table['population'].sum()))+', total population is: '+str(population_per_district['population'].sum()))
     
     # Compute population allocated to each firm
-    col_to_keep = ['id', 'sector', 'odpoint', 'importance', 'geometry', 'long', 'lat']
-    firm_table = pd.merge(firm_table[col_to_keep], od_table, on='odpoint', how='left')
-    firm_table = pd.merge(firm_table,
-                      firm_table.groupby(['odpoint', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
+    firm_table = firm_table[['id', 'sector', 'odpoint', 'importance']].merge(od_table, 
+                                                                      on='odpoint', 
+                                                                      how='left')
+    firm_table = firm_table.merge(firm_table.groupby(['odpoint', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
                       on=['odpoint', 'sector'],
                       how='left')
     firm_table.loc[firm_table['odpoint']==-1, 'perc_population'] = 1
@@ -552,9 +548,9 @@ def defineFinalDemand(firm_table, od_table,
     logging.info('Every '+time_resolution+', the total final demand is '+str(int(firm_table['final_demand'].sum())))
     actual_final_demand_per_sector = firm_table.groupby('sector')['final_demand'].sum()
     
-    if export_firm_table:
-        firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
-        logging.info('firm_table.xlsx exported')
+    # if export_firm_table:
+    #     firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
+    #     logging.info('firm_table.xlsx exported')
     
     return firm_table
     
@@ -579,7 +575,7 @@ def extractEdgeList(graph):
     dic_commercial_links = {key: value for key, value in dic_commercial_links.items() if (isinstance(key[0], Firm) and isinstance(key[1], Firm))}
     dic_commercial_links = [{
         'supplier_id':key[0].pid, 'buyer_id':key[1].pid,
-        'supplier_location':key[0].location, 'buyer_location':key[1].location,
+        'supplier_odpoint':key[0].odpoint, 'buyer_odpoint':key[1].odpoint,
         'supplier_sector':key[0].sector, 'buyer_sector':key[1].sector, 
         'distance':key[0].distance_to_other(key[1]),
         'flow':commercial_link.order

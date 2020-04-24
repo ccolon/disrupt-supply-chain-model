@@ -8,12 +8,12 @@ import numpy as np
 
 class Firm(object):
     
-    def __init__(self, pid, location=0, sector=0, input_mix=None, target_margin=0.2, utilization_rate=0.8,
+    def __init__(self, pid, odpoint=0, sector=0, input_mix=None, target_margin=0.2, utilization_rate=0.8,
                  importance=1, long=None, lat=None, geometry=None,
                  suppliers=None, clients=None, production=0, inventory_duration_target=1, reactivity_rate=1, usd_per_ton=2864):
         # Parameters depending on data
         self.pid = pid
-        self.location = location
+        self.odpoint = odpoint
         self.long = long
         self.lat = lat
         self.geometry = geometry
@@ -94,7 +94,7 @@ class Firm(object):
         
     
     def distance_to_other(self, other_firm):
-        if (self.location == -1) or (other_firm.location == -1): #if virtual firms
+        if (self.odpoint == -1) or (other_firm.odpoint == -1): #if virtual firms
             return 1
         else:
             return compute_distance_from_arcmin(self.long, self.lat, other_firm.long, other_firm.lat)
@@ -202,11 +202,11 @@ class Firm(object):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
-            elif edge[1].location == -1: # we do not create route for service firms 
+            elif edge[1].odpoint == -1: # we do not create route for service firms 
                 continue
             else:
-                origin_node = self.location
-                destination_node = edge[1].location
+                origin_node = self.odpoint
+                destination_node = edge[1].odpoint
                 route = transport_network.provide_shortest_route(origin_node, destination_node)
                 if route is not None:
                     graph[self][edge[1]]['object'].route = route
@@ -371,7 +371,7 @@ class Firm(object):
                     else:
                         sector_of_supplier = firm_list[graph[edge[0]][self]['object'].supplier_id].sector
                         distance_of_supplier = self.distance_to_other(firm_list[graph[edge[0]][self]['object'].supplier_id])
-                        if self.location == firm_list[graph[edge[0]][self]['object'].supplier_id].location:
+                        if self.odpoint == firm_list[graph[edge[0]][self]['object'].supplier_id].odpoint:
                             same_place = 1
                         else:
                             same_place = 0
@@ -448,11 +448,11 @@ class Firm(object):
                 graph[self][edge[1]]['object'].delivery = quantity_to_deliver[edge[1].pid]
                 
                 # If it's B2B and no service client, we send to the transport network, price will be adjusted according to transport conditions
-                if (self.location != -1) and (edge[1].location != -1) and (edge[1].pid != -1):
+                if (self.odpoint != -1) and (edge[1].odpoint != -1) and (edge[1].pid != -1):
                     self.send_shipment(graph[self][edge[1]]['object'], transport_network)
                 
                 # If it's B2C, or B2B with service client, we send directly, and adjust price with input costs. There is still transport costs.
-                elif (self.location == -1) or (edge[1].location == -1) or (edge[1].pid == -1):
+                elif (self.odpoint == -1) or (edge[1].odpoint == -1) or (edge[1].pid == -1):
                     self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
                 
                 # If it's B2C, we send directly, and adjust price with input costs. There is still transport costs.
@@ -486,7 +486,7 @@ class Firm(object):
                     route = commercial_link.alternative_route
                 else:
                 # Otherwise we have to find a new one
-                    origin_node = self.location
+                    origin_node = self.odpoint
                     destination_node = commercial_link.route[-1][0]
                     route = transport_network.available_subgraph().provide_shortest_route(origin_node, destination_node)
                     if route is not None: # if we find a new route, we save it as the alternative one
@@ -632,7 +632,7 @@ class Firm(object):
         
     def receive_products_and_pay(self, graph, transport_network):
         for edge in graph.in_edges(self): 
-            if (edge[0].location == -1) or (self.location == -1): # if service, directly
+            if (edge[0].odpoint == -1) or (self.odpoint == -1): # if service, directly
                 self.receive_service_and_pay(graph[edge[0]][self]['object'])
             else: # else collect through transport network
                 self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
@@ -653,9 +653,9 @@ class Firm(object):
         quantity_intransit = commercial_link.delivery
         quantity_delivered = 0
         price = 1
-        if commercial_link.pid in transport_network.node[self.location]['shipments'].keys():
-            quantity_delivered += transport_network.node[self.location]['shipments'][commercial_link.pid]['quantity']
-            price = transport_network.node[self.location]['shipments'][commercial_link.pid]['price']
+        if commercial_link.pid in transport_network.node[self.odpoint]['shipments'].keys():
+            quantity_delivered += transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['quantity']
+            price = transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['price']
             transport_network.remove_shipment(commercial_link)
         self.inventory[commercial_link.product] += quantity_delivered
         if abs(quantity_intransit - quantity_delivered) > 1e-6:

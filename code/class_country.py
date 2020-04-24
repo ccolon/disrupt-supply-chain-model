@@ -11,7 +11,7 @@ class Country(object):
     def __init__(self, pid=None, qty_sold=None, qty_purchased=None, transit_points=None, purchase_plan=None, transit_from=None, transit_to=None, supply_importance=None, usd_per_ton=None):
         # Instrinsic parameters
         self.pid = pid
-        self.location = pid
+        self.odpoint = pid
         self.usd_per_ton = usd_per_ton
         
         # Parameter based on data
@@ -110,11 +110,11 @@ class Country(object):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
-            elif edge[1].location == -1: # we do not create route for service firms 
+            elif edge[1].odpoint == -1: # we do not create route for service firms 
                 continue
             else:
-                origin_node = self.location
-                destination_node = edge[1].location
+                origin_node = self.odpoint
+                destination_node = edge[1].odpoint
                 route = transport_network.provide_shortest_route(origin_node, destination_node)
                 if route is not None:
                     graph[self][edge[1]]['object'].route = route
@@ -137,7 +137,7 @@ class Country(object):
         self.tonkm_transported = 0
         for edge in graph.out_edges(self):
             graph[self][edge[1]]['object'].delivery = graph[self][edge[1]]['object'].order
-            if (edge[1].location != -1): # to non service firms, send shipment through transportation network                   
+            if (edge[1].odpoint != -1): # to non service firms, send shipment through transportation network                   
                 self.send_shipment(graph[self][edge[1]]['object'], transport_network)
             else: # if it sends to service firms, nothing to do. price is equilibrium price
                 graph[self][edge[1]]['object'].price = graph[self][edge[1]]['object'].eq_price
@@ -168,7 +168,7 @@ class Country(object):
                     route = commercial_link.alternative_route
                 else:
                 # Otherwise we have to find a new one
-                    origin_node = self.location
+                    origin_node = self.odpoint
                     destination_node = commercial_link.route[-1][0]
                     route = transport_network.available_subgraph().provide_shortest_route(origin_node, destination_node)
                     # We evaluate the cost of this new route
@@ -248,7 +248,7 @@ class Country(object):
         self.extra_spending = 0
         self.consumption_loss = 0
         for edge in graph.in_edges(self):
-            if (edge[0].location == -1): # if buys service, get directly from commercial link
+            if (edge[0].odpoint == -1): # if buys service, get directly from commercial link
                 self.receive_service_and_pay(graph[edge[0]][self]['object'])
             else: # else collect through transport network
                 self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
@@ -269,9 +269,9 @@ class Country(object):
         #quantity_intransit = commercial_link.delivery
         quantity_delivered = 0
         price = 1
-        if commercial_link.pid in transport_network.node[self.location]['shipments'].keys():
-            quantity_delivered += transport_network.node[self.location]['shipments'][commercial_link.pid]['quantity']
-            price = transport_network.node[self.location]['shipments'][commercial_link.pid]['price']
+        if commercial_link.pid in transport_network.node[self.odpoint]['shipments'].keys():
+            quantity_delivered += transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['quantity']
+            price = transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['price']
             transport_network.remove_shipment(commercial_link)
         self.extra_spending += quantity_delivered * (price - commercial_link.eq_price)
         self.consumption_loss += commercial_link.delivery - quantity_delivered
