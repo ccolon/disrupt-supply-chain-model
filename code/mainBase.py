@@ -44,7 +44,7 @@ exporting_sth = [
     export_inventories, export_district_sector_table, export_sc_network_summary
 ]
 if any(exporting_sth):
-    exp_folder = os.path.join('output', timestamp)
+    exp_folder = os.path.join('output', input_folder, timestamp)
     os.mkdir(exp_folder)
 else:
     exp_folder = None
