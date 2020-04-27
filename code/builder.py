@@ -120,7 +120,7 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     elif (sectors_to_include!='all'):
         raise ValueError("'districts_to_include' should be a list of string or 'all'")
 
-    logging.info('Nb of combinations (district, sector): '+str(table_district_sector_importance.shape[0]))
+    logging.info('Nb of combinations (district, sector) before cutoff: '+str(table_district_sector_importance.shape[0]))
 
     # Filter district-sector combination that are above the cutoff value
     if agri_sectors:
@@ -132,6 +132,7 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
         logging.info('Treshold is '+str(district_sector_cutoff))
         boolindex_overthreshold = table_district_sector_importance['importance']>= district_sector_cutoff
         filtered_district_sector = table_district_sector_importance[boolindex_overthreshold].copy()
+    logging.info('Nb of combinations (district, sector) after cutoff: '+str(table_district_sector_importance.shape[0]))
 
     # Add the top district of each sector
     if isinstance(nb_top_district_per_sector, int):
@@ -141,6 +142,9 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
                 for sector in table_district_sector_importance['sector'].unique()
             ])
             filtered_district_sector = pd.concat([filtered_district_sector, top_district_sector]).drop_duplicates()
+        logging.info('Nb of combinations (district, sector) after adding top '+
+            str(nb_top_district_per_sector)+": "+
+            str(table_district_sector_importance.shape[0]))
     if export_district_sector_table:
         filtered_district_sector.to_excel(os.path.join(exp_folder, 'filtered_district_sector.xlsx'), index=False)
     

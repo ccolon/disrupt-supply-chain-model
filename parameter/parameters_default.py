@@ -95,7 +95,7 @@ districts_to_include = "all"
 # Which countries to include. Possible values:
 # - 'all': all the districts are kept
 # - list of countries
-countries_to_include = ["BDI", "EUR"]#"all"
+countries_to_include = "all"
 
 # Any sector in a district that have an importance lower than this value is discarded
 # 2 exceptions apply:
@@ -191,6 +191,10 @@ weight_localization = 1
 #   - "all": test all nodes or edges, ordered by their ID. Criticality exports.
 #   - a path to a list of node or edges. Criticality exports.
 disruption_analysis = None#("nodes", all")
+
+# What time interval does a time step represents
+# Possible values are: 'day', 'week', 'month', 'year'
+time_resolution = 'week'
 
 # Number of nodeedge to test
 # It will take only the first N in the list of nodes or edges of the criticality loop

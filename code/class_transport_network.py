@@ -240,7 +240,7 @@ class TransportNetwork(nx.Graph):
                             shipment['quantity'] 
                             for shipment in self[edge[0]][edge[1]]["shipments"].values()
                         ])
-                    elif flow_type in ['domestic_B2B', 'domestic_B2C', 'import', 'export']:
+                    elif flow_type in ['domestic_B2B', 'import', 'export']:
                         self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
                             shipment['quantity'] 
                             for shipment in self[edge[0]][edge[1]]["shipments"].values() 
