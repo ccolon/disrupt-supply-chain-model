@@ -95,7 +95,7 @@ districts_to_include = "all"
 # Which countries to include. Possible values:
 # - 'all': all the districts are kept
 # - list of countries
-countries_to_include = "all"
+countries_to_include = ["BDI", "EUR"]#"all"
 
 # Any sector in a district that have an importance lower than this value is discarded
 # 2 exceptions apply:

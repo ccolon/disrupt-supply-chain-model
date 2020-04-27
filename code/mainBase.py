@@ -20,6 +20,7 @@ import pickle
 # Import functions and classes
 from builder import *
 from functions import *
+from simulations import *
 from export_functions import *
 from class_firm import Firm
 from class_observer import Observer
@@ -142,14 +143,14 @@ logging.info('Firms located on the transport network')
 time_resolution = 'week'
 logging.info('Creating country_list. Countries included: '+str(countries_to_include))
 country_list = createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_transit_points, 
-    present_sectors, countries_to_include='all', time_resolution="day")
+    present_sectors, countries_to_include=countries_to_include, time_resolution="day")
 logging.info('Country_list created: '+str([country.pid for country in country_list]))
 # Linking the countries to the the transport network via their transit point.
 # This creates "virtual nodes" in the transport network that corresponds to the countries.
 # We create a copy of the transport network without such nodes, it will be used for plotting purposes
 for country in country_list:
     T.connect_country(country)
-T_noCountries =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!='virtual'])
+# T_noCountries =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!='virtual'])
 
 
 ### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
@@ -204,11 +205,11 @@ if disruption_analysis is None:
     logging.info("No disruption. Simulation of the initial state")
     t0 = time.time()
 
-    logging.info("Setting initial supply-chain conditions")
-    T.reinitialize_flows_and_disruptions()
-    set_initial_conditions(G, firm_list, households, country_list, "equilibrium")
-    obs = Observer(firm_list, Tfinal, exp_folder)
-    logging.info("Initial supply-chain conditions set")
+    # comments: not sure if the other initialization mode is (i) working and (ii) useful
+    setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
+        country_list=country_list, households=households, initialization_mode="equilibrium")
+
+    obs = Observer(firm_list, Tfinal)
 
     if export_firm_table or export_odpoint_table:
         exportFirmODPointTable(firm_list, firm_table, odpoint_table,
@@ -223,24 +224,19 @@ if disruption_analysis is None:
     if export_inventories:
         exportInventories(firm_list, export_folder=exp_folder)
 
-    ### Run the simulation              
-    allFirmsRetrieveOrders(G, firm_list)
-    allFirmsPlanProduction(firm_list, G, price_fct_input=propagate_input_price_change)
-    allFirmsPlanPurchase(firm_list)
-    allAgentsSendPurchaseOrders(G, firm_list, households, country_list)
-    allFirmsProduce(firm_list)
-    allAgentsDeliver(G, firm_list, country_list, T, rationing_mode=rationing_mode)
-    if export_flows: #should be done at this stage, while the goods are on their way
-        flow_types_to_export = present_sectors+['domestic', 'transit', 'import', 'export', 'total']
-        T.compute_flow_per_segment(flow_types_to_export)
-        obs.collect_transport_flows(T_noCountries, time_step=0, flow_types_to_export=flow_types_to_export)
-        exportTransportFlows(obs, exp_folder)
-    if export_sc_flow_analysis: #should be done at this stage, while the goods are on their way
-        analyzeSupplyChainFlows(G, firm_list, exp_folder)
-    allAgentsReceiveProducts(G, firm_list, households, country_list, T)
-    if export_agent_data:
-        obs.collect_agent_data(firm_list, households, country_list, t=0)
-        exportAgentData(obs, exp_folder)
+    ### Run the simulation
+    runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
+        country_list=country_list, households=households,
+        propagate_input_price_change=propagate_input_price_change,
+        rationing_mode=rationing_mode,
+        observer=obs,
+        time_step=0,
+        export_folder=exp_folder,
+        export_flows=export_flows, 
+        flow_types_to_export = present_sectors+['domestic', 'transit', 'import', 'export', 'total'],
+        export_sc_flow_analysis=export_sc_flow_analysis, 
+        export_agent_data=export_agent_data)
+
     logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
 
 
@@ -250,7 +246,10 @@ else:
     logging.info(str(len(disruption_list))+" "+disrupt_nodes_or_edges+" to be tested: "+str(disruption_list))
 
 
-exit() ## do function in "simulations.py". One for initial condition, one for running t0
+exit()
+## do function in "simulations.py". One for initial condition, one for running t0
+## see output, compare with TZA results
+## do it for Cambodia
 
 ### Disruption Loop
 
@@ -422,7 +421,7 @@ for disrupted_stuff in disruption_list:
 
     obs.evaluate_results(T, households, disrupted_roads, disruption_duration, per_firm=export_impact_per_firm, export_folder=None)
     if export_time_series:
-        obs.export_time_series(exp_folder)
+        exportTimeSeries(obs, exp_folder)
 
     if export_criticality:
         with open(os.path.join(exp_folder, 'criticality.csv'), "a") as myfile:

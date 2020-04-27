@@ -47,6 +47,7 @@ class Households(object):
                                object=CommercialLink(
                                    pid=str(firm.pid)+'to'+str(self.pid),
                                    product=firm.sector,
+                                   category="domestic_B2C",
                                    supplier_id=firm.pid,
                                    buyer_id=self.pid)
                               )

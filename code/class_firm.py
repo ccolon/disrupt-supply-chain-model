@@ -179,13 +179,16 @@ class Firm(object):
                 # It it is a firm we get it from the firm list
                 if sector_id == import_code:
                     supplier_object = [country for country in country_list if country.pid==supplier_id][0]
+                    link_category = 'import'
                 else:
                     supplier_object = firm_list[supplier_id]
+                    link_category = 'domestic_B2B'
                 # Create an edge in the graph
                 graph.add_edge(supplier_object, self,
                                object=CommercialLink(
                                    pid=str(supplier_id)+"to"+str(self.pid),
                                    product=sector_id,
+                                   category=link_category, 
                                    supplier_id=supplier_id,
                                    buyer_id=self.pid)
                               )

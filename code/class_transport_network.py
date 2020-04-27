@@ -183,6 +183,7 @@ class TransportNetwork(nx.Graph):
                     "to": commercial_link.buyer_id,
                     "quantity": commercial_link.delivery,
                     "product_type": commercial_link.product,
+                    "flow_category": commercial_link.category,
                     "price": commercial_link.price
                 }
             elif len(route_segment) == 1: #pass shipments to nodes
@@ -191,6 +192,7 @@ class TransportNetwork(nx.Graph):
                     "to": commercial_link.buyer_id,
                     "quantity": commercial_link.delivery,
                     "product_type": commercial_link.product,
+                    "flow_category": commercial_link.category,
                     "price": commercial_link.price
                 }
 
@@ -210,16 +212,46 @@ class TransportNetwork(nx.Graph):
                     del self.node[route_segment[0]]['shipments'][commercial_link.pid]
 
     
-    def compute_flow_per_segment(self, sectors=['total']):
+    def compute_flow_per_segment(self, flow_types=['total']):
+        """
+        Sum all flow of each 'flow_type' per transport edge
+
+        The flow type are given as a list in the flow_types argument.
+        It can corresponds to:
+        - "total": sum of all flows
+        - one of the CommercialLink.category, i.e., 'domestic_B2B', 
+        'domestic_B2C', 'import', 'export'
+        - one of the CommerialLink.product, i.e., the sectors
+
+        Parameters
+        ----------
+        flow_types : list of string
+            Flow type to evaluate
+
+        Returns
+        -------
+        Nothing
+        """
         for edge in self.edges():
             if self[edge[0]][edge[1]]['type'] != 'virtual':
-                for sector in sectors:
-                    if str(sector) == 'total':
-                        self[edge[0]][edge[1]]['flow_'+str(sector)] = sum([shipment['quantity'] for shipment in self[edge[0]][edge[1]]["shipments"].values()])
-                    elif str(sector) == 'domestic':
-                        self[edge[0]][edge[1]]['flow_domestic'] = sum([shipment['quantity'] for shipment in self[edge[0]][edge[1]]["shipments"].values() if len(str(shipment['product_type']))<=2])
+                for flow_type in flow_types:
+                    if flow_type == 'total':
+                        self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
+                            shipment['quantity'] 
+                            for shipment in self[edge[0]][edge[1]]["shipments"].values()
+                        ])
+                    elif flow_type in ['domestic_B2B', 'domestic_B2C', 'import', 'export']:
+                        self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
+                            shipment['quantity'] 
+                            for shipment in self[edge[0]][edge[1]]["shipments"].values() 
+                            if shipment['flow_category'] == flow_type
+                        ])
                     else: 
-                        self[edge[0]][edge[1]]['flow_'+str(sector)] = sum([shipment['quantity'] for shipment in self[edge[0]][edge[1]]["shipments"].values() if shipment['product_type'] == sector])
+                        self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
+                            shipment['quantity'] 
+                            for shipment in self[edge[0]][edge[1]]["shipments"].values() 
+                            if shipment['product_type'] == flow_type
+                        ])
 
   
     def evaluate_normal_traffic(self, sectorId_to_volumeCoef=None):

@@ -6,10 +6,11 @@ import geopandas as gpd
 
 from functions import rescale_values
 
-
+# Observer is an object that collects data while the simulation is running
+# It does not export anything. Export functions are in export_functions.py
 class Observer(object):
     
-    def __init__(self, firm_list, Tfinal=0, exp_folder=None):
+    def __init__(self, firm_list, Tfinal=0):
         self.firms = {}
         self.households = {}
         self.countries = {}
@@ -44,7 +45,6 @@ class Observer(object):
         self.households_consumption_loss_local = 0
         self.households_consumption_loss_per_firm = {}
         self.consumption_recovered = True
-        self.exp_folder = exp_folder or ''
         self.firm_to_sector = {firm.pid: firm.sector for firm in firm_list}
         self.generalized_cost_normal = 0
         self.generalized_cost_disruption = 0
@@ -57,8 +57,9 @@ class Observer(object):
         self.tonkm_transported_normal = 0
         self.tonkm_transported_disruption = 0
     
-    def collect_agent_data(self, firm_list, households, country_list, t):
-        self.firms[t] = {firm.pid: {
+
+    def collect_agent_data(self, firm_list, households, country_list, time_step):
+        self.firms[time_step] = {firm.pid: {
             'production': firm.production,
             'profit': firm.profit,
             'transport_cost': firm.finance['costs']['transport'],
@@ -68,7 +69,7 @@ class Observer(object):
             'tons_transported': firm.tons_transported,
             'tonkm_transported': firm.tonkm_transported
         } for firm in firm_list}
-        self.countries[t] = {country.pid: {
+        self.countries[time_step] = {country.pid: {
             'generalized_transport_cost': country.generalized_transport_cost,
             'usd_transported': country.usd_transported,
             'tons_transported': country.tons_transported,
@@ -76,19 +77,41 @@ class Observer(object):
             'extra_spending': country.extra_spending,
             'consumption_loss': country.consumption_loss
         } for country in country_list}
-        self.households[t] = {
+        self.households[time_step] = {
             'spending': households.spending,
             'consumption': households.consumption
         }
         
         
-    def collect_transport_flows(self, transport_network, time_step, flow_types_to_export=None):
+    def collect_transport_flows(self, transport_network, time_step, flow_types=None):
+        """
+        Store the transport flow at that time step.
+
+        See TransportNetwork.compute_flow_per_segment() for details on the flow types.
+
+        Parameters
+        ----------
+        transport_network : TransportNetwork
+            Transport network
+        time_step : int
+            The time step to index these data
+        flow_types : list of string
+            See TransportNetwork.compute_flow_per_segment() for details
+
+        Returns
+        -------
+        Nothing
+        """
         self.disrupted_nodes[time_step] = [node for node, val in nx.get_node_attributes(transport_network, "disruption_duration").items() if val > 0]
         self.disrupted_edges[time_step] = [nx.get_edge_attributes(transport_network, "link")[edge] for edge, val in nx.get_edge_attributes(transport_network, "disruption_duration").items() if val > 0]
-        flow_types_to_export = flow_types_to_export or ['total']
+        flow_types = flow_types or ['total']
         self.flows_snapshot[time_step] = {
-            str(transport_network[edge[0]][edge[1]]['link']): {str(sector): transport_network[edge[0]][edge[1]]["flow_"+str(sector)] for sector in flow_types_to_export}
+            str(transport_network[edge[0]][edge[1]]['link']): {
+                str(sector): transport_network[edge[0]][edge[1]]["flow_"+str(sector)] 
+                for sector in flow_types
+            }
             for edge in transport_network.edges
+            if transport_network[edge[0]][edge[1]]['type'] != 'virtual'
         }
         
         
@@ -110,7 +133,7 @@ class Observer(object):
             raise ValueError("'agent_type' should be 'firm', 'country', or 'firm+country'")
     
         
-    def evaluate_results(self, transport_network, households, disrupted_roads, disruption_duration, per_firm=False, export_folder=None):
+    def evaluate_results(self, transport_network, households, disrupted_roads, disruption_duration, per_firm=False):
         self.households_extra_spending = households.extra_spending
         print("Impact of disruption-induced price change on households:", '{:.4f}'.format(self.households_extra_spending))
         tot_spending_ts = pd.Series({t: sum(val['spending'].values()) for t, val in self.households.items()})
@@ -172,38 +195,14 @@ class Observer(object):
             self.households_consumption_loss_per_firm = consumption_loss_per_firm
             self.households_consumption_loss_per_firm[self.households_consumption_loss_per_firm<1e-6] = 0
 
-        if export_folder is not None:
-            pd.DataFrame(index=["value", "recovered"], data={
-                "agg_spending":[self.households_extra_spending, self.spending_recovered], 
-                "agg_consumption":[self.households_consumption_loss, self.consumption_recovered]
-            }).to_csv(os.path.join(export_folder, "results.csv"))
+        # if export_folder is not None:
+        #     pd.DataFrame(index=["value", "recovered"], data={
+        #         "agg_spending":[self.households_extra_spending, self.spending_recovered], 
+        #         "agg_consumption":[self.households_consumption_loss, self.consumption_recovered]
+        #     }).to_csv(os.path.join(export_folder, "results.csv"))
 
 
-    def export_time_series(self, exp_folder):  
-        # Calculus
-        firm_production_ts = pd.DataFrame({t: {firm_id: val['production'] for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
-        firm_profit_ts = pd.DataFrame({t: {firm_id: val['profit'] for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
-        firm_transportcost_ts = pd.DataFrame({t: {firm_id: val['transport_cost'] for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
-        firm_avinventoryduration_ts = pd.DataFrame({t: {firm_id: sum(val['inventory_duration'].values())/len(val['inventory_duration'].values()) for firm_id, val in self.firms[t].items()} for t in self.firms.keys()}).transpose()
-        households_consumption_ts = pd.DataFrame({t: val['consumption'] for t, val in self.households.items()}).transpose()
-        households_spending_ts = pd.DataFrame({t: val['spending'] for t, val in self.households.items()}).transpose()
-        # Export
-        firm_production_ts.to_csv(os.path.join(exp_folder, 'firm_production_ts.csv'), sep=',')
-        firm_profit_ts.to_csv(os.path.join(exp_folder, 'firm_profit_ts.csv'), sep=',')
-        firm_transportcost_ts.to_csv(os.path.join(exp_folder, 'firm_transportcost_ts.csv'), sep=',')
-        firm_avinventoryduration_ts.to_csv(os.path.join(exp_folder, 'firm_avinventoryduration_ts.csv'), sep=',')
-        households_consumption_ts.to_csv(os.path.join(exp_folder, 'households_consumption_ts.csv'), sep=',')
-        households_spending_ts.to_csv(os.path.join(exp_folder, 'households_spending_ts.csv'), sep=',')
-        # Get aggregate time series
-        agg_df = pd.DataFrame({
-            'firm_production': firm_production_ts.sum(axis=1),
-            'firm_profit': firm_profit_ts.sum(axis=1),
-            'firm_transportcost': firm_transportcost_ts.mean(axis=1),
-            'firm_avinventoryduration': firm_avinventoryduration_ts.mean(axis=1),
-            'households_consumption': households_consumption_ts.sum(axis=1),
-            'households_spending': households_spending_ts.sum(axis=1)
-        })
-        agg_df.to_csv(os.path.join(exp_folder, 'aggregate_ts.csv'), sep=',', index=False)
+ 
         
             
     @staticmethod

@@ -82,7 +82,8 @@ class Country(object):
                 graph.add_edge(firm_list[supplier_id], self,
                            object=CommercialLink(
                                pid=str(supplier_id)+'to'+str(self.pid),
-                               product='export',
+                               product=sector,
+                               category="export",
                                supplier_id=supplier_id,
                                buyer_id=self.pid))
                 # Associate a weight

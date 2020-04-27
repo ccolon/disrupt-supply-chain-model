@@ -14,6 +14,20 @@ export_flows = True
 export_sc_flow_analysis = True
 export_agent_data = True
 
+export_log = True
+export_criticality = True
+export_flows = True
+export_sc_flow_analysis = True
+export_agent_data = True
+export_impact_per_firm = True
+export_time_series = True
+export_firm_table = True
+export_odpoint_table = True
+export_country_table = True
+export_edgelist_table = True
+export_inventories = True
+export_district_sector_table = True
+
 
 # inputs_with_extra_inventories = ['TRD']
 # buying_sectors_with_extra_inventories = ["SUG"]
