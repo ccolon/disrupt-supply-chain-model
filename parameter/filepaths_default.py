@@ -9,20 +9,24 @@ else:
 
 # Filepaths
 import os
-filepath_district_sector_importance = os.path.join('input', input_folder, 'district_sector_importance.csv')
-filepath_transport_parameters = os.path.join('input', input_folder, 'transport_parameters.yaml')
-filepath_road_nodes = os.path.join('input', input_folder, 'road_nodes.shp')
-filepath_road_edges = os.path.join('input', input_folder, 'road_edges.shp')
-filepath_extra_road_edges = os.path.join('input', input_folder, "road_edges_extra.shp")
-filepath_special_sectors = os.path.join('input', input_folder, "special_sectors.yaml")
-filepath_odpoints = os.path.join('input', input_folder, "odpoints.csv")
-filepath_tech_coef = os.path.join('input', input_folder, "tech_coef_matrix.csv")
-filepath_inventory_duration_targets = os.path.join('input', input_folder, "inventory_duration_targets.csv")
-filepath_transit_points = os.path.join('input', input_folder, "country_transit_points.csv")
-filepath_imports = os.path.join('input', input_folder, "imports.csv")
-filepath_exports = os.path.join('input', input_folder, "exports.csv")
-filepath_export_shares = os.path.join('input', input_folder, "export_shares.csv")
-filepath_transit_matrix = os.path.join('input', input_folder, "transit_matrix.csv")
-filepath_ton_usd_equivalence = os.path.join('input', input_folder, "ton_usd_equivalence.csv")
-filepath_population = os.path.join('input', input_folder, "population.csv")
-filepath_final_demand = os.path.join('input', input_folder, "final_demand.csv")
+## Transport
+filepath_transport_parameters = os.path.join('input', input_folder, 'Transport', 'transport_parameters.yaml')
+filepath_road_nodes = os.path.join('input', input_folder, 'Transport', 'Roads', 'road_nodes.shp')
+filepath_road_edges = os.path.join('input', input_folder, 'Transport', 'Roads', 'road_edges.shp')
+filepath_extra_road_edges = os.path.join('input', input_folder, 'Transport', 'Roads', "road_edges_extra.shp")
+filepath_odpoints = os.path.join('input', input_folder, 'Transport', "odpoints.csv")
+## Supply
+filepath_district_sector_importance = os.path.join('input', input_folder, 'Supply', 'district_sector_importance.csv')
+filepath_special_sectors = os.path.join('input', input_folder, 'Supply', "special_sectors.yaml")
+filepath_tech_coef = os.path.join('input', input_folder, 'Supply', "tech_coef_matrix.csv")
+filepath_inventory_duration_targets = os.path.join('input', input_folder, 'Supply', "inventory_duration_targets.csv")
+filepath_ton_usd_equivalence = os.path.join('input', input_folder, 'Supply', "ton_usd_equivalence.csv")
+## Trade
+filepath_transit_points = os.path.join('input', input_folder, 'Trade', "country_transit_points.csv")
+filepath_imports = os.path.join('input', input_folder, 'Trade', "imports.csv")
+filepath_exports = os.path.join('input', input_folder, 'Trade', "exports.csv")
+filepath_export_shares = os.path.join('input', input_folder, 'Trade', "export_shares.csv")
+filepath_transit_matrix = os.path.join('input', input_folder, 'Trade', "transit_matrix.csv")
+## Demand
+filepath_population = os.path.join('input', input_folder, 'Demand', "population.csv")
+filepath_final_demand = os.path.join('input', input_folder, 'Demand', "final_demand.csv")
