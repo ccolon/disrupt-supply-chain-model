@@ -63,7 +63,10 @@ if export_log:
     logging.getLogger().addHandler(logging.StreamHandler())
 else:
     importlib.reload(logging)
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(
+        level=logging.INFO, 
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
 logging.info('Simulation '+timestamp+' starting using '+input_folder+' input data.')
 
@@ -83,9 +86,14 @@ if sys.argv[1] == "0":
         extra_road_log = " with extra roads"
     else:
         extra_road_log = ""
-    logging.info('Creating transport network'+extra_road_log+'. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
-    T = createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_params, additional_road_edges=filepath_extra_road_edges)
-    logging.info('Transport network'+extra_road_log+' created. Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
+    logging.info('Creating transport network'+extra_road_log+'.'+
+        'Speeds: '+str(transport_params['speeds'])+
+        ', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
+    T = createTransportNetwork(filepath_road_nodes, filepath_road_edges, 
+        transport_params, additional_road_edges=filepath_extra_road_edges)
+    logging.info('Transport network'+extra_road_log+' created.'+
+        'Nb of nodes: '+str(len(T.nodes))+
+        ', Nb of edges: '+str(len(T.edges)))
     pickle.dump(T, open(os.path.join('tmp', pickle_filename), 'wb'))
     logging.info('Transport network saved in tmp folder: '+pickle_filename)
 else:
@@ -96,25 +104,30 @@ else:
         extra_road_log = ""
         pickle_filename = 'transport_network_base_pickle'
     T = pickle.load(open(os.path.join('tmp', pickle_filename), 'rb'))
-    logging.info('Transport network'+extra_road_log+' generated from temp file. Speeds: '+str(transport_params['speeds'])+', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
+    logging.info('Transport network'+extra_road_log+' generated from temp file.'+
+        'Speeds: '+str(transport_params['speeds'])+
+        ', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
     
 
 ### Create firms
 # Filter district sector combination
 with open(filepath_special_sectors, "r") as yamlfile:
     special_sectors = yaml.load(yamlfile, Loader=yaml.FullLoader)
-logging.info('Generating the firm table. Sector included: '+str(sectors_to_include)+', districts included: '+str(districts_to_include)+', district sector cutoff: '+str(district_sector_cutoff))
-firm_table, odpoint_table = rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
-    district_sector_cutoff, nb_top_district_per_sector,
-    sectors_to_include=sectors_to_include, districts_to_include=districts_to_include,
-    agri_sectors=special_sectors['agriculture'], service_sectors=special_sectors['services'],
-    export_firm_table=export_firm_table, export_ODpoint_table=export_odpoint_table, 
-    export_district_sector_table=export_district_sector_table, exp_folder=exp_folder)
+logging.info('Generating the firm table. Sector included: '+str(sectors_to_include)+
+    ', districts included: '+str(districts_to_include)+
+    ', district sector cutoff: '+str(district_sector_cutoff))
+firm_table, odpoint_table, filtered_district_sector_table = \
+    rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
+        district_sector_cutoff, nb_top_district_per_sector,
+        sectors_to_include=sectors_to_include, districts_to_include=districts_to_include,
+        agri_sectors=special_sectors['agriculture'], service_sectors=special_sectors['services'])
 logging.info('Firm and OD tables generated')
 
 # Creating the firms
 nb_firms = 'all'
-logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+' reactivity_rate: '+str(reactivity_rate)+' utilization_rate: '+str(utilization_rate))
+logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+
+    ' reactivity_rate: '+str(reactivity_rate)+
+    ' utilization_rate: '+str(utilization_rate))
 firm_list = createFirms(firm_table, nb_firms, reactivity_rate, utilization_rate)
 n = len(firm_list)
 present_sectors = list(set([firm.sector for firm in firm_list]))
@@ -127,8 +140,11 @@ firm_list = loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff, 
 logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 
 # Loading the inventories
-firm_list = loadInventories(firm_list, inventory_duration_target=inventory_duration_target, filepath_inventory_duration_targets=filepath_inventory_duration_targets, 
-    extra_inventory_target=extra_inventory_target, inputs_with_extra_inventories=inputs_with_extra_inventories, buying_sectors_with_extra_inventories=buying_sectors_with_extra_inventories,
+firm_list = loadInventories(firm_list, inventory_duration_target=inventory_duration_target, 
+    filepath_inventory_duration_targets=filepath_inventory_duration_targets, 
+    extra_inventory_target=extra_inventory_target, 
+    inputs_with_extra_inventories=inputs_with_extra_inventories, 
+    buying_sectors_with_extra_inventories=buying_sectors_with_extra_inventories,
     random_mean_sd=None)
 logging.info('Inventory duration targets loaded, inventory_duration_target: '+str(inventory_duration_target))
 if extra_inventory_target:
@@ -163,7 +179,7 @@ firm_list, country_list = loadTonUsdEquivalence(filepath_ton_usd_equivalence, fi
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
 firm_table = defineFinalDemand(firm_table, odpoint_table, 
     filepath_population=filepath_population, filepath_final_demand=filepath_final_demand,
-    time_resolution=time_resolution, export_firm_table=export_firm_table, exp_folder=exp_folder)
+    time_resolution=time_resolution)
 logging.info('Creating households and loaded their purchase plan')
 households = createHouseholds(firm_table)
 logging.info('Households created')
@@ -211,6 +227,9 @@ if disruption_analysis is None:
         country_list=country_list, households=households, initialization_mode="equilibrium")
 
     obs = Observer(firm_list, Tfinal)
+
+    if export_district_sector_table:
+        exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
 
     if export_firm_table or export_odpoint_table:
         exportFirmODPointTable(firm_list, firm_table, odpoint_table,

@@ -28,14 +28,19 @@ def exportFirmODPointTable(firm_list, firm_table, odpoint_table,
         odpoint_table.to_csv(os.path.join(export_folder, 'odpoint_production_table.csv'), index=False)
 
 
+def exportDistrictSectorTable(filtered_district_sector_table, export_folder):
+    filtered_district_sector_table.to_csv(os.path.join(export_folder, 'filtered_district_sector_table.csv'), index=False)
+
+
 def exportCountryTable(country_list, export_folder):
     country_table = pd.DataFrame({
         'country':[country.pid for country in country_list],
         'purchases':[sum(country.purchase_plan.values()) for country in country_list],
-        'purchases_from_countries':[sum([value if str(key)[0]=='C' else 0 for key, value in country.purchase_plan.items()]) for country in country_list]
+        'purchases_from_countries':[sum([value if isinstance(key, str) else 0 for key, value in country.purchase_plan.items()]) for country in country_list],
+        'purchases_from_firms':[sum([value if isinstance(key, int) else 0 for key, value in country.purchase_plan.items()]) for country in country_list]
     })
-    country_table['purchases_from_firms'] = \
-        country_table['purchases'] - country_table['purchases_from_countries']
+    # country_table['purchases_from_firms'] = \
+    #     country_table['purchases'] - country_table['purchases_from_countries']
     country_table.to_csv(os.path.join(export_folder, 'country_table.csv'), index=False)
 
 

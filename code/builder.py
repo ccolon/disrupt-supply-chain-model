@@ -69,11 +69,14 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_p
 def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
     district_sector_cutoff, nb_top_district_per_sector, 
     sectors_to_include="all", districts_to_include="all",
-    agri_sectors=None, service_sectors=None,
-    export_firm_table=False, export_ODpoint_table=False, export_district_sector_table=False, exp_folder=None):
+    agri_sectors=None, service_sectors=None):
     """Generate the firm data
 
     It uses the district_sector_importance table, the odpoints, the cutoff values to generate the list of firms.
+    It generates a tuple of 3 pandas.DataFrame:
+    - firm_table
+    - odpoint_table
+    - filter_district_sector_table
 
     :param filepath_district_sector_importance: Path for the district_sector_importance table
     :type filepath_district_sector_importance: string
@@ -99,7 +102,7 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     :param service_sectors: list of the sectors that pertains to services. If None no special treatment is given to services.
     :type service_sectors: list of string or None
 
-    :return: tuple(pandas.DataFrame, pandas.DataFrame)
+    :return: tuple(pandas.DataFrame, pandas.DataFrame, pandas.DataFrame)
     """
 
     # Load 
@@ -127,11 +130,11 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
         logging.info('Treshold is '+str(district_sector_cutoff/2)+" for agriculture sectors, "+str(district_sector_cutoff)+" otherwise")
         boolindex_overthreshold = table_district_sector_importance['importance']>= district_sector_cutoff
         boolindex_agri = (table_district_sector_importance['sector'].isin(agri_sectors)) & (table_district_sector_importance['importance'] >= district_sector_cutoff/2)
-        filtered_district_sector = table_district_sector_importance[boolindex_overthreshold | boolindex_agri].copy()
+        filtered_district_sector_table = table_district_sector_importance[boolindex_overthreshold | boolindex_agri].copy()
     else:
         logging.info('Treshold is '+str(district_sector_cutoff))
         boolindex_overthreshold = table_district_sector_importance['importance']>= district_sector_cutoff
-        filtered_district_sector = table_district_sector_importance[boolindex_overthreshold].copy()
+        filtered_district_sector_table = table_district_sector_importance[boolindex_overthreshold].copy()
     logging.info('Nb of combinations (district, sector) after cutoff: '+str(table_district_sector_importance.shape[0]))
 
     # Add the top district of each sector
@@ -141,17 +144,15 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
                 table_district_sector_importance[table_district_sector_importance['sector']==sector].nlargest(nb_top_district_per_sector, 'importance')
                 for sector in table_district_sector_importance['sector'].unique()
             ])
-            filtered_district_sector = pd.concat([filtered_district_sector, top_district_sector]).drop_duplicates()
+            filtered_district_sector_table = pd.concat([filtered_district_sector_table, top_district_sector]).drop_duplicates()
         logging.info('Nb of combinations (district, sector) after adding top '+
             str(nb_top_district_per_sector)+": "+
             str(table_district_sector_importance.shape[0]))
-    if export_district_sector_table:
-        filtered_district_sector.to_excel(os.path.join(exp_folder, 'filtered_district_sector.xlsx'), index=False)
     
     # Generate the OD sector table
     table_odpoints = pd.read_csv(filepath_odpoints)
     table_odpoints['nb_points_same_district'] = table_odpoints['district'].map(table_odpoints['district'].value_counts())
-    od_sector_table = pd.merge(table_odpoints, filtered_district_sector, how='inner', on='district')
+    od_sector_table = pd.merge(table_odpoints, filtered_district_sector_table, how='inner', on='district')
     od_sector_table['importance'] = od_sector_table['importance'] / od_sector_table['nb_points_same_district']
     
     # Create firm table
@@ -175,22 +176,15 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     firm_table['id'] = list(range(firm_table.shape[0]))
     firm_table = firm_table[['id', 'sector', 'odpoint', 'importance', 'district', 'geometry', 'long', 'lat']]
     
-    # if export_firm_table:
-    #     firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
-    #     logging.info('firm_table.xlsx exported')
-    
     # Create OD table
     od_table = od_sector_table.copy()
     od_table = od_table[['odpoint', 'district', 'nb_points_same_district', 'geometry', 'long', 'lat']]
     od_table = od_table.drop_duplicates().sort_values('odpoint')
-    # if export_ODpoint_table:
-    #     od_table.to_excel(os.path.join(exp_folder, 'odpoint_table.xlsx'), index=False)
-    #     logging.info('odpoint_table.xlsx exported')
 
     logging.info('Nb of od points chosen: '+str(len(set(firm_table['odpoint'])))+
         ', final nb of firms chosen: '+str(firm_table.shape[0]))
 
-    return firm_table, od_table
+    return firm_table, od_table, filtered_district_sector_table
     
     
     
@@ -498,7 +492,7 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
 
 def defineFinalDemand(firm_table, od_table, 
     filepath_population, filepath_final_demand,
-    time_resolution='week', export_firm_table=False, exp_folder=None):
+    time_resolution='week'):
     """Allocate a final demand to each firm. It updates the firm_table
 
     :param firm_table: firm_table from rescaleNbFirms function
@@ -550,11 +544,7 @@ def defineFinalDemand(firm_table, od_table,
     firm_table['final_demand'] = firm_table['final_demand'] * firm_table['final_demand_weight'] / periods[time_resolution]
     logging.info('Every '+time_resolution+', the total final demand is '+str(int(firm_table['final_demand'].sum())))
     actual_final_demand_per_sector = firm_table.groupby('sector')['final_demand'].sum()
-    
-    # if export_firm_table:
-    #     firm_table.to_excel(os.path.join(exp_folder, 'firm_table.xlsx'), index=False)
-    #     logging.info('firm_table.xlsx exported')
-    
+        
     return firm_table
     
 
@@ -572,7 +562,7 @@ def createHouseholds(firm_table):
     households.extra_spending_per_sector = {key: 0 for key, val in households.final_demand_per_sector.items()}
     return households
     
-    
+
 def extractEdgeList(graph):
     dic_commercial_links = nx.get_edge_attributes(graph, "object")
     dic_commercial_links = {key: value for key, value in dic_commercial_links.items() if (isinstance(key[0], Firm) and isinstance(key[1], Firm))}
