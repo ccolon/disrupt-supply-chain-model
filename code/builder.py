@@ -66,10 +66,10 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_p
 
     
     
-def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
+def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, 
+    filepath_sector_table,
     district_sector_cutoff, nb_top_district_per_sector, 
-    sectors_to_include="all", districts_to_include="all",
-    agri_sectors=None, service_sectors=None):
+    sectors_to_include="all", districts_to_include="all"):
     """Generate the firm data
 
     It uses the district_sector_importance table, the odpoints, the cutoff values to generate the list of firms.
@@ -78,58 +78,61 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     - odpoint_table
     - filter_district_sector_table
 
-    :param filepath_district_sector_importance: Path for the district_sector_importance table
-    :type filepath_district_sector_importance: string
+    Parameters
+    ----------
+    filepath_district_sector_importance : string
+        Path for the district_sector_importance table
+    filepath_odpoints : string
+        Path for the odpoint table
+    filepath_sector_table : string
+        Path for the sector table
+    district_sector_cutoff : float
+        Cutoff value for selecting the combination of district and sectors. 
+        For agricultural sector it is divided by two.
+    nb_top_district_per_sector : None or integer
+        Nb of extra district to keep based on importance rank per sector
+    sectors_to_include : list of string or 'all'
+        list of the sectors to include. Default to "all"
+    districts_to_include : list of string or 'all'
+        list of the districts to include. Default to "all"
 
-    :param filepath_odpoints: Path for the odpoint table
-    :type filepath_odpoints: string
-
-    :param district_sector_cutoff: Cutoff value for selecting the combination of district and sectors. For agricultural sector it is divided by two.
-    :type district_sector_cutoff: float
-
-    :param nb_top_district_per_sector: Nb of extra district to keep based on importance rank per sector
-    :type nb_top_district_per_sector: None or integer
-
-    :param sectors_to_include: list of the sectors to include. Default to "all"
-    :type sectors_to_include: list of string or 'all'
-
-    :param districts_to_include: list of the districts to include. Default to "all"
-    :type districts_to_include: list of string or 'all'
-
-    :param agri_sectors: list of the sectors that pertains to agriculture. If None no special treatment is given to agriculture.
-    :type agri_sectors: list of string or None
-
-    :param service_sectors: list of the sectors that pertains to services. If None no special treatment is given to services.
-    :type service_sectors: list of string or None
-
-    :return: tuple(pandas.DataFrame, pandas.DataFrame, pandas.DataFrame)
+    Returns
+    -------
+    tuple(pandas.DataFrame, pandas.DataFrame, pandas.DataFrame)
     """
 
     # Load 
     table_district_sector_importance = pd.read_csv(filepath_district_sector_importance)
 
     # Filter out combination with 0 importance
-    table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['importance']!=0]
+    table_district_sector_importance = \
+        table_district_sector_importance[table_district_sector_importance['importance']!=0]
 
     # Keep only selected sectors, if applicable
     if isinstance(sectors_to_include, list):
-        table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['sector'].isin(sectors_to_include)]
+        table_district_sector_importance = \
+            table_district_sector_importance[table_district_sector_importance['sector'].isin(sectors_to_include)]
     elif (sectors_to_include!='all'):
         raise ValueError("'sectors_to_include' should be a list of string or 'all'")
 
     # Keep only selected districts, if applicable
     if isinstance(districts_to_include, list):
-        table_district_sector_importance = table_district_sector_importance[table_district_sector_importance['district'].isin(districts_to_include)]
+        table_district_sector_importance = \
+            table_district_sector_importance[table_district_sector_importance['district'].isin(districts_to_include)]
     elif (sectors_to_include!='all'):
         raise ValueError("'districts_to_include' should be a list of string or 'all'")
 
     logging.info('Nb of combinations (district, sector) before cutoff: '+str(table_district_sector_importance.shape[0]))
 
     # Filter district-sector combination that are above the cutoff value
-    if agri_sectors:
-        logging.info('Treshold is '+str(district_sector_cutoff/2)+" for agriculture sectors, "+str(district_sector_cutoff)+" otherwise")
-        boolindex_overthreshold = table_district_sector_importance['importance']>= district_sector_cutoff
-        boolindex_agri = (table_district_sector_importance['sector'].isin(agri_sectors)) & (table_district_sector_importance['importance'] >= district_sector_cutoff/2)
+    sector_table = pd.read_csv(filepath_sector_table)
+    agri_sectors = sector_table.loc[sector_table['type']=="agriculture", "sector"].tolist()
+    if len(agri_sectors)>0:
+        logging.info('Treshold is '+str(district_sector_cutoff/2)+" for agriculture sectors, "+
+            str(district_sector_cutoff)+" otherwise")
+        boolindex_overthreshold = table_district_sector_importance['importance'] >= district_sector_cutoff
+        boolindex_agri = (table_district_sector_importance['sector'].isin(agri_sectors)) & \
+             (table_district_sector_importance['importance'] >= district_sector_cutoff/2)
         filtered_district_sector_table = table_district_sector_importance[boolindex_overthreshold | boolindex_agri].copy()
     else:
         logging.info('Treshold is '+str(district_sector_cutoff))
@@ -158,7 +161,8 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
     # Create firm table
     # To generate the firm table, duplicates rows with 2 firms, divide by 2 firm_importance, and generate a unique id
     # Remove utilities, transport, and services
-    if service_sectors:
+    service_sectors = sector_table.loc[sector_table['type'].isin(['utility', 'transport', 'services']), 'sector'].tolist()
+    if len(service_sectors)>1:
         od_sector_table = od_sector_table[~od_sector_table['sector'].isin(service_sectors)]
         firm_table = od_sector_table.copy()    
         firm_table_services = pd.DataFrame({
@@ -191,9 +195,9 @@ def rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints,
 def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilization_rate=0.8):
     """Create the firms
 
-    It uses firm_table from rescaleNbFirms3
+    It uses firm_table from rescaleNbFirms
 
-    :param firm_table: firm_table from rescaleNbFirms3
+    :param firm_table: firm_table from rescaleNbFirms
     :type firm_table: pandas.DataFrame
 
     :param keep_top_n_firms: (optional) can be specified if we want to keep only the first n firms, for testing purposes
@@ -385,7 +389,7 @@ def loadInventories(firm_list, inventory_duration_target=2, filepath_inventory_d
     
 
 
-def loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list):
+def loadTonUsdEquivalence(filepath_sector_table, firm_list, country_list):
     """Load equivalence between usd and ton
 
     It updates the firm_list and country_list.
@@ -393,8 +397,8 @@ def loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list)
     It updates the 'usd_per_ton' attribute of countries, it gives the average.
     Note that this will be applied only to goods that are delivered by those agents.
 
-    :param filepath_ton_usd_equivalence: Path to the table providing the equivalence between tons and usd per sector
-    :type filepath_ton_usd_equivalence: string
+    :param filepath_sector_table: Path to the table providing the equivalence between tons and usd per sector
+    :type filepath_sector_table: string
 
     :param firm_list: list of firms
     :type firm_list: list(Firm objects)
@@ -404,7 +408,7 @@ def loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list)
 
     :return: (list(Firm objects), list(Country objects))
     """
-    sector_to_usdPerTon = pd.read_csv(filepath_ton_usd_equivalence).set_index('sector')['usd_per_ton']
+    sector_to_usdPerTon = pd.read_csv(filepath_sector_table).set_index('sector')['usd_per_ton']
     for firm in firm_list:
         firm.usd_per_ton = sector_to_usdPerTon[firm.sector]
     for country in country_list:
@@ -676,3 +680,8 @@ def exportSupplyChainNetworkSummary(sc_graph, firm_list, export_folder):
     pd.Series(res).to_csv(os.path.join(export_folder, "sc_network_summary.csv"))
 
     return 0
+
+
+def loadImportCode(filepath_sector_table):
+    sector_table = pd.read_csv(filepath_sector_table)
+    return sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]

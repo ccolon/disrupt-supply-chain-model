@@ -66,14 +66,17 @@ TRD | AGR | 3.5
 ... | ... | ...
 
 
-#### Ton USD Equivalence
+#### Sector Table
 
-A csv file providing, for each sector, the average monetary value, in USD, of a ton of good.
+A csv file providing, for each sector:
+- the type of sector ('agriculture', 'manufacturing', 'utility', 'transport', 'services')
+- the average monetary value, in USD, of a ton of good, 
+- the percentage of the firms that export per sector.
 
-sector | usd_per_ton
---- | --- 
-AGR | 950  
-... | ... 
+sector | type | usd_per_ton | share_exporting_firms
+--- | --- | --- | --- 
+AGR | agriculture | 950 | 0.16  
+... | ... | ... | ... 
 
 
 ### Demand
@@ -139,12 +142,3 @@ country | transit_point | weight
 BDI | 7112 | 1
 ... | ... | ...
 
-
-#### Export Shares
-
-A csv file with a a table indicating which percentage of the firms that export per sector.
-
-sector | share_exporting_firms
---- | --- 
-AGR | 0.16  
-... | ...

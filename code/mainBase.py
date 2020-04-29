@@ -111,16 +111,13 @@ else:
 
 ### Create firms
 # Filter district sector combination
-with open(filepath_special_sectors, "r") as yamlfile:
-    special_sectors = yaml.load(yamlfile, Loader=yaml.FullLoader)
 logging.info('Generating the firm table. Sector included: '+str(sectors_to_include)+
     ', districts included: '+str(districts_to_include)+
     ', district sector cutoff: '+str(district_sector_cutoff))
 firm_table, odpoint_table, filtered_district_sector_table = \
-    rescaleNbFirms3(filepath_district_sector_importance, filepath_odpoints, 
+    rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, filepath_sector_table,
         district_sector_cutoff, nb_top_district_per_sector,
-        sectors_to_include=sectors_to_include, districts_to_include=districts_to_include,
-        agri_sectors=special_sectors['agriculture'], service_sectors=special_sectors['services'])
+        sectors_to_include=sectors_to_include, districts_to_include=districts_to_include)
 logging.info('Firm and OD tables generated')
 
 # Creating the firms
@@ -136,7 +133,9 @@ logging.info('Firm_list created, size is: '+str(n))
 logging.info('Sectors present are: '+str(present_sectors))
 
 # Loading the technical coefficients
-firm_list = loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff, special_sectors['imports'])
+import_code = loadImportCode(filepath_sector_table)
+print(import_code)
+firm_list = loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff, import_code)
 logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 
 # Loading the inventories
@@ -173,7 +172,7 @@ for country in country_list:
 ### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
 # Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
 # In this case, we use an average.
-firm_list, country_list = loadTonUsdEquivalence(filepath_ton_usd_equivalence, firm_list, country_list)
+firm_list, country_list = loadTonUsdEquivalence(filepath_sector_table, firm_list, country_list)
 
 ### Create agents: Households
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
@@ -199,7 +198,8 @@ for country in country_list:
 
 logging.info('Tanzanian firms are selecting their Tanzanian and international suppliers (import B2B flows) (domestric B2B flows). Weight localisation is '+str(weight_localization))
 for firm in firm_list:
-    firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_input, weight_localization, import_code=special_sectors['imports'])
+    firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_input, weight_localization, 
+        import_code=import_code)
 
 logging.info('The nodes and edges of the supplier--buyer have been created')
 if export_sc_network_summary:
