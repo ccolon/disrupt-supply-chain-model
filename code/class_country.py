@@ -44,7 +44,7 @@ class Country(object):
         self.consumption_loss = 0
         
         
-    def select_suppliers(self, graph, firm_list, country_list, filepath_export_shares):
+    def select_suppliers(self, graph, firm_list, country_list, sector_table):
         # Select other country as supplier: transit flows
         for selling_country_pid, quantity in self.transit_from.items():
             selling_country_object = [country for country in country_list if country.pid==selling_country_pid][0]
@@ -64,7 +64,7 @@ class Country(object):
             'sector': [firm.sector for firm in firm_list]})
         dic_sector_to_firmid = firm_id_each_sector.groupby('sector')['firm'].apply(lambda x: list(x)).to_dict()
         sectors = firm_id_each_sector['sector'].unique()
-        share_exporting_firms = pd.read_csv(filepath_export_shares).set_index('sector')['share_exporting_firms'].to_dict()
+        share_exporting_firms = sector_table.set_index('sector')['share_exporting_firms'].to_dict()
         for sector in list(set(self.qty_purchased.keys()) & set(dic_sector_to_firmid.keys())): #only select suppliers from sectors that are present
             # Evaluate target nb of suppliers
             potential_supplier_pid = dic_sector_to_firmid[sector]

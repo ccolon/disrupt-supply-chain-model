@@ -67,7 +67,7 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_p
     
     
 def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, 
-    filepath_sector_table,
+    sector_table,
     district_sector_cutoff, nb_top_district_per_sector, 
     sectors_to_include="all", districts_to_include="all"):
     """Generate the firm data
@@ -84,8 +84,8 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
         Path for the district_sector_importance table
     filepath_odpoints : string
         Path for the odpoint table
-    filepath_sector_table : string
-        Path for the sector table
+    sector_table : pandas.DataFrame
+        Sector table
     district_sector_cutoff : float
         Cutoff value for selecting the combination of district and sectors. 
         For agricultural sector it is divided by two.
@@ -125,7 +125,6 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
     logging.info('Nb of combinations (district, sector) before cutoff: '+str(table_district_sector_importance.shape[0]))
 
     # Filter district-sector combination that are above the cutoff value
-    sector_table = pd.read_csv(filepath_sector_table)
     agri_sectors = sector_table.loc[sector_table['type']=="agriculture", "sector"].tolist()
     if len(agri_sectors)>0:
         logging.info('Treshold is '+str(district_sector_cutoff/2)+" for agriculture sectors, "+
@@ -389,7 +388,7 @@ def loadInventories(firm_list, inventory_duration_target=2, filepath_inventory_d
     
 
 
-def loadTonUsdEquivalence(filepath_sector_table, firm_list, country_list):
+def loadTonUsdEquivalence(sector_table, firm_list, country_list):
     """Load equivalence between usd and ton
 
     It updates the firm_list and country_list.
@@ -397,18 +396,16 @@ def loadTonUsdEquivalence(filepath_sector_table, firm_list, country_list):
     It updates the 'usd_per_ton' attribute of countries, it gives the average.
     Note that this will be applied only to goods that are delivered by those agents.
 
-    :param filepath_sector_table: Path to the table providing the equivalence between tons and usd per sector
-    :type filepath_sector_table: string
-
-    :param firm_list: list of firms
-    :type firm_list: list(Firm objects)
-
-    :param country_list: list of countries
-    :type country_list: list(Country objects)
+    sector_table : pandas.DataFrame
+        Sector table
+    firm_list : list(Firm objects)
+        list of firms
+    country_list : list(Country objects)
+        list of countries
 
     :return: (list(Firm objects), list(Country objects))
     """
-    sector_to_usdPerTon = pd.read_csv(filepath_sector_table).set_index('sector')['usd_per_ton']
+    sector_to_usdPerTon = sector_table.set_index('sector')['usd_per_ton']
     for firm in firm_list:
         firm.usd_per_ton = sector_to_usdPerTon[firm.sector]
     for country in country_list:
@@ -681,7 +678,3 @@ def exportSupplyChainNetworkSummary(sc_graph, firm_list, export_folder):
 
     return 0
 
-
-def loadImportCode(filepath_sector_table):
-    sector_table = pd.read_csv(filepath_sector_table)
-    return sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]

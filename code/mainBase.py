@@ -114,8 +114,9 @@ else:
 logging.info('Generating the firm table. Sector included: '+str(sectors_to_include)+
     ', districts included: '+str(districts_to_include)+
     ', district sector cutoff: '+str(district_sector_cutoff))
+sector_table = pd.read_csv(filepath_sector_table)
 firm_table, odpoint_table, filtered_district_sector_table = \
-    rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, filepath_sector_table,
+    rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, sector_table,
         district_sector_cutoff, nb_top_district_per_sector,
         sectors_to_include=sectors_to_include, districts_to_include=districts_to_include)
 logging.info('Firm and OD tables generated')
@@ -133,8 +134,7 @@ logging.info('Firm_list created, size is: '+str(n))
 logging.info('Sectors present are: '+str(present_sectors))
 
 # Loading the technical coefficients
-import_code = loadImportCode(filepath_sector_table)
-print(import_code)
+import_code = sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]
 firm_list = loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff, import_code)
 logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 
@@ -172,7 +172,7 @@ for country in country_list:
 ### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
 # Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
 # In this case, we use an average.
-firm_list, country_list = loadTonUsdEquivalence(filepath_sector_table, firm_list, country_list)
+firm_list, country_list = loadTonUsdEquivalence(sector_table, firm_list, country_list)
 
 ### Create agents: Households
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
@@ -194,7 +194,7 @@ households.select_suppliers(G, firm_list, mode='inputed')
 logging.info('Tanzanian exporters are being selected by purchasing countries (export B2B flows)')
 logging.info('and trading countries are being connected (transit flows)')
 for country in country_list:
-    country.select_suppliers(G, firm_list, country_list, filepath_export_shares)
+    country.select_suppliers(G, firm_list, country_list, sector_table)
 
 logging.info('Tanzanian firms are selecting their Tanzanian and international suppliers (import B2B flows) (domestric B2B flows). Weight localisation is '+str(weight_localization))
 for firm in firm_list:

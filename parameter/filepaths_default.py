@@ -24,7 +24,6 @@ filepath_inventory_duration_targets = os.path.join('input', input_folder, 'Suppl
 filepath_transit_points = os.path.join('input', input_folder, 'Trade', "country_transit_points.csv")
 filepath_imports = os.path.join('input', input_folder, 'Trade', "imports.csv")
 filepath_exports = os.path.join('input', input_folder, 'Trade', "exports.csv")
-filepath_export_shares = os.path.join('input', input_folder, 'Trade', "export_shares.csv")
 filepath_transit_matrix = os.path.join('input', input_folder, 'Trade', "transit_matrix.csv")
 ## Demand
 filepath_population = os.path.join('input', input_folder, 'Demand', "population.csv")
