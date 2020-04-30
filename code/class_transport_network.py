@@ -42,8 +42,8 @@ class TransportNetwork(nx.Graph):
         
     def connect_country(self, country):
         self.add_node(country.pid, **{'type':'virtual'})
-        for transit_point in country.transit_points: #ATT so far works for road only
-            self.add_edge(transit_point, country.pid, **{'type':'virtual', 'time_cost':1000}) # high time cost to avoid that algo goes through countries
+        for entry_point in country.entry_points: #ATT so far works for road only
+            self.add_edge(entry_point, country.pid, **{'type':'virtual', 'time_cost':1000}) # high time cost to avoid that algo goes through countries
 
             
     def remove_countries(self, country_list):

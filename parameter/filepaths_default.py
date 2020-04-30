@@ -21,7 +21,7 @@ filepath_sector_table = os.path.join('input', input_folder, 'Supply', "sector_ta
 filepath_tech_coef = os.path.join('input', input_folder, 'Supply', "tech_coef_matrix.csv")
 filepath_inventory_duration_targets = os.path.join('input', input_folder, 'Supply', "inventory_duration_targets.csv")
 ## Trade
-filepath_transit_points = os.path.join('input', input_folder, 'Trade', "country_transit_points.csv")
+filepath_entry_points = os.path.join('input', input_folder, 'Trade', "entry_points.csv")
 filepath_imports = os.path.join('input', input_folder, 'Trade', "imports.csv")
 filepath_exports = os.path.join('input', input_folder, 'Trade', "exports.csv")
 filepath_transit_matrix = os.path.join('input', input_folder, 'Trade', "transit_matrix.csv")

@@ -158,7 +158,7 @@ logging.info('Firms located on the transport network')
 
 ### Create agents: Countries
 logging.info('Creating country_list. Countries included: '+str(countries_to_include))
-country_list = createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_transit_points, 
+country_list = createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_entry_points, 
     present_sectors, countries_to_include=countries_to_include, time_resolution=time_resolution)
 logging.info('Country_list created: '+str([country.pid for country in country_list]))
 # Linking the countries to the the transport network via their transit point.

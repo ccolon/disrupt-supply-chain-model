@@ -137,7 +137,7 @@ A csv file representing a double-entry table. Country codes are row headers. Sec
 
 A csv file with the following strucutre.
 
-country | transit_point | weight
+country | entry_point | weight
 --- | --- | --- 
 BDI | 7112 | 1
 ... | ... | ...

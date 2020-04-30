@@ -413,7 +413,7 @@ def loadTonUsdEquivalence(sector_table, firm_list, country_list):
     return firm_list, country_list
 
 
-def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_transit_points,
+def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_entry_points,
     present_sectors, countries_to_include='all', time_resolution="week"):
     """Create the countries
 
@@ -426,8 +426,8 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     :param filepath_transit_matrix: path to transit matrix csv
     :type filepath_transit_matrix: string
 
-    :param filepath_transit_points: path to the table of transit points csv
-    :type filepath_transit_points: string
+    :param filepath_entry_points: path to the table of transit points csv
+    :type filepath_entry_points: string
 
     :param present_sectors: list which sectors are included. Output of the rescaleFirms functions.
     :type present_sectors: list of string
@@ -445,7 +445,7 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     import_table = pd.read_csv(filepath_imports, index_col=0)
     export_table = pd.read_csv(filepath_exports, index_col=0)
     transit_matrix = pd.read_csv(filepath_transit_matrix, index_col=0)
-    transit_point_table = pd.read_csv(filepath_transit_points)
+    entry_point_table = pd.read_csv(filepath_entry_points)
 
     # Keep only selected countries, if applicable
     if isinstance(countries_to_include, list):
@@ -463,7 +463,7 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     total_imports = import_table.sum().sum() / periods[time_resolution]
     for country in import_table.index.tolist():
         # transit points
-        transit_points = transit_point_table.loc[transit_point_table['country']==country, 'transit_point'].tolist()
+        entry_points = entry_point_table.loc[entry_point_table['country']==country, 'entry_point'].tolist()
 
         # imports, i.e., sales of countries
         qty_sold = (import_table.loc[country,:] / periods[time_resolution]).to_dict()
@@ -483,7 +483,7 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
         country_list += [Country(pid=country,
                                 qty_sold=qty_sold,
                                 qty_purchased=qty_purchased,
-                                transit_points=transit_points,
+                                entry_points=entry_points,
                                 transit_from=transit_from,
                                 transit_to=transit_to,
                                 supply_importance=supply_importance
