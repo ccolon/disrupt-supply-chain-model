@@ -8,8 +8,8 @@ from functions import rescale_values, congestion_function
 class TransportNetwork(nx.Graph):
     
     def add_transport_node(self, node_id, all_nodes_data): #used in add_transport_edge_with_nodes
-        node_attributes = ["nodename", "region", "geometry", "nodenumber"]
-        node_data = all_nodes_data.loc[all_nodes_data['nodenumber']==node_id, node_attributes].iloc[0].to_dict()
+        node_attributes = ["id", "geometry"]
+        node_data = all_nodes_data.loc[node_id, node_attributes].to_dict()
         node_data['shipments'] = {}
         node_data['disruption_duration'] = 0
         node_data['firms_there'] = []
@@ -17,27 +17,28 @@ class TransportNetwork(nx.Graph):
         self.add_node(node_id, **node_data)
                
             
-    def add_transport_edge(self, edge_id, all_edges_data): #not used, use add_transport_edge_with_nodes instead
-        edge_attributes = ['roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry"]
-        edge_data = all_edges_data.loc[all_edges_data['link']==edge_id, edge_attributes].iloc[0].to_dict()
-        edge_data['type'] = 'road'
-        start_and_end_id = all_edges_data.loc[all_edges_data['link']==edge_id, ["startumber", "endnoumber"]].iloc[0].tolist()
-        self.add_edge(start_and_end_id[0], start_and_end_id[1], **edge_data)
+    # def add_transport_edge(self, edge_id, all_edges_data): #not used, use add_transport_edge_with_nodes instead
+    #     edge_attributes = ['roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry"]
+    #     edge_data = all_edges_data.loc[all_edges_data['link']==edge_id, edge_attributes].iloc[0].to_dict()
+    #     edge_data['type'] = 'road'
+    #     end_ids = all_edges_data.loc[all_edges_data['link']==edge_id, ["startumber", "endnoumber"]].iloc[0].tolist()
+    #     self.add_edge(end_ids[0], end_ids[1], **edge_data)
         
         
     def add_transport_edge_with_nodes(self, edge_id, all_edges_data, all_nodes_data): # used
-        edge_attributes = ['link', 'roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry", "time_cost", 'cost_travel_time', 'cost_variability']
-        edge_data = all_edges_data.loc[all_edges_data['link']==edge_id, edge_attributes].iloc[0].to_dict()
-        edge_data['type'] = 'road'
-        start_and_end_id = all_edges_data.loc[all_edges_data['link']==edge_id, ["startumber", "endnoumber"]].iloc[0].tolist()
+        # edge_attributes = ['link', 'roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry", "time_cost", 'cost_travel_time', 'cost_variability']
+        edge_attributes = ['id', 'surface', "geometry", "class", "km",
+            "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
+        edge_data = all_edges_data.loc[edge_id, edge_attributes].to_dict()
+        end_ids = all_edges_data.loc[edge_id, ["end1", "end2"]].tolist()
         # Creating the start and end nodes
-        self.add_transport_node(start_and_end_id[0], all_nodes_data)
-        self.add_transport_node(start_and_end_id[1], all_nodes_data)
+        self.add_transport_node(end_ids[0], all_nodes_data)
+        self.add_transport_node(end_ids[1], all_nodes_data)
         # Creating the edge
-        self.add_edge(start_and_end_id[0], start_and_end_id[1], **edge_data)
-        self[start_and_end_id[0]][start_and_end_id[1]]['node_tuple'] = (start_and_end_id[0], start_and_end_id[1])
-        self[start_and_end_id[0]][start_and_end_id[1]]['shipments'] = {}
-        self[start_and_end_id[0]][start_and_end_id[1]]['disruption_duration'] = 0
+        self.add_edge(end_ids[0], end_ids[1], **edge_data)
+        self[end_ids[0]][end_ids[1]]['node_tuple'] = (end_ids[0], end_ids[1])
+        self[end_ids[0]][end_ids[1]]['shipments'] = {}
+        self[end_ids[0]][end_ids[1]]['disruption_duration'] = 0
         
         
     def connect_country(self, country):
@@ -68,8 +69,9 @@ class TransportNetwork(nx.Graph):
             if len(segment) == 2: #only edges have costs 
                 if self[segment[0]][segment[1]]['type'] != 'virtual':
                     time_cost += self[segment[0]][segment[1]]['time_cost']
-                    cost_per_ton += self.graph['unit_cost']['road']['paved'] * self[segment[0]][segment[1]]['kmpaved'] + self.graph['unit_cost']['road']['unpaved'] * self[segment[0]][segment[1]]['kmunpaved']
-                    
+                    cost_per_ton += (surface=='paved')*self.graph['unit_cost']['road']['paved']+\
+                                 (surface=='unpaved')*self.graph['unit_cost']['road']['unpaved']
+
         return time_cost, cost_per_ton
     
     
@@ -80,9 +82,11 @@ class TransportNetwork(nx.Graph):
         for segment in route:
             if len(segment) == 2: #only edges have costs 
                 if self[segment[0]][segment[1]]['type'] != 'virtual':
-                    distance += self[segment[0]][segment[1]]['kmpaved'] + self[segment[0]][segment[1]]['kmunpaved']
+                    distance += self[segment[0]][segment[1]]['km']
                     time_cost += self[segment[0]][segment[1]]['time_cost']
-                    cost_per_ton += self.graph['unit_cost']['road']['paved'] * self[segment[0]][segment[1]]['kmpaved'] + self.graph['unit_cost']['road']['unpaved'] * self[segment[0]][segment[1]]['kmunpaved']
+                    surface = self[segment[0]][segment[1]]['surface']
+                    cost_per_ton += (surface=='paved')*self.graph['unit_cost']['road']['paved']+\
+                                 (surface=='unpaved')*self.graph['unit_cost']['road']['unpaved']
                     
         return distance, time_cost, cost_per_ton
         
@@ -109,7 +113,7 @@ class TransportNetwork(nx.Graph):
         distance = 0
         for segment in route:
             if len(segment) == 2: #only edges have distances 
-                distance += self[segment[0]][segment[1]]['kmpaved'] + self[segment[0]][segment[1]]['kmunpaved']
+                distance += self[segment[0]][segment[1]]['km']
         return distance
     
     

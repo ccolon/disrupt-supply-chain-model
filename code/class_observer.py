@@ -103,10 +103,10 @@ class Observer(object):
         Nothing
         """
         self.disrupted_nodes[time_step] = [node for node, val in nx.get_node_attributes(transport_network, "disruption_duration").items() if val > 0]
-        self.disrupted_edges[time_step] = [nx.get_edge_attributes(transport_network, "link")[edge] for edge, val in nx.get_edge_attributes(transport_network, "disruption_duration").items() if val > 0]
+        self.disrupted_edges[time_step] = [nx.get_edge_attributes(transport_network, "id")[edge] for edge, val in nx.get_edge_attributes(transport_network, "disruption_duration").items() if val > 0]
         flow_types = flow_types or ['total']
         self.flows_snapshot[time_step] = {
-            str(transport_network[edge[0]][edge[1]]['link']): {
+            str(transport_network[edge[0]][edge[1]]['id']): {
                 str(sector): transport_network[edge[0]][edge[1]]["flow_"+str(sector)] 
                 for sector in flow_types
             }

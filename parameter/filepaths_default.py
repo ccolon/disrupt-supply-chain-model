@@ -11,8 +11,8 @@ else:
 import os
 ## Transport
 filepath_transport_parameters = os.path.join('input', input_folder, 'Transport', 'transport_parameters.yaml')
-filepath_road_nodes = os.path.join('input', input_folder, 'Transport', 'Roads', 'road_nodes.shp')
-filepath_road_edges = os.path.join('input', input_folder, 'Transport', 'Roads', 'road_edges.shp')
+filepath_road_nodes = os.path.join('input', input_folder, 'Transport', 'Roads', 'roads_nodes.shp')
+filepath_road_edges = os.path.join('input', input_folder, 'Transport', 'Roads', 'roads_edges.shp')
 filepath_extra_road_edges = os.path.join('input', input_folder, 'Transport', 'Roads', "road_edges_extra.shp")
 filepath_odpoints = os.path.join('input', input_folder, 'Transport', "odpoints.csv")
 ## Supply
@@ -22,8 +22,8 @@ filepath_tech_coef = os.path.join('input', input_folder, 'Supply', "tech_coef_ma
 filepath_inventory_duration_targets = os.path.join('input', input_folder, 'Supply', "inventory_duration_targets.csv")
 ## Trade
 filepath_entry_points = os.path.join('input', input_folder, 'Trade', "entry_points.csv")
-filepath_imports = os.path.join('input', input_folder, 'Trade', "imports.csv")
-filepath_exports = os.path.join('input', input_folder, 'Trade', "exports.csv")
+filepath_imports = os.path.join('input', input_folder, 'Trade', "import_table.csv")
+filepath_exports = os.path.join('input', input_folder, 'Trade', "export_table.csv")
 filepath_transit_matrix = os.path.join('input', input_folder, 'Trade', "transit_matrix.csv")
 ## Demand
 filepath_population = os.path.join('input', input_folder, 'Demand', "population.csv")

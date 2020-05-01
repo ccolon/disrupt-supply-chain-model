@@ -1,4 +1,4 @@
-input_folder = "Tanzania2"
+input_folder = "Cambodia"
 inventory_duration_target = "inputed"
 # extra_inventory_target = 1
 import os

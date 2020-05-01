@@ -13,7 +13,8 @@ from class_transport_network import TransportNetwork
 from class_country import Country
 
 
-def createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_params, filepath_extra_road_edges=None):
+def createTransportNetwork(filepath_road_nodes, filepath_road_edges, 
+    transport_params, filepath_extra_road_edges=None):
     """Create the transport network object
 
     It uses one shapefile for the nodes and another for the edges.
@@ -41,27 +42,39 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges, transport_p
     
     # Load node and edge data
     road_nodes = gpd.read_file(filepath_road_nodes)
+    road_nodes.index = road_nodes['id']
     road_edges = gpd.read_file(filepath_road_edges)
+    road_edges.index = road_edges['id']
 
     # Add additional edges, if any
     if filepath_extra_road_edges is not None:
         new_road_edges = gpd.read_file(filepath_extra_road_edges)
-        new_road_edges.index = [road_edges.index.max()+1+item for item in list(range(new_road_edges.shape[0]))]
-        road_edges = road_edges.append(new_road_edges.reindex(), verify_integrity=True)
+        new_road_edges.index = new_road_edges['id']
+        # new_road_edges.index = [road_edges.index.max()+1+item for item in list(range(new_road_edges.shape[0]))]
+        road_edges = pd.concat([road_edges, new_road_edges])
+        #road_edges = road_edges.append(new_road_edges.reindex(), verify_integrity=True)
     
     # Compute how much it costs to transport one USD worth of good on each road edge
-    travel_time_paved = road_edges['kmpaved']/transport_params['speeds']['road']['paved']
-    travel_time_unpaved = road_edges['kmunpaved']/transport_params["speeds"]['road']['unpaved']
-    road_edges['cost_travel_time'] = (travel_time_paved + travel_time_unpaved) * transport_params["travel_cost_of_time"]
-    road_edges['cost_variability'] = transport_params['variability_coef'] * (
-            travel_time_paved*transport_params["variability"]['road']['paved'] + 
-            travel_time_unpaved*transport_params["variability"]['road']['unpaved']
+    # compute travel time. Differentiate between paved and unpaved roads
+    road_edges['travel_time'] = road_edges['km'] * (
+            (road_edges['surface']=='unpaved') / transport_params['speeds']['road']['unpaved'] +\
+            (road_edges['surface']=='paved') / transport_params['speeds']['road']['paved']
         )
+    # compute cost of travel time
+    road_edges['cost_travel_time'] = road_edges['travel_time'] * \
+        transport_params["travel_cost_of_time"]
+    # compute variability cost. Differentiate between paved and unpaved roads
+    road_edges['cost_variability'] = road_edges['cost_travel_time'] * \
+        transport_params['variability_coef'] * (
+            (road_edges['surface']=='unpaved') * transport_params["variability"]['road']['unpaved'] +\
+            (road_edges['surface']=='paved') * transport_params['variability']['road']['paved']
+        )
+    # finally, add up both cost to get the cost of time of each road edges
     road_edges['time_cost'] = road_edges['cost_travel_time'] + road_edges['cost_variability']
-
     # Load the nodes and edges on the transport network object
-    for road in road_edges['link']:
+    for road in road_edges['id']:
         T.add_transport_edge_with_nodes(road, road_edges, road_nodes)
+
     return T
 
     
@@ -137,7 +150,7 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
         logging.info('Treshold is '+str(district_sector_cutoff))
         boolindex_overthreshold = table_district_sector_importance['importance']>= district_sector_cutoff
         filtered_district_sector_table = table_district_sector_importance[boolindex_overthreshold].copy()
-    logging.info('Nb of combinations (district, sector) after cutoff: '+str(table_district_sector_importance.shape[0]))
+    logging.info('Nb of combinations (district, sector) after cutoff: '+str(filtered_district_sector_table.shape[0]))
 
     # Add the top district of each sector
     if isinstance(nb_top_district_per_sector, int):
@@ -149,7 +162,7 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
             filtered_district_sector_table = pd.concat([filtered_district_sector_table, top_district_sector]).drop_duplicates()
         logging.info('Nb of combinations (district, sector) after adding top '+
             str(nb_top_district_per_sector)+": "+
-            str(table_district_sector_importance.shape[0]))
+            str(filtered_district_sector_table.shape[0]))
     
     # Generate the OD sector table
     table_odpoints = pd.read_csv(filepath_odpoints)

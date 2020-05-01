@@ -125,6 +125,8 @@ class Country(object):
                     graph[self][edge[1]]['object'].route_time_cost = route_time_cost
                     graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
                 else:
+                    print(origin_node)
+                    print(destination_node)
                     logging.error('Country '+str(self.pid)+': I did not find any route from me to client '+str(edge[1].pid))
                     raise Exception("\t\tCountry "+str(self.pid)+": there is no route between me and client "+str(edge[1].pid))
             

@@ -35,6 +35,7 @@ from parameter.filepaths_default import *
 from parameter.filepaths import *
 
 # Start run
+t0 = time.time()
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 # If there is sth to export, then we create the output folder
@@ -79,18 +80,18 @@ with open(filepath_transport_parameters, "r") as yamlfile:
 ## With new input data, run the model with first arg = 0, it generates the pickle
 ## Then use first arg = 1, to skip network building and use directly the pickle
 if sys.argv[1] == "0":
-    additional_road_edges = None
     pickle_filename = 'transport_network_base_pickle'
     if new_roads:
         pickle_filename = 'transport_network_modified_pickle'
         extra_road_log = " with extra roads"
     else:
         extra_road_log = ""
+        filepath_extra_road_edges = None
     logging.info('Creating transport network'+extra_road_log+'.'+
         'Speeds: '+str(transport_params['speeds'])+
         ', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
-    T = createTransportNetwork(filepath_road_nodes, filepath_road_edges, 
-        transport_params, additional_road_edges=filepath_extra_road_edges)
+    T = createTransportNetwork(filepath_road_nodes, filepath_road_edges,
+        transport_params, filepath_extra_road_edges=filepath_extra_road_edges)
     logging.info('Transport network'+extra_road_log+' created.'+
         'Nb of nodes: '+str(len(T.nodes))+
         ', Nb of edges: '+str(len(T.edges)))
@@ -217,6 +218,7 @@ for firm in firm_list:
         firm.decide_routes(G, T)
 logging.info('The supplier--buyer graph is now connected to the transport network')
 
+logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
 
 if disruption_analysis is None:
     logging.info("No disruption. Simulation of the initial state")
@@ -257,7 +259,7 @@ if disruption_analysis is None:
         export_sc_flow_analysis=export_sc_flow_analysis, 
         export_agent_data=export_agent_data)
 
-    logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
+    logging.info("Simulation completed, "+str((time.time()-t0)/60)+" min")
 
 
 else:
