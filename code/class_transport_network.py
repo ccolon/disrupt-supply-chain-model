@@ -15,21 +15,13 @@ class TransportNetwork(nx.Graph):
         node_data['firms_there'] = []
         node_data['type'] = 'road'
         self.add_node(node_id, **node_data)
-               
-            
-    # def add_transport_edge(self, edge_id, all_edges_data): #not used, use add_transport_edge_with_nodes instead
-    #     edge_attributes = ['roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry"]
-    #     edge_data = all_edges_data.loc[all_edges_data['link']==edge_id, edge_attributes].iloc[0].to_dict()
-    #     edge_data['type'] = 'road'
-    #     end_ids = all_edges_data.loc[all_edges_data['link']==edge_id, ["startumber", "endnoumber"]].iloc[0].tolist()
-    #     self.add_edge(end_ids[0], end_ids[1], **edge_data)
-        
         
     def add_transport_edge_with_nodes(self, edge_id, all_edges_data, all_nodes_data): # used
         # edge_attributes = ['link', 'roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry", "time_cost", 'cost_travel_time', 'cost_variability']
         edge_attributes = ['id', 'surface', "geometry", "class", "km",
             "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
         edge_data = all_edges_data.loc[edge_id, edge_attributes].to_dict()
+        edge_data['type'] = "road"
         end_ids = all_edges_data.loc[edge_id, ["end1", "end2"]].tolist()
         # Creating the start and end nodes
         self.add_transport_node(end_ids[0], all_nodes_data)
@@ -44,7 +36,9 @@ class TransportNetwork(nx.Graph):
     def connect_country(self, country):
         self.add_node(country.pid, **{'type':'virtual'})
         for entry_point in country.entry_points: #ATT so far works for road only
-            self.add_edge(entry_point, country.pid, **{'type':'virtual', 'time_cost':1000}) # high time cost to avoid that algo goes through countries
+            self.add_edge(entry_point, country.pid, 
+                **{'type':'virtual', 'time_cost':1000}
+            ) # high time cost to avoid that algo goes through countries
 
             
     def remove_countries(self, country_list):
@@ -129,15 +123,21 @@ class TransportNetwork(nx.Graph):
     
     
     def provide_shortest_route(self, origin_node, destination_node):
-        if (origin_node not in self.nodes) or (destination_node not in self.nodes):
-            return None
+        if (origin_node not in self.nodes):
+            raise KeyError("Origin node "+str(origin_node)+" not in the transport network")
+
+        elif (destination_node not in self.nodes):
+            raise KeyError("Destination node "+str(destination_node)+" not in the transport network")
+
         elif nx.has_path(self, origin_node, destination_node):
             sp = nx.shortest_path(self, origin_node, destination_node, weight="time_cost")
             route = [[(sp[0],)]] + [[(sp[i], sp[i+1]), (sp[i+1],)] for i in range(0,len(sp)-1)]
             route = [item for item_tuple in route for item in item_tuple]
             return route
+
         else:
-            return None
+            raise ValueError("There is no path between "+str(origin_node)+
+                " and "+str(destination_node))
 
         
     def available_subgraph(self):

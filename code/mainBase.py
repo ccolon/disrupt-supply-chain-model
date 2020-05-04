@@ -53,19 +53,20 @@ else:
     exp_folder = None
 
 # Set logging parameters
+logging_level = logging.DEBUG
 if export_log:
     log_filename = os.path.join(exp_folder, 'exp.log')
     importlib.reload(logging)
     logging.basicConfig(
             filename=log_filename,
-            level=logging.INFO,
+            level=logging_level,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
     logging.getLogger().addHandler(logging.StreamHandler())
 else:
     importlib.reload(logging)
     logging.basicConfig(
-        level=logging.INFO, 
+        level=logging_level, 
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
@@ -120,6 +121,7 @@ firm_table, odpoint_table, filtered_district_sector_table = \
     rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, sector_table,
         district_sector_cutoff, nb_top_district_per_sector,
         sectors_to_include=sectors_to_include, districts_to_include=districts_to_include)
+firm_table.to_csv(os.path.join("output", "Test", 'firm_table.csv'))
 logging.info('Firm and OD tables generated')
 
 # Creating the firms
@@ -145,12 +147,22 @@ firm_list = loadInventories(firm_list, inventory_duration_target=inventory_durat
     extra_inventory_target=extra_inventory_target, 
     inputs_with_extra_inventories=inputs_with_extra_inventories, 
     buying_sectors_with_extra_inventories=buying_sectors_with_extra_inventories,
-    random_mean_sd=None)
+    min_inventory=1)
 logging.info('Inventory duration targets loaded, inventory_duration_target: '+str(inventory_duration_target))
 if extra_inventory_target:
     logging.info("Extra inventory duration: "+str(extra_inventory_target)+\
         " for inputs "+str(inputs_with_extra_inventories)+\
         " for buying sectors "+str(buying_sectors_with_extra_inventories))
+
+# inventories = {sec:{} for sec in present_sectors}
+# for firm in firm_list:
+#     for input_id, inventory in firm.inventory_duration_target.items():
+#         if input_id not in inventories[firm.sector].keys():
+#             inventories[firm.sector][input_id] = inventory
+#         else:
+#             inventories[firm.sector][input_id] = inventory
+# with open(os.path.join("output", "Test", "inventories.json"), 'w') as f:
+#     json.dump(inventories, f)
 
 # Adding the firms onto the nodes of the transport network
 T.locate_firms_on_nodes(firm_list)
@@ -159,15 +171,16 @@ logging.info('Firms located on the transport network')
 
 ### Create agents: Countries
 logging.info('Creating country_list. Countries included: '+str(countries_to_include))
-country_list = createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_entry_points, 
-    present_sectors, countries_to_include=countries_to_include, time_resolution=time_resolution)
+country_list = createCountries(filepath_imports, filepath_exports, 
+    filepath_transit_matrix, filepath_entry_points, 
+    present_sectors, countries_to_include=countries_to_include, 
+    time_resolution=time_resolution)
 logging.info('Country_list created: '+str([country.pid for country in country_list]))
 # Linking the countries to the the transport network via their transit point.
 # This creates "virtual nodes" in the transport network that corresponds to the countries.
 # We create a copy of the transport network without such nodes, it will be used for plotting purposes
 for country in country_list:
     T.connect_country(country)
-# T_noCountries =  T.subgraph([node for node in T.nodes if T.nodes[node]['type']!='virtual'])
 
 
 ### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
@@ -256,6 +269,7 @@ if disruption_analysis is None:
         export_folder=exp_folder,
         export_flows=export_flows, 
         flow_types_to_export = present_sectors+['domestic_B2B', 'transit', 'import', 'export', 'total'],
+        filepath_road_edges = filepath_road_edges,
         export_sc_flow_analysis=export_sc_flow_analysis, 
         export_agent_data=export_agent_data)
 

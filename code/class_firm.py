@@ -154,7 +154,19 @@ class Firm(object):
                 potential_supplier_pid = [firm.pid for firm in firm_list if firm.sector == sector_id] # Identify the id of potential suppliers among the other firms
                 if sector_id == self.sector:
                     potential_supplier_pid.remove(self.pid) # remove oneself
-                distance_to_each = rescale_values([self.distance_to_other(firm_list[firm_pid]) for firm_pid in potential_supplier_pid]) # Compute distance to each of them (vol d oiseau)
+                if len(potential_supplier_pid)==0:
+                    raise ValueError("Firm "+str(self.pid)+
+                        ": no potential supplier for input "+str(sector_id))
+                # print("\n", self.pid, ":", str(len(potential_supplier_pid)), "for sector", sector_id)
+                # print([
+                #     self.distance_to_other(firm_list[firm_pid]) 
+                #     for firm_pid in potential_supplier_pid
+                # ])
+                distance_to_each = rescale_values([
+                    self.distance_to_other(firm_list[firm_pid]) 
+                    for firm_pid in potential_supplier_pid
+                ]) # Compute distance to each of them (vol d oiseau)
+                # print(distance_to_each)
                 importance_of_each = rescale_values([firm_list[firm_pid].importance for firm_pid in potential_supplier_pid]) # Get importance for each of them
                 prob_to_be_selected = np.array(importance_of_each) / (np.array(distance_to_each)**weight_localization)
                 prob_to_be_selected /= prob_to_be_selected.sum()
@@ -208,18 +220,16 @@ class Firm(object):
             elif edge[1].odpoint == -1: # we do not create route for service firms 
                 continue
             else:
+                # Find route
                 origin_node = self.odpoint
                 destination_node = edge[1].odpoint
                 route = transport_network.provide_shortest_route(origin_node, destination_node)
-                if route is not None:
-                    graph[self][edge[1]]['object'].route = route
-                    distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
-                    graph[self][edge[1]]['object'].route_length = distance
-                    graph[self][edge[1]]['object'].route_time_cost = route_time_cost
-                    graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
-                else:
-                    logging.error('Firm '+str(self.pid)+': I did not find any route from me to firm '+str(edge[1].pid))
-                    raise Exception("\t\tFirm "+str(self.pid)+": there is no route between me and firm "+str(edge[1].pid))
+                # Store it into commercial link object
+                graph[self][edge[1]]['object'].route = route
+                distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
+                graph[self][edge[1]]['object'].route_length = distance
+                graph[self][edge[1]]['object'].route_time_cost = route_time_cost
+                graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
     
     
     def calculate_client_share_in_sales(self):
@@ -403,7 +413,7 @@ class Firm(object):
     def deliver_products(self, graph, transport_network=None, rationing_mode="equal"):
         # Do nothing if no orders
         if self.total_order == 0:
-            logging.info('Firm '+str(self.pid)+': no one ordered to me')
+            logging.warning('Firm '+str(self.pid)+': no one ordered to me')
             return 0
         
         # Otherwise compute rationing factor
@@ -468,7 +478,9 @@ class Firm(object):
         """Only apply to B2B flows 
         """
         if len(commercial_link.route)==0:
-            logging.error("Firm "+str(self.pid)+": commercial link "+str(commercial_link.pid)+" is not associated to any route, I cannot send any shipment to client "+str(commercial_link.pid))
+            logging.error("Firm "+str(self.pid)+": commercial link "+str(commercial_link.pid)+
+                " is not associated to any route, I cannot send any shipment to client "+
+                str(commercial_link.pid))
             
         else:
             if self.check_route_avaibility(commercial_link, transport_network, 'main') == 'available':

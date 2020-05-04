@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import pandas as pd
+import geopandas as gpd
 from builder import extractEdgeList
 
 
@@ -89,6 +90,16 @@ def exportTransportFlows(observer, export_folder):
     with open(os.path.join(export_folder, 'transport_flows.json'), 'w') as jsonfile:
         json.dump(observer.flows_snapshot, jsonfile)
 
+
+def exportTransportFlowsShp(observer, export_folder, time_step, filepath_road_edges):
+    road_edges = gpd.read_file(filepath_road_edges)
+    #extract flows of the desired time step
+    flow_table = pd.DataFrame(observer.flows_snapshot[time_step]).transpose()
+    flow_table['id'] = flow_table.index.astype(int)
+    road_edges = road_edges.merge(flow_table, on='id', how='left')
+    print(road_edges.crs)
+    road_edges.to_file(os.path.join(export_folder, 'flow_table_'+str(time_step)+'.shp'))
+    
 
 def exportAgentData(observer, export_folder):
     agent_data = {
@@ -235,3 +246,4 @@ def exportTimeSeries(observer, export_folder):
         'households_spending': households_spending_ts.sum(axis=1)
     })
     agg_df.to_csv(os.path.join(export_folder, 'aggregate_ts.csv'), sep=',', index=False)
+

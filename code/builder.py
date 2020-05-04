@@ -140,14 +140,14 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
     # Filter district-sector combination that are above the cutoff value
     agri_sectors = sector_table.loc[sector_table['type']=="agriculture", "sector"].tolist()
     if len(agri_sectors)>0:
-        logging.info('Treshold is '+str(district_sector_cutoff/2)+" for agriculture sectors, "+
+        logging.info('Cutoff is '+str(district_sector_cutoff/2)+" for agriculture sectors, "+
             str(district_sector_cutoff)+" otherwise")
         boolindex_overthreshold = table_district_sector_importance['importance'] >= district_sector_cutoff
         boolindex_agri = (table_district_sector_importance['sector'].isin(agri_sectors)) & \
              (table_district_sector_importance['importance'] >= district_sector_cutoff/2)
         filtered_district_sector_table = table_district_sector_importance[boolindex_overthreshold | boolindex_agri].copy()
     else:
-        logging.info('Treshold is '+str(district_sector_cutoff))
+        logging.info('Cutoff is '+str(district_sector_cutoff))
         boolindex_overthreshold = table_district_sector_importance['importance']>= district_sector_cutoff
         filtered_district_sector_table = table_district_sector_importance[boolindex_overthreshold].copy()
     logging.info('Nb of combinations (district, sector) after cutoff: '+str(filtered_district_sector_table.shape[0]))
@@ -165,28 +165,49 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
             str(filtered_district_sector_table.shape[0]))
     
     # Generate the OD sector table
+    # It only contains the OD points for the filtered district
     table_odpoints = pd.read_csv(filepath_odpoints)
     table_odpoints['nb_points_same_district'] = table_odpoints['district'].map(table_odpoints['district'].value_counts())
     od_sector_table = pd.merge(table_odpoints, filtered_district_sector_table, how='inner', on='district')
     od_sector_table['importance'] = od_sector_table['importance'] / od_sector_table['nb_points_same_district']
+    logging.info('Initial nb of OD points: '+str(table_odpoints.shape[0]))
+    logging.info('Filtered OD points: '+str(od_sector_table["odpoint"].nunique()))
+    logging.info("Av OD point per district: {:.2g}".
+        format(od_sector_table["odpoint"].nunique()/od_sector_table["district"].nunique()))
+    logging.info("Av sector per OD point: {:.2g}".
+        format(od_sector_table.shape[0]/od_sector_table["odpoint"].nunique()))
     
     # Create firm table
-    # To generate the firm table, duplicates rows with 2 firms, divide by 2 firm_importance, and generate a unique id
-    # Remove utilities, transport, and services
-    service_sectors = sector_table.loc[sector_table['type'].isin(['utility', 'transport', 'services']), 'sector'].tolist()
-    if len(service_sectors)>1:
-        od_sector_table = od_sector_table[~od_sector_table['sector'].isin(service_sectors)]
-        firm_table = od_sector_table.copy()    
+    # To generate the firm table, remove utilities, transport, and services
+    # Should be changed!!! The flow of those firms should be virtual.
+    # But they should be spatially represented! Because they buy real stuff!
+    service_sectors = sector_table.loc[sector_table['type'].isin(
+            ['utility', 'transport', 'services']
+        ), 'sector'].tolist()
+    service_sectors_present = od_sector_table.loc[
+            od_sector_table['sector'].isin(service_sectors), 
+            'sector'
+        ].drop_duplicates().tolist()
+    od_sector_table_noservice = od_sector_table[
+        ~od_sector_table['sector'].isin(service_sectors_present)
+    ]
+    # We want two firms of the same sector in the same OD point,
+    # so duplicates rows, generate a unique id
+    firm_table = pd.concat(
+        [od_sector_table_noservice, od_sector_table_noservice], 
+        axis = 0, ignore_index=True
+    )
+    # Add utilities, transport, and services as virtuval firms
+    if len(service_sectors_present)>1:
         firm_table_services = pd.DataFrame({
             'odpoint':-1,
             'importance': 1/2,
-            "sector": service_sectors*2
+            "sector": service_sectors_present*2
         })
-        firm_table_services.index = [firm_table.index.max()+1+item for item in list(range(firm_table_services.shape[0]))]
-        firm_table = pd.concat([firm_table, firm_table_services], sort=True)
-    else:
-        firm_table = od_sector_table.copy()
+        firm_table = pd.concat([firm_table, firm_table_services], 
+            axis=0, ignore_index=True, sort=True)
 
+    # Format firm table
     firm_table = firm_table.sort_values('importance', ascending=False)
     firm_table = firm_table.sort_values(['district', 'sector'])
     firm_table['id'] = list(range(firm_table.shape[0]))
@@ -199,6 +220,7 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
 
     logging.info('Nb of od points chosen: '+str(len(set(firm_table['odpoint'])))+
         ', final nb of firms chosen: '+str(firm_table.shape[0]))
+    # logging.debug(firm_table.groupby('sector')['id'].count())
 
     return firm_table, od_table, filtered_district_sector_table
     
@@ -289,9 +311,10 @@ def loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff=0.1, impo
     
 
 
-def loadInventories(firm_list, inventory_duration_target=2, filepath_inventory_duration_targets=None,
-    extra_inventory_target=None, inputs_with_extra_inventories=None, buying_sectors_with_extra_inventories=None,
-    random_mean_sd=None):
+def loadInventories(firm_list, inventory_duration_target=2, 
+    filepath_inventory_duration_targets=None, extra_inventory_target=None, 
+    inputs_with_extra_inventories=None, buying_sectors_with_extra_inventories=None,
+    min_inventory=1, random_mean_sd=None):
     """Load inventory duration target
 
     If inventory_duration_target is an integer, it is uniformly applied to all firms.
@@ -304,26 +327,34 @@ def loadInventories(firm_list, inventory_duration_target=2, filepath_inventory_d
     - to a combination of both. e.g., all manufacturing firms have more of agricultural inputs.
     We can also add some noise on the distribution of inventories. Not yet imlemented.
 
-    :param firm_list: the list of Firms generated from the createFirms function
-    :type firm_list: pandas.DataFrame
+    Parameters
+    ----------
+    firm_list : pandas.DataFrame
+        the list of Firms generated from the createFirms function
 
-    :param inventory_duration_target: Inventory duration target uniformly applied to all firms and all inputs.
-    If 'inputed', uses the specific values from the file specified by filepath_inventory_duration_targets
-    :type inventory_duration_target: "inputed" or integer
+    inventory_duration_target : "inputed" or integer
+        Inventory duration target uniformly applied to all firms and all inputs.
+        If 'inputed', uses the specific values from the file specified by 
+        filepath_inventory_duration_targets
 
-    :param extra_inventory_target: If specified, extra inventory duration target.
-    :type extra_inventory_target: None or integer
+    extra_inventory_target : None or integer
+        If specified, extra inventory duration target.
 
-    :param inputs_with_extra_inventories: For which inputs do we add inventories.
-    :type inputs_with_extra_inventories: None or list of sector
+    inputs_with_extra_inventories : None or list of sector
+        For which inputs do we add inventories.
 
-    :param buying_sectors_with_extra_inventories: For which sector we add inventories.
-    :type buying_sectors_with_extra_inventories: None or list of sector
+    buying_sectors_with_extra_inventories : None or list of sector
+        For which sector we add inventories.
 
-    :param random_mean_sd: Not yet implemented.
-    :type random_mean_sd: None
+    min_inventory : int
+        Set a minimum inventory level
 
-    :return: list of Firms
+    random_mean_sd: None
+        Not yet implemented.
+
+    Returns
+    -------
+        list of Firms
     """
 
     if isinstance(inventory_duration_target, int):
@@ -390,6 +421,12 @@ def loadInventories(firm_list, inventory_duration_target=2, filepath_inventory_d
             raise ValueError("Unknown value given for 'inputs_with_extra_inventories' or 'buying_sectors_with_extra_inventories'.\
                 Should be a list of string or 'all'")           
 
+    if (min_inventory > 0):
+        for firm in firm_list:
+            firm.inventory_duration_target = {
+                input_sector: max(min_inventory, inventory)
+                for input_sector, inventory in firm.inventory_duration_target.items()
+            }
     # inventory_table = pd.DataFrame({
     #     'id': [firm.pid for firm in firm_list],
     #     'buying_sector': [firm.sector for firm in firm_list],
@@ -476,7 +513,9 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     total_imports = import_table.sum().sum() / periods[time_resolution]
     for country in import_table.index.tolist():
         # transit points
-        entry_points = entry_point_table.loc[entry_point_table['country']==country, 'entry_point'].tolist()
+        entry_points = entry_point_table.loc[
+            entry_point_table['country']==country, 'entry_point'
+        ].astype(int).tolist()
 
         # imports, i.e., sales of countries
         qty_sold = (import_table.loc[country,:] / periods[time_resolution]).to_dict()

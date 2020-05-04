@@ -41,6 +41,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     export_folder=None,
     export_flows=False, 
     flow_types_to_export=['total'],
+    filepath_road_edges="",
     export_sc_flow_analysis=False, 
     export_agent_data=False):
     """
@@ -82,15 +83,21 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     allFirmsPlanPurchase(firm_list)
     allAgentsSendPurchaseOrders(sc_network, firm_list, households, country_list)
     allFirmsProduce(firm_list)
-    allAgentsDeliver(sc_network, firm_list, country_list, transport_network, rationing_mode=rationing_mode)
+    allAgentsDeliver(sc_network, firm_list, country_list, transport_network, 
+        rationing_mode=rationing_mode)
     if export_flows: #should be done at this stage, while the goods are on their way
         transport_network.compute_flow_per_segment(flow_types_to_export)
         # obs.collect_transport_flows(T_noCountries, time_step=0, flow_types_to_export=flow_types_to_export)
-        observer.collect_transport_flows(transport_network, time_step=time_step, flow_types=flow_types_to_export)
+        observer.collect_transport_flows(transport_network, 
+            time_step=time_step, flow_types=flow_types_to_export)
         exportTransportFlows(observer, export_folder)
+        exportTransportFlowsShp(observer, export_folder, time_step=time_step, 
+            filepath_road_edges=filepath_road_edges)
     if export_sc_flow_analysis: #should be done at this stage, while the goods are on their way
         analyzeSupplyChainFlows(sc_network, firm_list, export_folder)
-    allAgentsReceiveProducts(sc_network, firm_list, households, country_list, transport_network)
+    allAgentsReceiveProducts(sc_network, firm_list, households, 
+        country_list, transport_network)
     if export_agent_data:
-        observer.collect_agent_data(firm_list, households, country_list, time_step=time_step)
+        observer.collect_agent_data(firm_list, households, country_list, 
+            time_step=time_step)
         exportAgentData(observer, export_folder)

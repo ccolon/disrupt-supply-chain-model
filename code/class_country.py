@@ -114,22 +114,18 @@ class Country(object):
             elif edge[1].odpoint == -1: # we do not create route for service firms 
                 continue
             else:
+                #Find rounte
                 origin_node = self.odpoint
                 destination_node = edge[1].odpoint
                 route = transport_network.provide_shortest_route(origin_node, destination_node)
-                if route is not None:
-                    graph[self][edge[1]]['object'].route = route
-                    #route_cost = transport_network.giveRouteCost(route)
-                    distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
-                    graph[self][edge[1]]['object'].route_length = distance
-                    graph[self][edge[1]]['object'].route_time_cost = route_time_cost
-                    graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
-                else:
-                    print(origin_node)
-                    print(destination_node)
-                    logging.error('Country '+str(self.pid)+': I did not find any route from me to client '+str(edge[1].pid))
-                    raise Exception("\t\tCountry "+str(self.pid)+": there is no route between me and client "+str(edge[1].pid))
-            
+                #Store it into commercial link object
+                graph[self][edge[1]]['object'].route = route
+                #route_cost = transport_network.giveRouteCost(route)
+                distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
+                graph[self][edge[1]]['object'].route_length = distance
+                graph[self][edge[1]]['object'].route_time_cost = route_time_cost
+                graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
+
             
     def deliver_products(self, graph, transport_network):
         """ The quantity to be delivered is the quantity that was ordered (no rationning takes place)
