@@ -134,90 +134,102 @@ class Country(object):
         self.usd_transported = 0
         self.tons_transported = 0
         self.tonkm_transported = 0
+        self.qty_sold = 0
         for edge in graph.out_edges(self):
             graph[self][edge[1]]['object'].delivery = graph[self][edge[1]]['object'].order
             if (edge[1].odpoint != -1): # to non service firms, send shipment through transportation network                   
                 self.send_shipment(graph[self][edge[1]]['object'], transport_network)
             else: # if it sends to service firms, nothing to do. price is equilibrium price
                 graph[self][edge[1]]['object'].price = graph[self][edge[1]]['object'].eq_price
+                self.qty_sold += graph[self][edge[1]]['object'].delivery
 
 
     def send_shipment(self, commercial_link, transport_network):
         """Only apply to B2B flows 
         """
         if len(commercial_link.route)==0:
-            logging.error("Country "+str(self.pid)+": commercial link "+str(commercial_link.pid)+" is not associated to any route, I cannot send any shipment to client "+str(commercial_link.pid))
+            raise ValueError("Country "+str(self.pid)+
+                ": commercial link "+str(commercial_link.pid)+
+                " is not associated to any route, I cannot send any shipment to client "+
+                str(commercial_link.pid))
+    
+        if self.check_route_avaibility(commercial_link, transport_network, 'main') == 'available':
+            # If the normal route is available, we can send the shipment as usual and pay the usual price
+            commercial_link.current_route = 'main'
+            commercial_link.price = commercial_link.eq_price
+            transport_network.transport_shipment(commercial_link)
+            
+            self.generalized_transport_cost += commercial_link.route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
+            self.usd_transported += commercial_link.delivery
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) *commercial_link.route_length
+            self.qty_sold += commercial_link.delivery
+            return 0
+
+        # If there is a disruption, we try the alternative route, if there is any
+        if (len(commercial_link.alternative_route)>0) & (self.check_route_avaibility(commercial_link, transport_network, 'alternative') == 'available'):
+            commercial_link.current_route = 'alternative'
+            route = commercial_link.alternative_route
+        # Otherwise we have to find a new one
+        else:
+            origin_node = self.odpoint
+            destination_node = commercial_link.route[-1][0]
+            route = transport_network.available_subgraph().provide_shortest_route(origin_node, destination_node)
+            # We evaluate the cost of this new route
+            if route is not None:
+                commercial_link.alternative_route = route
+                distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
+                commercial_link.alternative_route_length = distance
+                commercial_link.alternative_route_time_cost = route_time_cost
+                commercial_link.alternative_route_cost_per_ton = cost_per_ton
+        
+        if route is not None:
+            commercial_link.current_route = 'alternative'
+            self.generalized_transport_cost += commercial_link.alternative_route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
+            self.usd_transported += commercial_link.delivery
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_length
+            self.qty_sold += commercial_link.delivery
+
+            if False: #relative cost change with actual bill
+                new_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
+                normal_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
+                added_transport_bill = max(new_transport_bill - normal_transport_bill, 0)
+                relative_cost_change = added_transport_bill/normal_transport_bill
+                relative_price_change_transport = 0.2 * relative_cost_change
+                total_relative_price_change = relative_price_change_transport
+                commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
+
+            elif True: #actual repercussion de la bill
+                added_costUSD_per_ton = max(commercial_link.alternative_route_cost_per_ton - commercial_link.route_cost_per_ton, 0)
+                added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton*1e-6)
+                added_costmUSD_per_mUSD = added_costUSD_per_mUSD*1e-6
+                commercial_link.price = commercial_link.eq_price + added_costmUSD_per_mUSD
+                relative_price_change_transport = commercial_link.price / commercial_link.eq_price - 1
+                
+            else:
+                # We translate this real cost into transport cost
+                relative_cost_change = (commercial_link.alternative_route_time_cost - commercial_link.route_time_cost)/commercial_link.route_time_cost
+                relative_price_change_transport = 0.2 * relative_cost_change
+                # With that, we deliver the shipment
+                total_relative_price_change = relative_price_change_transport
+                commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
+                commercial_link.current_route = 'alternative'
+
+            transport_network.transport_shipment(commercial_link)
+            # Print information
+            logging.debug("Country "+str(self.pid)+": found an alternative route to client "+
+                str(commercial_link.buyer_id)+", it is costlier by "+
+                '{:.0f}'.format(100*relative_price_change_transport)+"%, price is "+
+                '{:.4f}'.format(commercial_link.price)+" instead of "+
+                '{:.4f}'.format(commercial_link.eq_price))
         
         else:
-            if self.check_route_avaibility(commercial_link, transport_network, 'main') == 'available':
-                # If the normal route is available, we can send the shipment as usual and pay the usual price
-                commercial_link.current_route = 'main'
-                commercial_link.price = commercial_link.eq_price
-                transport_network.transport_shipment(commercial_link)
-                
-                self.generalized_transport_cost += commercial_link.route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
-                self.usd_transported += commercial_link.delivery
-                self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-                self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) *commercial_link.route_length
-
-            else:
-                # If there is a disruption, we try the alternative route, if there is any
-                if (len(commercial_link.alternative_route)>0) & (self.check_route_avaibility(commercial_link, transport_network, 'alternative') == 'available'):
-                    commercial_link.current_route = 'alternative'
-                    route = commercial_link.alternative_route
-                else:
-                # Otherwise we have to find a new one
-                    origin_node = self.odpoint
-                    destination_node = commercial_link.route[-1][0]
-                    route = transport_network.available_subgraph().provide_shortest_route(origin_node, destination_node)
-                    # We evaluate the cost of this new route
-                    if route is not None:
-                        commercial_link.alternative_route = route
-                        distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
-                        commercial_link.alternative_route_length = distance
-                        commercial_link.alternative_route_time_cost = route_time_cost
-                        commercial_link.alternative_route_cost_per_ton = cost_per_ton
-                
-                if route is not None:
-                    commercial_link.current_route = 'alternative'
-                    self.generalized_transport_cost += commercial_link.alternative_route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
-                    self.usd_transported += commercial_link.delivery
-                    self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-                    self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_length
-                    
-                    if False: #relative cost change with actual bill
-                        new_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
-                        normal_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
-                        added_transport_bill = max(new_transport_bill - normal_transport_bill, 0)
-                        relative_cost_change = added_transport_bill/normal_transport_bill
-                        relative_price_change_transport = 0.2 * relative_cost_change
-                        total_relative_price_change = relative_price_change_transport
-                        commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
-
-                    elif True: #actual repercussion de la bill
-                        added_costUSD_per_ton = max(commercial_link.alternative_route_cost_per_ton - commercial_link.route_cost_per_ton, 0)
-                        added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton*1e-6)
-                        added_costmUSD_per_mUSD = added_costUSD_per_mUSD*1e-6
-                        commercial_link.price = commercial_link.eq_price + added_costmUSD_per_mUSD
-                        relative_price_change_transport = commercial_link.price / commercial_link.eq_price - 1
-                        
-                    else:
-                        # We translate this real cost into transport cost
-                        relative_cost_change = (commercial_link.alternative_route_time_cost - commercial_link.route_time_cost)/commercial_link.route_time_cost
-                        relative_price_change_transport = 0.2 * relative_cost_change
-                        # With that, we deliver the shipment
-                        total_relative_price_change = relative_price_change_transport
-                        commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
-                        commercial_link.current_route = 'alternative'
-                    transport_network.transport_shipment(commercial_link)
-                    # Print information
-                    logging.debug("Country "+str(self.pid)+": found an alternative route to client "+str(commercial_link.buyer_id)+", it is costlier by "+'{:.0f}'.format(100*relative_price_change_transport)+'%'+", price is "+'{:.4f}'.format(commercial_link.price)+" instead of "+'{:.4f}'.format(commercial_link.eq_price))
-                
-                else:
-                    logging.debug("Country "+str(self.pid)+": because of disruption, there is no route between me and client "+str(commercial_link.buyer_id))
-                    # We do not write how the input price would have changed
-                    commercial_link.price = commercial_link.eq_price
-                    # We do not pay the transporter, so we don't increment the transport cost
+            logging.debug("Country "+str(self.pid)+": because of disruption, there is"+
+                "no route between me and client "+str(commercial_link.buyer_id))
+            # We do not write how the input price would have changed
+            commercial_link.price = commercial_link.eq_price
+            # We do not pay the transporter, so we don't increment the transport cost
 
                     
     def check_route_avaibility(self, commercial_link, transport_network, which_route='main'):
@@ -253,12 +265,12 @@ class Country(object):
                 self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
 
 
-
     def receive_service_and_pay(self, commercial_link):
         quantity_delivered = commercial_link.delivery
         commercial_link.payment = quantity_delivered * commercial_link.price
         self.extra_spending += quantity_delivered * (commercial_link.price - commercial_link.eq_price)
         
+
     def receive_shipment_and_pay(self, commercial_link, transport_network):
         """Firm look for shipments in the transport nodes it is locatedd
         It takes those which correspond to the commercial link 
@@ -272,12 +284,16 @@ class Country(object):
             quantity_delivered += transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['quantity']
             price = transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['price']
             transport_network.remove_shipment(commercial_link)
+        # Increment extra spending
         self.extra_spending += quantity_delivered * (price - commercial_link.eq_price)
+        # Increment consumption loss
         self.consumption_loss += commercial_link.delivery - quantity_delivered
-        #if isinstance(commercial_link.supplier_id, str):
-            #logging.info('Country '+self.pid+' from '+commercial_link.supplier_id+': delivered '+str(quantity_delivered)+' on '+str(commercial_link.delivery))
-        #if abs(quantity_intransit - quantity_delivered) > 1e-6:
-            #print("Firm "+str(self.pid)+': ', "quantity delivered by firm",  commercial_link.supplier_id, "("+str(quantity_delivered)+")", "differs from what was supposed to be delivered", "("+str(commercial_link.delivery)+")")
+        # Log if quantity received does not match order
+        if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
+            logging.debug("Agent "+str(self.pid)+": quantity delivered by "+
+                str(commercial_link.supplier_id), " is "+str(quantity_delivered)+
+                ". It was supposed to be "+str(commercial_link.delivery)+".")
+        # Make payment
         commercial_link.payment = quantity_delivered * price
         
         

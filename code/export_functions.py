@@ -97,7 +97,6 @@ def exportTransportFlowsShp(observer, export_folder, time_step, filepath_road_ed
     flow_table = pd.DataFrame(observer.flows_snapshot[time_step]).transpose()
     flow_table['id'] = flow_table.index.astype(int)
     road_edges = road_edges.merge(flow_table, on='id', how='left')
-    print(road_edges.crs)
     road_edges.to_file(os.path.join(export_folder, 'flow_table_'+str(time_step)+'.shp'))
     
 

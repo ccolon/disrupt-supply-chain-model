@@ -107,8 +107,8 @@ class Observer(object):
         flow_types = flow_types or ['total']
         self.flows_snapshot[time_step] = {
             str(transport_network[edge[0]][edge[1]]['id']): {
-                str(sector): transport_network[edge[0]][edge[1]]["flow_"+str(sector)] 
-                for sector in flow_types
+                str(flow_type): transport_network[edge[0]][edge[1]]["flow_"+str(flow_type)] 
+                for flow_type in flow_types
             }
             for edge in transport_network.edges
             if transport_network[edge[0]][edge[1]]['type'] != 'virtual'

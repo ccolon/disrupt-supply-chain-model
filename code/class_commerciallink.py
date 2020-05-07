@@ -17,7 +17,8 @@ class CommercialLink(object):
         # Variable
         self.current_route = 'main'
         self.order = order # flows upstream
-        self.delivery = delivery # flows downstream
+        self.delivery = delivery # flows downstream. What is supposed to be delivered (if no transport pb)
+        self.realized_delivery = delivery
         self.payment = payment # flows upstream
         self.alternative_route = []
         self.alternative_route_length = 1

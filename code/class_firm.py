@@ -88,7 +88,35 @@ class Firm(object):
         self.tonkm_transported = 0
 
         
+    def initialize_ope_var_using_eq_production(self, eq_production):
+        self.production_target = eq_production
+        self.production = self.production_target
+        self.eq_production_capacity = self.production_target / self.utilization_rate
+        self.production_capacity = self.eq_production_capacity
+        self.evaluate_input_needs()
+        self.eq_needs = self.input_needs
+        self.inventory = {
+            input_id: need * (1+self.inventory_duration_target[input_id]) 
+            for input_id, need in self.input_needs.items()
+        }
+        self.decide_purchase_plan()
+
         
+    def initialize_fin_var_using_eq_cost(self, eq_production, eq_input_cost,
+        eq_transport_cost, eq_other_cost):
+        self.eq_finance['sales'] = eq_production
+        self.eq_finance['costs']['input'] = eq_input_cost
+        self.eq_finance['costs']['transport'] = eq_transport_cost
+        self.eq_finance['costs']['other'] = eq_other_cost
+        self.eq_profit = self.eq_finance['sales'] - sum(self.eq_finance['costs'].values())
+        self.finance['sales'] = self.eq_finance['sales']
+        self.finance['costs']['input'] = self.eq_finance['costs']['input']
+        self.finance['costs']['transport'] = self.eq_finance['costs']['transport']
+        self.finance['costs']['other'] = self.eq_finance['costs']['other']
+        self.profit = self.eq_profit
+        self.delta_price_input = 0
+
+
     def add_noise_to_geometry(self, noise_level=1e-5):
         self.geometry = shapely.geometry.point.Point(self.long+noise_level*random.uniform(0,1), self.lat+noise_level*random.uniform(0,1))
         
@@ -477,93 +505,119 @@ class Firm(object):
     def send_shipment(self, commercial_link, transport_network):
         """Only apply to B2B flows 
         """
-        if len(commercial_link.route)==0:
-            logging.error("Firm "+str(self.pid)+": commercial link "+str(commercial_link.pid)+
+        if len(commercial_link.route) == 0:
+            raise ValueError("Firm "+str(self.pid)+": commercial link "+str(commercial_link.pid)+
                 " is not associated to any route, I cannot send any shipment to client "+
                 str(commercial_link.pid))
+
+        if self.check_route_avaibility(commercial_link, transport_network, 'main') == 'available':
+            # If the normal route is available, we can send the shipment as usual 
+            # and pay the usual price
+            commercial_link.price = commercial_link.eq_price * (1 + self.delta_price_input)
+            commercial_link.current_route = 'main'
+            transport_network.transport_shipment(commercial_link)
+            self.product_stock -= commercial_link.delivery
+            self.generalized_transport_cost += \
+                commercial_link.route_time_cost \
+                + commercial_link.delivery / (self.usd_per_ton*1e-6) \
+                * commercial_link.route_cost_per_ton
+            self.usd_transported += commercial_link.delivery
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) \
+                                    * commercial_link.route_length
+            self.finance['costs']['transport'] += \
+                self.clients[commercial_link.buyer_id]['share'] \
+                * self.eq_finance['costs']['transport']
+            return 0
             
+        # If there is an alternative route already discovered, 
+        # and if this alternative route is available, then we use it
+        if (len(commercial_link.alternative_route)>0) \
+            & (self.check_route_avaibility(commercial_link, transport_network, 'alternative') \
+                == 'available'):
+            route = commercial_link.alternative_route
+        # Otherwise we need to discover a new one
         else:
-            if self.check_route_avaibility(commercial_link, transport_network, 'main') == 'available':
-                # If the normal route is available, we can send the shipment as usual and pay the usual price
-                commercial_link.price = commercial_link.eq_price * (1 + self.delta_price_input)
-                commercial_link.current_route = 'main'
-                transport_network.transport_shipment(commercial_link)
-                self.product_stock -= commercial_link.delivery
-                self.generalized_transport_cost += commercial_link.route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
-                self.usd_transported += commercial_link.delivery
-                self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-                self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) *commercial_link.route_length
+            origin_node = self.odpoint
+            destination_node = commercial_link.route[-1][0]
+            route = transport_network.available_subgraph()\
+                                     .provide_shortest_route(origin_node, destination_node)
+            # If we find a new route, we save it as the alternative one
+            if route is not None: 
+                commercial_link.alternative_route = route
+                distance, route_time_cost, cost_per_ton = transport_network\
+                    .giveRouteCaracteristics(route)
+                commercial_link.alternative_route_length = distance
+                commercial_link.alternative_route_time_cost = route_time_cost
+                commercial_link.alternative_route_cost_per_ton = cost_per_ton
+        # If the alternative route is available, or if we discovered one, we proceed
+        if route is not None:
+            commercial_link.current_route = 'alternative'
+            self.generalized_transport_cost += commercial_link.alternative_route_time_cost \
+                + commercial_link.delivery / (self.usd_per_ton*1e-6) \
+                * commercial_link.alternative_route_cost_per_ton
+            self.usd_transported += commercial_link.delivery
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) \
+                * commercial_link.alternative_route_length
+        
+            # We translate this real cost into transport cost
+            if False: #relative cost change with actual bill
+                new_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
+                normal_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
+                added_transport_bill = max(new_transport_bill - normal_transport_bill, 0)
+                relative_cost_change = added_transport_bill/normal_transport_bill
+                self.finance['costs']['transport'] += self.eq_finance['costs']['transport'] * self.clients[commercial_link.buyer_id]['share'] * (1 + relative_cost_change)
+                relative_price_change_transport = self.eq_finance['costs']['transport'] * relative_cost_change / ((1-self.target_margin) * self.eq_finance['sales'])
+                total_relative_price_change = self.delta_price_input + relative_price_change_transport
+                commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
+
+            elif True: #actual repercussion de la bill
+                added_costUSD_per_ton = max(commercial_link.alternative_route_cost_per_ton - \
+                    commercial_link.route_cost_per_ton, 0)
+                added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton*1e-6)
+                added_costmUSD_per_mUSD = added_costUSD_per_mUSD*1e-6
+                added_transport_bill = added_costmUSD_per_mUSD * commercial_link.delivery
+                self.finance['costs']['transport'] += \
+                    self.eq_finance['costs']['transport'] + added_transport_bill
+                commercial_link.price = commercial_link.eq_price \
+                    + self.delta_price_input \
+                    + added_costmUSD_per_mUSD
+                relative_price_change_transport = \
+                    commercial_link.price / (commercial_link.eq_price + self.delta_price_input) - 1
                 
-                self.finance['costs']['transport'] += self.clients[commercial_link.buyer_id]['share'] * self.eq_finance['costs']['transport']
+                logging.debug('Firm '+str(self.pid)+": qty "+str(commercial_link.delivery / (self.usd_per_ton*1e-6)) +
+                " increase in route cost per ton "+ str((commercial_link.alternative_route_cost_per_ton-commercial_link.route_cost_per_ton)/commercial_link.route_cost_per_ton)+
+                " increased bill mUSD "+str(added_costmUSD_per_mUSD*commercial_link.delivery))
                 
             else:
-                # If there is a disruption, we try the alternative route, if there is any
-                if (len(commercial_link.alternative_route)>0) & (self.check_route_avaibility(commercial_link, transport_network, 'alternative') == 'available'):
-                    route = commercial_link.alternative_route
-                else:
-                # Otherwise we have to find a new one
-                    origin_node = self.odpoint
-                    destination_node = commercial_link.route[-1][0]
-                    route = transport_network.available_subgraph().provide_shortest_route(origin_node, destination_node)
-                    if route is not None: # if we find a new route, we save it as the alternative one
-                        commercial_link.alternative_route = route
-                        distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
-                        commercial_link.alternative_route_length = distance
-                        commercial_link.alternative_route_time_cost = route_time_cost
-                        commercial_link.alternative_route_cost_per_ton = cost_per_ton
-                
-                if route is not None:
-                    commercial_link.current_route = 'alternative'
-                    self.generalized_transport_cost += commercial_link.alternative_route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
-                    self.usd_transported += commercial_link.delivery
-                    self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-                    self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_length
-                
-                    # We translate this real cost into transport cost
-                    if False: #relative cost change with actual bill
-                        new_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
-                        normal_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
-                        added_transport_bill = max(new_transport_bill - normal_transport_bill, 0)
-                        relative_cost_change = added_transport_bill/normal_transport_bill
-                        self.finance['costs']['transport'] += self.eq_finance['costs']['transport'] * self.clients[commercial_link.buyer_id]['share'] * (1 + relative_cost_change)
-                        relative_price_change_transport = self.eq_finance['costs']['transport'] * relative_cost_change / ((1-self.target_margin) * self.eq_finance['sales'])
-                        total_relative_price_change = self.delta_price_input + relative_price_change_transport
-                        commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
+                relative_cost_change = (commercial_link.alternative_route_time_cost - commercial_link.route_time_cost)/commercial_link.route_time_cost
+                self.finance['costs']['transport'] += self.eq_finance['costs']['transport'] * self.clients[commercial_link.buyer_id]['share'] * (1 + relative_cost_change)
+                relative_price_change_transport = self.eq_finance['costs']['transport'] * relative_cost_change / ((1-self.target_margin) * self.eq_finance['sales'])
+                # With that, we deliver the shipment
+                total_relative_price_change = self.delta_price_input + relative_price_change_transport
+                commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
-                    elif True: #actual repercussion de la bill
-                        added_costUSD_per_ton = max(commercial_link.alternative_route_cost_per_ton - commercial_link.route_cost_per_ton, 0)
-                        added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton*1e-6)
-                        added_costmUSD_per_mUSD = added_costUSD_per_mUSD*1e-6
-                        added_transport_bill = added_costmUSD_per_mUSD * commercial_link.delivery
-                        self.finance['costs']['transport'] += self.eq_finance['costs']['transport'] + added_transport_bill
-                        commercial_link.price = commercial_link.eq_price + self.delta_price_input + added_costmUSD_per_mUSD
-                        relative_price_change_transport = commercial_link.price / (commercial_link.eq_price + self.delta_price_input) - 1
-                        
-                        logging.debug('Firm '+str(self.pid)+": qty "+str(commercial_link.delivery / (self.usd_per_ton*1e-6)) +
-                        " increase in route cost per ton "+ str((commercial_link.alternative_route_cost_per_ton-commercial_link.route_cost_per_ton)/commercial_link.route_cost_per_ton)+
-                        " increased bill mUSD "+str(added_costmUSD_per_mUSD*commercial_link.delivery))
-                        
-                    else:
-                        relative_cost_change = (commercial_link.alternative_route_time_cost - commercial_link.route_time_cost)/commercial_link.route_time_cost
-                        self.finance['costs']['transport'] += self.eq_finance['costs']['transport'] * self.clients[commercial_link.buyer_id]['share'] * (1 + relative_cost_change)
-                        relative_price_change_transport = self.eq_finance['costs']['transport'] * relative_cost_change / ((1-self.target_margin) * self.eq_finance['sales'])
-                        # With that, we deliver the shipment
-                        total_relative_price_change = self.delta_price_input + relative_price_change_transport
-                        commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
-                    transport_network.transport_shipment(commercial_link)
-                    self.product_stock -= commercial_link.delivery
-                    # Print information
-                    logging.debug("Firm "+str(self.pid)+": found an alternative route to "+str(commercial_link.buyer_id)+", it is costlier by "+'{:.0f}'.format(100*relative_price_change_transport)+'%'+", price is "+'{:.4f}'.format(commercial_link.price)+" instead of "+'{:.4f}'.format(commercial_link.eq_price*(1+self.delta_price_input)))
-                
-                else:
-                    logging.debug('Firm '+str(self.pid)+": because of disruption, there is no route between me and firm "+str(commercial_link.buyer_id))
-                    # We do not write how the input price would have changed
-                    commercial_link.price = commercial_link.eq_price
-                    commercial_link.current_route = 'none'
-                    # We do not pay the transporter, so we don't increment the transport cost
-                    # We set delivery to 0
-                    commercial_link.delivery = 0
-    
+            transport_network.transport_shipment(commercial_link)
+            self.product_stock -= commercial_link.delivery
+            # Print information
+            logging.debug("Firm "+str(self.pid)+": found an alternative route to "+
+                str(commercial_link.buyer_id)+", it is costlier by "+
+                '{:.0f}'.format(100*relative_price_change_transport)+"%, price is "+
+                '{:.4f}'.format(commercial_link.price)+" instead of "+
+                '{:.4f}'.format(commercial_link.eq_price*(1+self.delta_price_input)))
+        
+        # If we do not find a route, then we do not deliver
+        else:
+            logging.debug('Firm '+str(self.pid)+": because of disruption, "+
+                "there is no route between me and firm "+str(commercial_link.buyer_id))
+            # We do not write how the input price would have changed
+            commercial_link.price = commercial_link.eq_price
+            commercial_link.current_route = 'none'
+            # We do not pay the transporter, so we don't increment the transport cost
+            # We set delivery to 0
+            commercial_link.delivery = 0
+
   
     def add_congestion_malus2(self, graph, transport_network): 
         """Congestion cost are perceived costs, felt by firms, but they do not influence prices paid to transporter, hence do not change price
@@ -666,29 +720,56 @@ class Firm(object):
         It receives them, thereby removing them from the transport network
         Then it pays the corresponding supplier along the commecial link
         """
-        quantity_intransit = commercial_link.delivery
+        # quantity_intransit = commercial_link.delivery
+        # Get delivery and update price
         quantity_delivered = 0
         price = 1
         if commercial_link.pid in transport_network.node[self.odpoint]['shipments'].keys():
             quantity_delivered += transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['quantity']
             price = transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['price']
             transport_network.remove_shipment(commercial_link)
+        # Add to inventory
         self.inventory[commercial_link.product] += quantity_delivered
-        if abs(quantity_intransit - quantity_delivered) > 1e-6:
-            logging.debug("Firm "+str(self.pid)+": quantity delivered by firm"+str(commercial_link.supplier_id)+"("+str(quantity_delivered)+") differs from what was supposed to be delivered ("+str(commercial_link.delivery)+")")
+        # Log if quantity received differs from what it was supposed to be
+        if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
+            logging.debug("Agent "+str(self.pid)+": quantity delivered by "+
+                str(commercial_link.supplier_id), " is "+str(quantity_delivered)+
+                ". It was supposed to be "+str(commercial_link.delivery)+".")
+        # Make payment
         commercial_link.payment = quantity_delivered * price
         
         
     def evaluate_profit(self, graph):
-        self.finance['sales'] = sum([graph[self][edge[1]]['object'].payment for edge in graph.out_edges(self)])
-        self.finance['costs']['input'] = sum([graph[edge[0]][self]['object'].payment for edge in graph.in_edges(self)]) 
-        self.profit = self.finance['sales'] - self.finance['costs']['input'] - self.finance['costs']['other'] - self.finance['costs']['transport']
-        if self.finance['sales'] > 0:
-            if abs(self.profit/self.finance['sales'] - self.target_margin) > 1e-3:
-                logging.debug('Firm '+str(self.pid)+': my margin differs from the target one: '+'{:.3f}'.format(self.profit/self.finance['sales'])+' instead of '+str(self.target_margin))
-        
-           
-           
+        self.finance['sales'] = sum([
+            graph[self][edge[1]]['object'].payment 
+            for edge in graph.out_edges(self)
+        ])
+        self.finance['costs']['input'] = sum([
+            graph[edge[0]][self]['object'].payment 
+            for edge in graph.in_edges(self)
+        ]) 
+        self.profit = self.finance['sales'] \
+            - self.finance['costs']['input'] \
+            - self.finance['costs']['other'] \
+            - self.finance['costs']['transport']
+
+        expected_gross_margin_no_transport = 1 - sum(list(self.input_mix.values()))
+        realized_gross_margin_no_transport = \
+            (self.finance['sales'] - self.finance['costs']['input']) \
+            / self.finance['sales']
+        realized_margin = self.profit / self.finance['sales']
+
+        # Log discrepancies
+        if abs(realized_gross_margin_no_transport - expected_gross_margin_no_transport) > 1e-6:
+            logging.debug('Firm '+str(self.pid)+': realized gross margin without transport is '+
+                '{:.3f}'.format(realized_gross_margin_no_transport)+" instead of "+
+                '{:.3f}'.format(expected_gross_margin_no_transport))
+
+        if abs(realized_margin - self.target_margin) > 1e-6:
+            logging.debug('Firm '+str(self.pid)+': my margin differs from the target one: '+
+                '{:.3f}'.format(realized_margin)+' instead of '+str(self.target_margin))
+
+
     def print_info(self):
         print("\nFirm "+str(self.pid)+" from sector "+str(self.sector)+":")
         print("suppliers:", self.suppliers)

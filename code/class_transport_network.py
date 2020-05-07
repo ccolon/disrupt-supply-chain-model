@@ -136,8 +136,8 @@ class TransportNetwork(nx.Graph):
             return route
 
         else:
-            raise ValueError("There is no path between "+str(origin_node)+
-                " and "+str(destination_node))
+            logging.info("There is no path between "+str(origin_node)+" and "+str(destination_node))
+            return None
 
         
     def available_subgraph(self):
@@ -244,7 +244,7 @@ class TransportNetwork(nx.Graph):
                             shipment['quantity'] 
                             for shipment in self[edge[0]][edge[1]]["shipments"].values()
                         ])
-                    elif flow_type in ['domestic_B2B', 'import', 'export']:
+                    elif flow_type in ['domestic_B2B', 'import', 'export', 'transit']:
                         self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
                             shipment['quantity'] 
                             for shipment in self[edge[0]][edge[1]]["shipments"].values() 

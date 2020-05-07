@@ -79,75 +79,151 @@ def set_initial_conditions(graph, firm_list, households, country_list, mode="equ
         print("Wrong mode chosen")
 
 
+
+def buildFinalDemandVector(households, country_list, firm_list):
+    '''Create a numpy.Array of the final demand per firm, including exports
+
+    Households and countries should already have set their purchase plan
+
+    Returns
+    -------
+    numpy.Array of dimension (len(firm_list), 1)
+    '''
+    if len(households.purchase_plan) == 0:
+        raise ValueError('Households purchase plan is empty')
+
+    if (len(country_list)>0) \
+        & (sum([len(country.purchase_plan) for country in country_list]) == 0):
+        raise ValueError('The purchase plan of all countries is empty')
+
+    final_demand_vector = np.zeros((len(firm_list), 1))
+    # Collect households final demand. They buy only from firms.
+    for firm_id, quantity in households.purchase_plan.items(): 
+        final_demand_vector[(firm_id,0)] += quantity
+    # Collect country final demand. They buy from firms and countries.
+    # We need to filter the demand directed to firms only.
+    for country in country_list:
+        for supplier_id, quantity in country.purchase_plan.items():
+            if isinstance(supplier_id, int): # we only consider purchase from firms
+                final_demand_vector[(supplier_id,0)] += quantity
+
+    return final_demand_vector
+
+
 def initilize_at_equilibrium(graph, firm_list, households, country_list):
-    firm_connectivity_matrix = nx.adjacency_matrix(graph.subgraph(list(graph.nodes)[:-1]), weight='weight', nodelist=firm_list).todense()
-    import_weight_per_firm = [sum([graph[supply_edge[0]][supply_edge[1]]['weight'] for supply_edge in graph.in_edges(firm) if str(graph[supply_edge[0]][supply_edge[1]]['object'].supplier_id)[0] == 'C']) for firm in firm_list]
+    """Initialize the supply chain network at the input--output equilibrium
+
+    We will use the matrix forms to solve the following equation for X (production):
+    D + E + AX = X + I
+    where:
+        D: final demand from households
+        E: exports
+        I: imports
+        X: firm productions
+        A: the input-output matrix
+    These vectors and matrices are in the firm-and-country space.
+
+    Parameters
+    ----------
+    graph : NetworkX.DiGraph
+        The supply chain network. Nodes are firms, countries, or households. 
+        Edges are commercial links.
+
+    firm_list : list of Firms
+        List of firms
+
+    households : Households
+        households
+
+    country_list : list of Countries
+        List of countries
+
+    Returns
+    -------
+    Nothing
+    """
+
+    # Get the wieghted connectivity matrix.
+    # Weight is the sectoral technical coefficient, if there is only one supplier for the input
+    # It there are several, the technical coefficient is multiplied by the share of input of
+    # this type that the firm buys to this supplier.
+    firm_connectivity_matrix = nx.adjacency_matrix(
+        graph.subgraph(list(graph.nodes)[:-1]), 
+        weight='weight', 
+        nodelist=firm_list
+    ).todense()
+    # Imports are considered as "a sector". We get the weight per firm for these inputs.
+    # !!! aren't I computing the same thing as the IMP tech coef?
+    import_weight_per_firm = [
+        sum([
+            graph[supply_edge[0]][supply_edge[1]]['weight'] 
+            for supply_edge in graph.in_edges(firm) 
+            if graph[supply_edge[0]][supply_edge[1]]['object'].category == 'import'
+        ]) 
+        for firm in firm_list
+    ]
     n = len(firm_list)
 
-    households.consumption = households.purchase_plan
-    households.tot_consumption = households.final_demand * np.sum(list(households.purchase_plan.values()))
-    households.spending = households.consumption
-    households.tot_spending = households.tot_consumption
-    households.extra_spending_per_sector = {key:0 for key, val in households.extra_spending_per_sector.items()}
-    
-    # Build final demand vector, of length n
-    # Purchases made by other countries are considered as final demand
-    final_demand_vector = np.zeros((n, 1))
-    for firm_id, quantity in households.purchase_plan.items():
-        final_demand_vector[(firm_id,0)] += quantity
-    for country in country_list:
-        for firm_id, quantity in country.purchase_plan.items():
-            if type(firm_id) == str:
-                continue #we dismiss transit flows
-            else:
-                final_demand_vector[(firm_id,0)] += quantity
-    eq_production_vector = np.linalg.solve(np.eye(n) - firm_connectivity_matrix, final_demand_vector)
+    # Build final demand vector per firm, of length n
+    # Exports are considered as final demand
+    final_demand_vector = buildFinalDemandVector(households, country_list, firm_list)
 
+    # Solve the input--output equation
+    eq_production_vector = np.linalg.solve(
+        np.eye(n) - firm_connectivity_matrix, 
+        final_demand_vector
+    )
+
+    # Initialize households variables
+    households.initialize_var_on_purchase_plan()
+
+    # Compute costs
+    ## Input costs
+    domestic_input_cost_vector = np.multiply(
+        firm_connectivity_matrix.sum(axis=0).reshape((n,1)), 
+        eq_production_vector
+    )
+    import_input_cost_vector = np.multiply(
+        np.array(import_weight_per_firm).reshape((n,1)), 
+        eq_production_vector
+    )
+    input_cost_vector = domestic_input_cost_vector + import_input_cost_vector
+    ## Transport costs
+    proportion_of_transport_cost_vector = 0.2*np.ones((n,1))
+    transport_cost_vector = np.multiply(eq_production_vector, proportion_of_transport_cost_vector)
+    ## Compute other costs based on margin
+    margin = np.array([firm.target_margin for firm in firm_list]).reshape((n,1))
+    other_cost_vector = np.multiply(eq_production_vector, (1-margin))\
+         - input_cost_vector - transport_cost_vector
+    
+    # Based on these calculus, update agents variables
+    ## Firm operational variables
+    for firm in firm_list:
+        firm.initialize_ope_var_using_eq_production(
+            eq_production=eq_production_vector[(firm.pid, 0)]
+        )
+    ## Firm financial variables
+    for firm in firm_list:
+        firm.initialize_fin_var_using_eq_cost(
+            eq_production=eq_production_vector[(firm.pid, 0)], 
+            eq_input_cost=input_cost_vector[(firm.pid,0)],
+            eq_transport_cost=transport_cost_vector[(firm.pid,0)], 
+            eq_other_cost=other_cost_vector[(firm.pid,0)]
+        )
+    ## Commercial links: agents set their order
     households.send_purchase_orders(graph)
     for country in country_list:
         country.send_purchase_orders(graph)
-
-    # Compute costs
-    #input costs
-    domestic_input_cost_vector = np.multiply(firm_connectivity_matrix.sum(axis=0).reshape((n,1)), eq_production_vector)
-    import_input_cost_vector = np.multiply(np.array(import_weight_per_firm).reshape((n,1)), eq_production_vector)
-    input_cost_vector = domestic_input_cost_vector + import_input_cost_vector
-    #transport costs
-    proportion_of_transport_cost_vector = 0.2*np.ones((n,1))
-    transport_cost_vector = np.multiply(eq_production_vector, proportion_of_transport_cost_vector)
-    #compute other costs based on margin
-    margin = np.array([firm.target_margin for firm in firm_list]).reshape((n,1))
-    other_cost_vector = np.multiply(eq_production_vector, (1-margin)) - input_cost_vector - transport_cost_vector
-    
     for firm in firm_list:
-        firm.production_target = eq_production_vector[(firm.pid, 0)]
-        firm.production = firm.production_target
-        firm.eq_production_capacity = firm.production_target / firm.utilization_rate
-        firm.production_capacity = firm.eq_production_capacity
-        firm.evaluate_input_needs()
-        firm.eq_needs = firm.input_needs
-        firm.inventory = {input_id: need * (1+firm.inventory_duration_target[input_id]) for input_id, need in firm.input_needs.items()}
-        firm.decide_purchase_plan()
         firm.send_purchase_orders(graph)
-        firm.eq_finance['sales'] = firm.production
-        firm.eq_finance['costs']['input'] = input_cost_vector[(firm.pid,0)]
-        firm.eq_finance['costs']['transport'] = transport_cost_vector[(firm.pid,0)]
-        firm.eq_finance['costs']['other'] = other_cost_vector[(firm.pid,0)]
-        firm.eq_profit = firm.eq_finance['sales'] - sum(firm.eq_finance['costs'].values())
-        firm.finance['sales'] = firm.eq_finance['sales']
-        firm.finance['costs']['input'] = firm.eq_finance['costs']['input']
-        firm.finance['costs']['transport'] = firm.eq_finance['costs']['transport']
-        firm.finance['costs']['other'] = firm.eq_finance['costs']['other']
-        firm.profit = firm.eq_profit
-        firm.delta_price_input = 0
-        #the following is just to set once for all the share of sales of each client
+    ##the following is just to set once for all the share of sales of each client
     for firm in firm_list:
         firm.retrieve_orders(graph)
         firm.aggregate_orders()
         firm.eq_total_order = firm.total_order
         firm.calculate_client_share_in_sales()
         
-    # Reset price to 1
+    ## Set price to 1
     reset_prices(graph)
 
         

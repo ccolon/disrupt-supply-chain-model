@@ -21,19 +21,23 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges,
     Note that therea are strong constraints on these files, in particular on their attributes. 
     We can optionally use an additional edge shapefile, which contains extra road segments. Useful for scenario testing.
 
-    :param filepath_road_nodes: Path of the shapefile of the road nodes 
-    :type filepath_road_nodes: string
+    Parameters
+    ----------
+    filepath_road_nodes : string
+        Path of the shapefile of the road nodes 
 
-    :param filepath_road_edges: Path of the shapefile of the road edges 
-    :type filepath_road_edges: string
+    filepath_road_edges : string
+        Path of the shapefile of the road edges 
 
-    :param transport_params: Transport parameters. Should be in a specific format.
-    :type transport_params: dictionary
+    transport_params : dictionary
+        Transport parameters. Should be in a specific format.
 
-    :param filepath_extra_road_edges: Path of the shapefile of any extra road edges to include. Default to None.
-    :type filepath_extra_road_edges: string
+    filepath_extra_road_edges : string
+        Path of the shapefile of any extra road edges to include. Default to None.
 
-    :return: TransportNetwork
+    Returns
+    -------
+    TransportNetwork
     """
 
     # Create the transport network object, and set the "unit_cost" parameter, which is the ton.km cost of transporting sth
@@ -45,6 +49,19 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges,
     road_nodes.index = road_nodes['id']
     road_edges = gpd.read_file(filepath_road_edges)
     road_edges.index = road_edges['id']
+
+    # Check conformity
+    if (road_nodes['id'].isduplicated().sum()>0):
+        raise ValueError('The following node ids are duplicated: '+
+            road_nodes.loc[road_nodes['id'].isduplicated(), "id"])
+    if (road_edges['id'].isduplicated().sum()>0):
+        raise ValueError('The following edge ids are duplicated: '+
+            road_edges.loc[road_edges['id'].isduplicated(), "id"])
+    edge_ends = set(road_edges['end1'].tolist()+road_edges['end2'].tolist())
+    edge_ends_not_in_node_data = edge_ends - set(road_nodes['id'])
+    if len(edge_ends_not_in_node_data)>0:
+        raise KeyError("The following node id are given as 'end1' or 'end2' in edge data \
+            but are not in the node data: "+str(edge_ends_not_in_node_data))
 
     # Add additional edges, if any
     if filepath_extra_road_edges is not None:
@@ -435,7 +452,6 @@ def loadInventories(firm_list, inventory_duration_target=2,
     # inventory_table.to_csv('inventory_check.csv')
     # logging.info("Inventories: "+str({firm.pid: firm.inventory_duration_target for firm in firm_list}))
     return firm_list
-    
 
 
 def loadTonUsdEquivalence(sector_table, firm_list, country_list):

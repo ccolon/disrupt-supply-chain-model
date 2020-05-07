@@ -3,6 +3,7 @@
 import logging
 from functions import *
 from export_functions import *
+from check_functions import *
 
 def setInitialSCConditions(transport_network, sc_network, firm_list, 
     country_list, households, initialization_mode="equilibrium"):
@@ -78,13 +79,20 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     -------
     Nothing
     """
+
     allFirmsRetrieveOrders(sc_network, firm_list)
+
     allFirmsPlanProduction(firm_list, sc_network, price_fct_input=propagate_input_price_change)
+    
     allFirmsPlanPurchase(firm_list)
+
     allAgentsSendPurchaseOrders(sc_network, firm_list, households, country_list)
+    
     allFirmsProduce(firm_list)
+    
     allAgentsDeliver(sc_network, firm_list, country_list, transport_network, 
         rationing_mode=rationing_mode)
+    
     if export_flows: #should be done at this stage, while the goods are on their way
         transport_network.compute_flow_per_segment(flow_types_to_export)
         # obs.collect_transport_flows(T_noCountries, time_step=0, flow_types_to_export=flow_types_to_export)
@@ -93,11 +101,16 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         exportTransportFlows(observer, export_folder)
         exportTransportFlowsShp(observer, export_folder, time_step=time_step, 
             filepath_road_edges=filepath_road_edges)
+    
     if export_sc_flow_analysis: #should be done at this stage, while the goods are on their way
         analyzeSupplyChainFlows(sc_network, firm_list, export_folder)
+    
     allAgentsReceiveProducts(sc_network, firm_list, households, 
         country_list, transport_network)
+    
     if export_agent_data:
         observer.collect_agent_data(firm_list, households, country_list, 
             time_step=time_step)
         exportAgentData(observer, export_folder)
+
+    compareProductionPurchasePlans(firm_list, country_list, households)
