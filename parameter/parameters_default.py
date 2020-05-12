@@ -76,6 +76,12 @@ disruption_duration = 1
 # Whether or not to export a csv summarizing some topological caracteristics of the supply chain network
 export_sc_network_summary = True
 
+# Monetary units to use in model. 'USD', 'kUSD', 'mUSD'
+monetary_units_in_model = "mUSD"
+
+# Monetary units in input files. 'USD', 'kUSD', 'mUSD'
+monetary_units_inputed = "USD"
+
 # Whether or not to model congestion
 congestion = True
 

@@ -530,38 +530,90 @@ def loadTonUsdEquivalence(sector_table, firm_list, country_list):
     return firm_list, country_list
 
 
+def rescaleMonetaryValues(values, time_resolution="week", target_units="mUSD", input_units="USD"):
+    """Rescale monetary values using the approriate time scale and monetary units
+
+    Parameters
+    ----------
+    values : pandas.Series, pandas.DataFrame, float
+        Values to transform
+
+    time_resolution : 'day', 'week', 'month', 'year'
+        The number in the input table are yearly figure
+
+    target_units : 'USD', 'kUSD', 'mUSD'
+        Moneraty units to which valuess are converted
+
+    input_units : 'USD', 'kUSD', 'mUSD'
+        Moneraty units of the inputed values
+
+    Returns
+    -------
+    same type as values
+    """
+    # Rescale according to the time period chosen
+    periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
+    values = values / periods[time_resolution]
+
+    # Change units
+    units = {"USD": 1, "kUSD": 1e3, "mUSD":1e6}
+    values = values * units[input_units] / units[target_units]
+    
+    return values
+
+
+
 def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_entry_points,
-    present_sectors, countries_to_include='all', time_resolution="week"):
+    present_sectors, countries_to_include='all', 
+    time_resolution="week", target_units="mUSD", input_units="USD"):
     """Create the countries
 
-    :param filepath_imports: path to import table csv
-    :type filepath_imports: string
+    Parameters
+    ----------
+    filepath_imports : string
+        path to import table csv
 
-    :param filepath_exports: path to export table csv
-    :type filepath_exports: string
+    filepath_exports : string
+        path to export table csv
 
-    :param filepath_transit_matrix: path to transit matrix csv
-    :type filepath_transit_matrix: string
+    filepath_transit_matrix : string
+        path to transit matrix csv
 
-    :param filepath_entry_points: path to the table of transit points csv
-    :type filepath_entry_points: string
+    filepath_entry_points : string
+        path to the table of transit points csv
 
-    :param present_sectors: list which sectors are included. Output of the rescaleFirms functions.
-    :type present_sectors: list of string
+    present_sectors : list of string
+        list which sectors are included. Output of the rescaleFirms functions.
 
-    :param countries_to_include: List of countries to include. Default to "all", which select all sectors.
-    :type countries_to_include: list of string or "all"
+    countries_to_include : list of string or "all"
+        List of countries to include. Default to "all", which select all sectors.
 
-    :param time_resolution: The number in the input table are yearly figure. Rescale thoses numbers appropriately.
-    :type time_resolution: 'day', 'week', 'month', 'year'
+    time_resolution : see rescaleMonetaryValues
+    target_units : see rescaleMonetaryValues
+    input_units : see rescaleMonetaryValues
 
-    :return: list of Countries
+    Returns
+    -------
+    list of Countries
     """
-    periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
-
-    import_table = pd.read_csv(filepath_imports, index_col=0)
-    export_table = pd.read_csv(filepath_exports, index_col=0)
-    transit_matrix = pd.read_csv(filepath_transit_matrix, index_col=0)
+    import_table = rescaleMonetaryValues(
+        pd.read_csv(filepath_imports, index_col=0),
+        time_resolution=time_resolution,
+        target_units=target_units,
+        input_units=input_units
+    )
+    export_table = rescaleMonetaryValues(
+        pd.read_csv(filepath_exports, index_col=0),
+        time_resolution=time_resolution,
+        target_units=target_units,
+        input_units=input_units
+    )
+    transit_matrix = rescaleMonetaryValues(
+        pd.read_csv(filepath_transit_matrix, index_col=0),
+        time_resolution=time_resolution,
+        target_units=target_units,
+        input_units=input_units
+    )
     entry_point_table = pd.read_csv(filepath_entry_points)
 
     # Keep only selected countries, if applicable
@@ -575,9 +627,15 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     else:
         raise ValueError("'countries_to_include' should be a list of string or 'all'")
     
-    
+    logging.info("Total imports per "+time_resolution+" is "+
+        "{:.01f} ".format(import_table.sum().sum())+target_units)
+    logging.info("Total exports per "+time_resolution+" is "+
+        "{:.01f} ".format(export_table.sum().sum())+target_units)
+    logging.info("Total transit per "+time_resolution+" is "+
+        "{:.01f} ".format(transit_matrix.sum().sum())+target_units)
+
     country_list = []
-    total_imports = import_table.sum().sum() / periods[time_resolution]
+    total_imports = import_table.sum().sum()
     for country in import_table.index.tolist():
         # transit points
         entry_points = entry_point_table.loc[
@@ -585,17 +643,17 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
         ].astype(int).tolist()
 
         # imports, i.e., sales of countries
-        qty_sold = (import_table.loc[country,:] / periods[time_resolution]).to_dict()
+        qty_sold = import_table.loc[country,:].to_dict()
         supply_importance = sum(qty_sold.values()) / total_imports
         
         # exports, i.e., purchases from countries
-        qty_purchased = (export_table.loc[country,:] / periods[time_resolution]).to_dict()
+        qty_purchased = export_table.loc[country,:].to_dict()
         
         # transits
         # Note that transit are not given per sector, so, if we only consider a few sector, the full transit flows will still be used
-        transit_from = transit_matrix.loc[:,country] / periods[time_resolution]
+        transit_from = transit_matrix.loc[:, country]
         transit_from = transit_from[transit_from>0].to_dict()
-        transit_to = transit_matrix.loc[country, :] / periods[time_resolution]
+        transit_to = transit_matrix.loc[country, :]
         transit_to = transit_to[transit_to>0].to_dict()
         
         # create the list of Country object
@@ -612,25 +670,30 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
 
 def defineFinalDemand(firm_table, od_table, 
     filepath_population, filepath_final_demand,
-    time_resolution='week'):
+    time_resolution='week', target_units="mUSD", input_units="USD"):
     """Allocate a final demand to each firm. It updates the firm_table
 
-    :param firm_table: firm_table from rescaleNbFirms function
-    :type firm_table: pandas.DataFrame
+    Parameters
+    ----------
+    firm_table : pandas.DataFrame
+        firm_table from rescaleNbFirms function
 
-    :param od_table: od_table from rescaleNbFirms function
-    :type od_table: pandas.DataFrame
+    od_table: pandas.DataFrame
+        od_table from rescaleNbFirms function
 
-    :param filepath_population: path to population csv
-    :type filepath_population: string
+    filepath_population: string
+        path to population csv
 
-    :param filepath_final_demand: path to final demand csv
-    :type filepath_final_demand: string
+    filepath_final_demand : string
+        path to final demand csv
 
-    :param time_resolution: The number in the input table are yearly figure. Rescale thoses numbers appropriately.
-    :type time_resolution: 'day', 'week', 'month', 'year'
+    time_resolution : see rescaleMonetaryValues
+    target_units : see rescaleMonetaryValues
+    input_units : see rescaleMonetaryValues
 
-    :return: firm_table
+    Returns
+    -------
+    firm_table
     """
     # Compute population allocated to each od point
     population_per_district = pd.read_csv(filepath_population)
@@ -657,14 +720,19 @@ def defineFinalDemand(firm_table, od_table,
     if ((sum_of_sectoral_final_demand_weight-1.0)>1e-6).any():
         logging.warning('The final demand of some sectors is problematic: '+str(sum_of_sectoral_final_demand_weight))
     
-    # Allocate actual final demand, in dollars, using final consumption data of IO table, and take into account a time resolution
-    periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
+    # Rescale final demand according to the time period and monetary unit chosen
     final_demand_per_sector = pd.read_csv(filepath_final_demand)
+    final_demand_per_sector["final_demand"] = rescaleMonetaryValues(
+        final_demand_per_sector["final_demand"],
+        time_resolution=time_resolution,
+        target_units=target_units,
+        input_units=input_units
+    )
+    # Allocate actual final demand to each firm based on its weight
     firm_table['final_demand'] = firm_table['sector'].map(final_demand_per_sector.set_index('sector')['final_demand'])
-    firm_table['final_demand'] = firm_table['final_demand'] * firm_table['final_demand_weight'] / periods[time_resolution]
-    logging.info('Every '+time_resolution+', the total final demand is '+str(int(firm_table['final_demand'].sum())))
-    actual_final_demand_per_sector = firm_table.groupby('sector')['final_demand'].sum()
-        
+    firm_table['final_demand'] = firm_table['final_demand'] * firm_table['final_demand_weight']
+    logging.info("Total final demand per "+time_resolution+" is "+
+        "{:.01f} ".format(firm_table['final_demand'].sum())+target_units)
     return firm_table
     
 

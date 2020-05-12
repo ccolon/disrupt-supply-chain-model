@@ -182,7 +182,8 @@ logging.info('Creating country_list. Countries included: '+str(countries_to_incl
 country_list = createCountries(filepath_imports, filepath_exports, 
     filepath_transit_matrix, filepath_entry_points, 
     present_sectors, countries_to_include=countries_to_include, 
-    time_resolution=time_resolution)
+    time_resolution=time_resolution,
+    target_units=monetary_units_in_model, input_units=monetary_units_inputed)
 logging.info('Country_list created: '+str([country.pid for country in country_list]))
 # Linking the countries to the the transport network via their transit point.
 # This creates "virtual nodes" in the transport network that corresponds to the countries.
@@ -200,7 +201,8 @@ firm_list, country_list = loadTonUsdEquivalence(sector_table, firm_list, country
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
 firm_table = defineFinalDemand(firm_table, odpoint_table, 
     filepath_population=filepath_population, filepath_final_demand=filepath_final_demand,
-    time_resolution=time_resolution)
+    time_resolution=time_resolution, 
+    target_units=monetary_units_in_model, input_units=monetary_units_inputed)
 logging.info('Creating households and loaded their purchase plan')
 households = createHouseholds(firm_table)
 logging.info('Households created')
