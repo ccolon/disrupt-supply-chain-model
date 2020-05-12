@@ -110,18 +110,26 @@ else:
         'Speeds: '+str(transport_params['speeds'])+
         ', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
     
+### Filter sectors
+logging.info('Filtering the sectors based on their output. '+
+    "Cutoff type is "+cutoff_sector_output['type']+
+    ", cutoff value is "+str(cutoff_sector_output['value']))
+sector_table = pd.read_csv(filepath_sector_table)
+filtered_sectors = filterSector(sector_table, cutoff=cutoff_sector_output['value'],
+    cutoff_type=cutoff_sector_output['type'],
+    sectors_to_include=sectors_to_include)
+logging.info('The filtered sectors are: '+str(filtered_sectors))
 
 ### Create firms
 # Filter district sector combination
-logging.info('Generating the firm table. Sector included: '+str(sectors_to_include)+
-    ', districts included: '+str(districts_to_include)+
+logging.info('Generating the firm table. '+
+    'Districts included: '+str(districts_to_include)+
     ', district sector cutoff: '+str(district_sector_cutoff))
-sector_table = pd.read_csv(filepath_sector_table)
 firm_table, odpoint_table, filtered_district_sector_table = \
     rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, sector_table,
         district_sector_cutoff, nb_top_district_per_sector,
-        sectors_to_include=sectors_to_include, districts_to_include=districts_to_include)
-firm_table.to_csv(os.path.join("output", "Test", 'firm_table.csv'))
+        sectors_to_include=filtered_sectors, districts_to_include=districts_to_include)
+#firm_table.to_csv(os.path.join("output", "Test", 'firm_table.csv'))
 logging.info('Firm and OD tables generated')
 
 # Creating the firms

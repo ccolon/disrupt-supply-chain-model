@@ -8,7 +8,7 @@ disruption_analysis = {
     "nodeedge_tested": [456,4]
 }
 disruption_analysis = None
-district_sector_cutoff = 0.03*4
+district_sector_cutoff = 0.003*15
 
 # countries_to_include = ["BDI", "EUR"]#"all"
 # countries_to_include = ["BDI","COD","KEN","MWI","MOZ","RWA","UGA","ZMB","AME","ASI","EUR","MDE","OCE","OAF"]
@@ -16,7 +16,6 @@ district_sector_cutoff = 0.03*4
 export_flows = True
 export_sc_flow_analysis = True
 export_agent_data = True
-
 export_log = True
 export_criticality = True
 export_flows = True

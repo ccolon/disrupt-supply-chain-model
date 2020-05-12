@@ -52,6 +52,7 @@ class Country(object):
                        object=CommercialLink(
                            pid=str(selling_country_pid)+'to'+str(self.pid),
                            product='transit',
+                           category="transit",
                            supplier_id=selling_country_pid,
                            buyer_id=self.pid))
             graph[selling_country_object][self]['weight'] = 1

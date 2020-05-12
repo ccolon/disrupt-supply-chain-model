@@ -87,6 +87,14 @@ propagate_input_price_change = True
 # - list of sectors
 sectors_to_include = "all"
 
+# Filter out sectors whose output is below that cutoff value
+# - if 'type' is 'percentage', test cutoff againt the sector's relative output
+# - if 'type' is 'absolute', test cutoff againt the sector's absolute output
+cutoff_sector_output = {
+    'type': 'percentage',
+    'value': 0.01
+}
+
 # Which districts to include. Possible values:
 # - 'all': all the districts are kept
 # - list of districts

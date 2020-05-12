@@ -95,6 +95,50 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges,
     return T
 
     
+def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage", 
+    sectors_to_include="all"):
+    """Filter the sector table to sector whose output is largen than the cutoff value
+
+    Parameters
+    ----------
+    sector_table : pandas.DataFrame
+        Sector table
+    cutoff : float
+        Cutoff value for selecting the sectors
+        If cutoff_type="percentage", the sector's output divided by all sectors' output is used
+        If cutoff_type="absolute", the sector's absolute output, in USD, is used
+    sectors_to_include : list of string or 'all'
+        list of the sectors preselected by the user. Default to "all"
+
+    Returns
+    -------
+    list of filtered sectors
+    """
+    if cutoff_type == "percentage":
+        rel_output = sector_table['output'] / sector_table['output'].sum()
+        filtered_sectors = sector_table.loc[rel_output > cutoff, "sector"].tolist()
+
+    elif cutoff_type == "absolute":
+        filtered_sectors = sector_table.loc[sector_table['output'] > cutoff, "sector"].tolist()
+
+    else:
+        raise ValueError("cutoff type should be 'percentage' or 'absolute'")    
+
+    if len(filtered_sectors) == 0:
+        raise ValueError("The cutoff value is so high that it filtered out all sectors")
+
+    if isinstance(sectors_to_include, list):
+        if (len(set(sectors_to_include) - set(filtered_sectors)) > 0):
+            selected_but_filteredout_sectors = list(set(sectors_to_include) - set(filtered_sectors))
+            logging.info("The following sectors were specifically selected but were filtered out"+
+                str(selected_but_filteredout_sectors))
+
+        return list(set(sectors_to_include) & set(filtered_sectors))
+
+    else:
+        return filtered_sectors
+
+
     
 def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, 
     sector_table,
@@ -149,7 +193,7 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
     if isinstance(districts_to_include, list):
         table_district_sector_importance = \
             table_district_sector_importance[table_district_sector_importance['district'].isin(districts_to_include)]
-    elif (sectors_to_include!='all'):
+    elif (districts_to_include!='all'):
         raise ValueError("'districts_to_include' should be a list of string or 'all'")
 
     logging.info('Nb of combinations (district, sector) before cutoff: '+str(table_district_sector_importance.shape[0]))
@@ -248,20 +292,23 @@ def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilizat
 
     It uses firm_table from rescaleNbFirms
 
-    :param firm_table: firm_table from rescaleNbFirms
-    :type firm_table: pandas.DataFrame
+    Parameters
+    ----------
+    firm_table: pandas.DataFrame
+        firm_table from rescaleNbFirms
 
-    :param keep_top_n_firms: (optional) can be specified if we want to keep only the first n firms, for testing purposes
-    :type keep_top_n_firms: None (default) or integer
+    keep_top_n_firms: None (default) or integer
+        (optional) can be specified if we want to keep only the first n firms, for testing purposes
 
+    reactivity_rate: float
+        Determines the speed at which firms try to reach their inventory duration target. Default to 0.1.
 
-    :param reactivity_rate: Determines the speed at which firms try to reach their inventory duration target. Default to 0.1.
-    :type reactivity_rate: float
+    utilization_rate: float
+        Set the utilization rate, which determines the production capacity at the input-output equilibrium.
 
-    :param utilization_rate: Set the utilization rate, which determines the production capacity at the input-output equilibrium.
-    :type utilization_rate: float
-
-    :return: list of Firms
+    Returns
+    -------
+    list of Firms
     """
 
     if isinstance(keep_top_n_firms, int):
@@ -293,19 +340,23 @@ def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilizat
 def loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff=0.1, import_sector_name=None):
     """Load the input mix of the firms' Leontief function
 
-    :param firm_list: the list of Firms generated from the createFirms function
-    :type firm_list: pandas.DataFrame
+    Parameters
+    ----------
+    firm_list : pandas.DataFrame
+        the list of Firms generated from the createFirms function
 
-    :param filepath_tech_coef: Filepath to the matrix of technical coefficients
-    :type filepath_tech_coef: string
+    filepath_tech_coef : string
+        Filepath to the matrix of technical coefficients
 
-    :param io_cutoff: Filters out technical coefficient below this cutoff value. Default to 0.1.
-    :type io_cutoff: float
+    io_cutoff : float
+        Filters out technical coefficient below this cutoff value. Default to 0.1.
 
-    :param imports: Give the name of the import sector. If None, then the import technical coefficient is discarded. Default to None.
-    :type imports: None or string
-
-    :return: list of Firms
+    imports : None or string
+        Give the name of the import sector. If None, then the import technical coefficient is discarded. Default to None.
+    
+    Returns
+    -------
+    list of Firms
     """
 
     # Load technical coefficient matrix from data

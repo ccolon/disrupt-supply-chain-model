@@ -72,11 +72,12 @@ A csv file providing, for each sector:
 - the type of sector ('agriculture', 'manufacturing', 'utility', 'transport', 'services')
 - the average monetary value, in USD, of a ton of good, 
 - the percentage of the firms that export per sector.
+- the total yearly output, is USD (not kUSD, not mUSD, USD)
 
-sector | type | usd_per_ton | share_exporting_firms
---- | --- | --- | --- 
-AGR | agriculture | 950 | 0.16  
-... | ... | ... | ... 
+sector | type | usd_per_ton | share_exporting_firms | output
+--- | --- | --- | ---  | --- 
+AGR | agriculture | 950 | 0.16 | 415641365
+... | ... | ... | ... | ... 
 
 
 ### Demand

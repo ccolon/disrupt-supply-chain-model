@@ -620,7 +620,8 @@ class Firm(object):
 
   
     def add_congestion_malus2(self, graph, transport_network): 
-        """Congestion cost are perceived costs, felt by firms, but they do not influence prices paid to transporter, hence do not change price
+        """Congestion cost are perceived costs, felt by firms, but they do not influence 
+        prices paid to transporter, hence do not change price
         """
         if len(transport_network.congestionned_edges) > 0:
             # for each client
