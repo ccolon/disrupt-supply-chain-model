@@ -26,10 +26,10 @@ If you set `new_roads = True`, the shapefile containing the extra road edges sho
 
 A csv file with the following strucutre.
 
-odpoint | district | geometry | long | lat
---- | --- | --- | --- | --- 
-7121 | 16-08 | POINT (30.09349 -4.56182) | 30.09349 | -4.56182
-... | ... | ... | ... | ... 
+odpoint | district | long | lat
+--- | --- | --- | ---
+7121 | 16-08 | 30.09349 | -4.56182
+... | ... | ... | ...
 
 
 ### Production

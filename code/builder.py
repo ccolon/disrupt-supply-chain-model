@@ -272,11 +272,11 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
     firm_table = firm_table.sort_values('importance', ascending=False)
     firm_table = firm_table.sort_values(['district', 'sector'])
     firm_table['id'] = list(range(firm_table.shape[0]))
-    firm_table = firm_table[['id', 'sector', 'odpoint', 'importance', 'district', 'geometry', 'long', 'lat']]
+    firm_table = firm_table[['id', 'sector', 'odpoint', 'importance', 'district', 'long', 'lat']]
     
     # Create OD table
     od_table = od_sector_table.copy()
-    od_table = od_table[['odpoint', 'district', 'nb_points_same_district', 'geometry', 'long', 'lat']]
+    od_table = od_table[['odpoint', 'district', 'nb_points_same_district', 'long', 'lat']]
     od_table = od_table.drop_duplicates().sort_values('odpoint')
 
     logging.info('Nb of od points chosen: '+str(len(set(firm_table['odpoint'])))+
@@ -322,7 +322,7 @@ def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilizat
              sector=firm_table.loc[i, "sector"], 
              odpoint=firm_table.loc[i, "odpoint"], 
              importance=firm_table.loc[i, 'importance'],
-             geometry=firm_table.loc[i, 'geometry'],
+             # geometry=firm_table.loc[i, 'geometry'],
              long=float(firm_table.loc[i, 'long']),
              lat=float(firm_table.loc[i, 'lat']),
              utilization_rate=utilization_rate
@@ -764,54 +764,84 @@ def extractEdgeList(graph):
     return dic_commercial_links
 
 
-def defineDisruptionList(disrupt_nodes_or_edges, nodeedge_tested, transport_network, nodeedge_tested_topn=None, nodeedge_tested_skipn=None):
+def defineDisruptionList(disruption_analysis, transport_network, 
+    nodeedge_tested_topn=None, nodeedge_tested_skipn=None):
     """Create list of infrastructure to disrupt
 
-    :param disrupt_nodes_or_edges: Whether the nodes or edges of the transport network are to be disrupted
-    :type disrupt_nodes_or_edges: "nodes" or "edges"
+    Parameters
+    ----------
+    disruption_analysis : None or dic
+        See parameters_default commments
 
-    :param nodeedge_tested: Specific the ids of the nodes/edges to disrupt
-    :type nodeedge_tested: "all", list of int, filepath
+    transport_network : TransportNetwork object
+        Transport network
 
-    :param transport_network: Transport network
-    :type transport_network: TransportNetwork object
+    nodeedge_tested_topn : None or integer
+        Nb of node/edge to test in the list. If None the full list is tested.
 
-    :param nodeedge_tested_topn: Nb of node/edge to test in the list. If None the full list is tested.
-    :type nodeedge_tested_topn: None or integer
+    nodeedge_tested_topn : None or integer
+        Nb of node/edge to skip in the list.
 
-    :param nodeedge_tested_topn: Nb of node/edge to skip in the list.
-    :type nodeedge_tested_topn: None or integer
-
-    :return: list of node/edge ids
+    Returns
+    -------
+    list of node/edge ids
     """
-    if isinstance(nodeedge_tested, list):
-        disruption_list = nodeedge_tested
+    if disruption_analysis is None:
+        raise ValueError("'disruption_analysis' is None, cannot define the disruption list")
 
-    elif nodeedge_tested == 'all':
+    # if a list is directly provided, then it is the list
+    if isinstance(disruption_analysis['nodeedge_tested'], list):
+        disruption_list = disruption_analysis['nodeedge_tested']
+
+    # if 'all' is indicated, need to retrieve all node or edge ids from the transport network
+    elif disruption_analysis['nodeedge_tested'] == 'all':
         actual_transport_network =  transport_network.subgraph(
             [node for node in transport_network.nodes if transport_network.nodes[node]['type']!='virtual']
         )
-        if disrupt_nodes_or_edges == "nodes":
+        if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
             disruption_list = list(actual_transport_network.nodes)
-        elif disrupt_nodes_or_edges == "edges":
+        elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
             disruption_list = list(nx.get_edge_attributes(actual_transport_network, 'link').values())
         else:
-            raise ValueError("'disrupt_nodes_or_edges' should be 'nodes' or 'edges'")
+            raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
 
-    elif isinstance(nodeedge_tested, str):
-        if nodeedge_tested[-4:] == ".csv":
-            disruption_list = pd.read_csv(nodeedge_tested, header=None).iloc[:,0].tolist()
+    # if a filepath is given, then load it. It is the list
+    elif isinstance(disruption_analysis['nodeedge_tested'], str):
+        if disruption_analysis['nodeedge_tested'][-4:] == ".csv":
+            disruption_list = pd.read_csv(
+                disruption_analysis['nodeedge_tested'], 
+                header=None
+            ).iloc[:,0].tolist()
         else:
             raise ValueError("If defining a path to a file in 'nodeedge_tested', it should be a csv")
 
     else:
         raise ValueError("'nodeedge_tested' should be list of node/edge ids, a path to a csv file, or 'all'")
 
+    # keep only some
     if isinstance(nodeedge_tested_topn, int):
         disruption_list = disruption_list[:nodeedge_tested_topn]
 
+    # skip some
     if isinstance(nodeedge_tested_skipn, int):
         disruption_list = disruption_list[nodeedge_tested_skipn:]
+
+    # reformat disruption list. It is a list of dic
+    # [{"node":[1,2,3], "edge"=[]}, {"node":[4], "edge"=[]}]
+    if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
+        disruption_list = [
+            {"node":disrupted_stuff, "edge":[]}
+            if isinstance(disrupted_stuff, list)
+            else {"node":[disrupted_stuff], "edge":[]}
+            for disrupted_stuff in disruption_list
+        ]
+    elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
+        disruption_list = [
+            {"node":[], "edge":disrupted_stuff}
+            if isinstance(disrupted_stuff, list)
+            else {"node":[], "edge":[disrupted_stuff]}
+            for disrupted_stuff in disruption_list
+        ]
 
     return disruption_list
 

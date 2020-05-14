@@ -69,10 +69,6 @@ export_inventories = False
 # It creates an "filtered_district_sector.xlsx" file in the output folder
 export_district_sector_table = False
 
-# Duration of the disruption
-# Should be an integer
-disruption_duration = 1
-
 # Whether or not to export a csv summarizing some topological caracteristics of the supply chain network
 export_sc_network_summary = True
 
@@ -198,13 +194,14 @@ weight_localization = 1
 #       "disrupt_nodes_or_edges": "nodes" or "edges", 
 #        "nodeedge_tested": object
 #   }
-# "disrupt_nodes_or_edges" determines whether nodes or edges are to be dirupted.
-# "nodeedge_tested" determines" what is disrupted. Possible values are:
-#   - integer: a single node or edge ID. The time series are exported.
-#   - a list of node/edge ids. Criticality exports.
-#   - "all": test all nodes or edges, ordered by their ID. Criticality exports.
-#   - a path to a list of node or edges. Criticality exports.
-disruption_analysis = None#("nodes", all")
+#   - "disrupt_nodes_or_edges" determines whether nodes or edges are to be dirupted.
+#   - "nodeedge_tested" determines" what is disrupted. Possible values are:
+#       - integer: a single node or edge ID. The time series are exported.
+#       - a list of node/edge ids. Criticality exports.
+#       - "all": test all nodes or edges, ordered by their ID. Criticality exports.
+#       - a path to a list of node or edges. Criticality exports.
+#   - "duration" determines" the duration of a disruption
+disruption_analysis = None
 
 # What time interval does a time step represents
 # Possible values are: 'day', 'week', 'month', 'year'
@@ -238,7 +235,10 @@ duration_dic = {
 }
 
 # The duration of the simulation, in time steps
-Tfinal = duration_dic[disruption_duration]
+if disruption_analysis is not None:
+    Tfinal = duration_dic[disruption_analysis['duration']]
+else:
+    Tfinal = 0
 
 # Whether or not to load extra roads in the model
 new_roads = False

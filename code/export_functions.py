@@ -6,7 +6,7 @@ import geopandas as gpd
 from builder import extractEdgeList
 
 
-def exportFirmODPointTable(firm_list, firm_table, odpoint_table,
+def exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepath_road_nodes,
     export_firm_table, export_odpoint_table, export_folder):
 
     imports = pd.Series({firm.pid: sum([val for key, val in firm.purchase_plan.items() if str(key)[0]=="C"]) for firm in firm_list}, name='imports')
@@ -21,12 +21,26 @@ def exportFirmODPointTable(firm_list, firm_table, odpoint_table,
     firm_table = firm_table.merge(production_table.reset_index(), on="id", how="left")
     prod_per_sector_ODpoint_table = firm_table.groupby(['odpoint', 'sector'])['total_production'].sum().unstack().fillna(0).reset_index()
     odpoint_table = odpoint_table.merge(prod_per_sector_ODpoint_table, on='odpoint', how="left")
+    odpoint_table = odpoint_table.merge(
+        firm_table.groupby('odpoint', as_index=False)[
+            ['total_production', 'production_toC', 'production_toB', 'production_exported']
+        ].sum(),
+        on="odpoint",
+        how="left").fillna(0)
 
     if export_firm_table:
         firm_table.to_csv(os.path.join(export_folder, 'firm_table.csv'), index=False)
     
     if export_odpoint_table:
         odpoint_table.to_csv(os.path.join(export_folder, 'odpoint_production_table.csv'), index=False)
+        exportODPointAsShp(odpoint_table, filepath_road_nodes, export_folder)
+
+
+def exportODPointAsShp(odpoint_table, filepath_road_nodes, export_folder):
+    road_nodes = gpd.read_file(filepath_road_nodes)
+    res = road_nodes[['id', 'geometry']].merge(odpoint_table, left_on='id', right_on="odpoint", how='right')
+    res.to_file(os.path.join(export_folder, 'odpoints_output.shp'))
+
 
 
 def exportDistrictSectorTable(filtered_district_sector_table, export_folder):
@@ -246,3 +260,64 @@ def exportTimeSeries(observer, export_folder):
     })
     agg_df.to_csv(os.path.join(export_folder, 'aggregate_ts.csv'), sep=',', index=False)
 
+
+def initializeCriticalityExportFile(export_folder):
+    criticality_export_file = open(os.path.join(export_folder, 'criticality.csv'), "w")
+    criticality_export_file.write(
+        'disrupted_node' \
+        + ',' + 'disrupted_edge' \
+        + ',' + 'disruption_duration' \
+        + ',' + 'households_extra_spending' \
+        + ',' + 'households_extra_spending_local' \
+        + ',' + 'spending_recovered' \
+        + ',' + 'countries_extra_spending' \
+        + ',' + 'countries_consumption_loss' \
+        + ',' + 'households_consumption_loss' \
+        + ',' + 'households_consumption_loss_local' \
+        + ',' + 'consumption_recovered' \
+        + ',' + 'generalized_cost_normal' \
+        + ',' + 'generalized_cost_disruption' \
+        + ',' + 'generalized_cost_country_normal' \
+        + ',' + 'generalized_cost_country_disruption' \
+        + ',' + 'usd_transported_normal' \
+        + ',' + 'usd_transported_disruption' \
+        + ',' + 'tons_transported_normal' \
+        + ',' + 'tons_transported_disruption' \
+        + ',' + 'tonkm_transported_normal' \
+        + ',' + 'tonkm_transported_disruption' \
+        + ',' + 'computing_time' \
+        + "\n")
+    return criticality_export_file
+
+
+def writeCriticalityResults(criticality_export_file, disruption_analysis):
+    # The first two columns is disrupted_node, disrupted_edge
+    if disruption_analysis['disrupt_nodes_or_edges'] == 'nodes':
+        write_disrupted_stuff = str(disrupted_stuff) + ',' + 'NA'
+    elif disruption_analysis['disrupt_nodes_or_edges'] == 'edges':
+        write_disrupted_stuff = 'NA' + ',' + str(disrupted_stuff)
+    else:
+        raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
+
+    criticality_export_file.write(write_disrupted_stuff \
+        + ',' + str(disruption_duration) \
+        + ',' + str(obs.households_extra_spending) \
+        + ',' + str(obs.households_extra_spending_local) \
+        + ',' + str(obs.spending_recovered) \
+        + ',' + str(obs.countries_extra_spending) \
+        + ',' + str(obs.countries_consumption_loss) \
+        + ',' + str(obs.households_consumption_loss) \
+        + ',' + str(obs.households_consumption_loss_local) \
+        + ',' + str(obs.consumption_recovered) \
+        + ',' + str(obs.generalized_cost_normal) \
+        + ',' + str(obs.generalized_cost_disruption) \
+        + ',' + str(obs.generalized_cost_country_normal) \
+        + ',' + str(obs.generalized_cost_country_disruption) \
+        + ',' + str(obs.usd_transported_normal) \
+        + ',' + str(obs.usd_transported_disruption) \
+        + ',' + str(obs.tons_transported_normal) \
+        + ',' + str(obs.tons_transported_disruption) \
+        + ',' + str(obs.tonkm_transported_normal) \
+        + ',' + str(obs.tonkm_transported_disruption) \
+        + ',' + str((time.time()-t0)/60) \
+        + "\n")

@@ -56,7 +56,6 @@ def compareProductionPurchasePlans(firm_list, country_list, households):
     if boolindex_unbalanced.sum() > 0:
         logging.warn("Sales does not equate purchases for sectors: "+
             str(res.index[boolindex_unbalanced].tolist()))
-    res.to_csv('purchase_sales_comparison.csv')
 
 
 def compareDeliveredVsReceived():
