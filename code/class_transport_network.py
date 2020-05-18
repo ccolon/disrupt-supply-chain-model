@@ -148,17 +148,20 @@ class TransportNetwork(nx.Graph):
         return TransportNetwork(available_subgraph)
         
         
-    def disrupt_roads(self, disrupted_roads, duration=1):
-        logging.debug('Disrupting roads')
-        for road_node_nb in disrupted_roads['node_nb']:
-            logging.info('Road node '+str(road_node_nb)+' gets disrupted for '+str(duration)+ ' time steps')
-            self.node[road_node_nb]['disruption_duration'] = duration
+    def disrupt_roads(self, disruption, duration=1):
+        # Disrupting nodes
+        for node_id in disruption['node']:
+            logging.info('Road node '+str(node_id)+
+                ' gets disrupted for '+str(duration)+ ' time steps')
+            self.node[node_id]['disruption_duration'] = duration
+        # Disrupting edges
         for edge in self.edges:
             if self[edge[0]][edge[1]]['type'] == 'virtual':
                 continue
             else:
-                if self[edge[0]][edge[1]]['link'] in disrupted_roads['edge_link']:
-                    logging.info('Road edge '+str(self[edge[0]][edge[1]]['link'])+' gets disrupted for '+str(duration)+ ' time steps')                                            
+                if self[edge[0]][edge[1]]['id'] in disruption['edge']:
+                    logging.info('Road edge '+str(self[edge[0]][edge[1]]['link'])+
+                        ' gets disrupted for '+str(duration)+ ' time steps')                                            
                     self[edge[0]][edge[1]]['disruption_duration'] = duration
             
             

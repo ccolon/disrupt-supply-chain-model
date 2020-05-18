@@ -3,6 +3,7 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
+print("organize export boolean, put loop in simulation, check nan delta")
 # Import modules
 import os
 import networkx as nx
@@ -141,6 +142,7 @@ firm_list = createFirms(firm_table, nb_firms, reactivity_rate, utilization_rate)
 n = len(firm_list)
 present_sectors = list(set([firm.sector for firm in firm_list]))
 present_sectors.sort()
+flow_types_to_export = present_sectors+['domestic_B2B', 'transit', 'import', 'export', 'total']
 logging.info('Firm_list created, size is: '+str(n))
 logging.info('Sectors present are: '+str(present_sectors))
 
@@ -251,7 +253,7 @@ if disruption_analysis is None:
     setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
         country_list=country_list, households=households, initialization_mode="equilibrium")
 
-    obs = Observer(firm_list, Tfinal)
+    obs = Observer(firm_list, 0)
 
     if export_district_sector_table:
         exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
@@ -278,7 +280,7 @@ if disruption_analysis is None:
         time_step=0,
         export_folder=exp_folder,
         export_flows=export_flows, 
-        flow_types_to_export = present_sectors+['domestic_B2B', 'transit', 'import', 'export', 'total'],
+        flow_types_to_export = flow_types_to_export,
         filepath_road_edges = filepath_road_edges,
         export_sc_flow_analysis=export_sc_flow_analysis, 
         export_agent_data=export_agent_data)
@@ -294,6 +296,10 @@ else:
     if export_criticality:
         criticality_export_file = initializeCriticalityExportFile(export_folder=exp_folder)
 
+    if export_impact_per_firm:
+        extra_spending_export_file, missing_consumption_export_file = \
+            initializeResPerFirmExportFile(exp_folder, firm_list)
+
     ### Disruption Loop
     for disruption in disruption_list:
         t0 = time.time()
@@ -303,23 +309,22 @@ else:
         setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
             country_list=country_list, households=households, initialization_mode="equilibrium")
 
+        Tfinal = duration_dic[disruption_analysis['duration']]
         obs = Observer(firm_list, Tfinal)
 
         ### Run the simulation
         obs.disruption_time = disruption_analysis['duration']
-
         logging.info('Simulation will last '+str(Tfinal)+' time steps.')
         logging.info('A disruption will occur at time 1, it will affect '+
                      str(len(disruption['node']))+' nodes and '+
                      str(len(disruption['edge']))+' edges for '+
                      str(disruption_analysis['duration']) +' time steps.')
         
-        exit()
         logging.info("Starting time loop")
         for t in range(1, Tfinal+1):
             logging.info('Time t='+str(t))
-            if (disruption_duration>0) and (t == disruption_time):
-                T.disrupt_roads(disrupted_roads, disruption_duration)
+            if (disruption_analysis['duration']>0) and (t == 1):
+                T.disrupt_roads(disruption, disruption_analysis['duration'])
                 # if model_IO:
                 #     if len(disrupted_roads['node_nb']) == 0:
                 #         logging.error('With model_IO, nodes should be disrupted')
@@ -338,7 +343,7 @@ else:
             allFirmsProduce(firm_list)
             allAgentsDeliver(G, firm_list, country_list, T, rationing_mode=rationing_mode)
             if export_flows:
-                T.compute_flow_per_segment(flow_types_to_observe)
+                T.compute_flow_per_segment(flow_types_to_export)
             if congestion:
                 if (t==1):
                     T.evaluate_normal_traffic()
@@ -351,7 +356,7 @@ else:
                 for country in country_list:
                     country.add_congestion_malus2(G, T)
             if export_flows:
-                obs.collect_transport_flows(T_noCountries, t, flow_types_to_observe)
+                obs.collect_transport_flows(T, t, flow_types_to_export)
             if export_flows and (t==Tfinal):
                 with open(os.path.join(exp_folder, 'flows.json'), 'w') as jsonfile:
                     json.dump(obs.flows_snapshot, jsonfile)
@@ -361,28 +366,24 @@ else:
             if export_flows and (t==1) and False: #legacy, should be removed, we shall do these kind of analysis outside of the core model
                 obs.analyzeSupplyChainFlows(G, firm_list, exp_folder)
             logging.debug('End of t='+str(t))
-        logging.info("Time loop completed, "+str((time.time()-t0)/60)+" min")
+        computation_time = time.time()-t0
+        logging.info("Time loop completed, {:.02f} min".format(computation_time/60))
 
 
-        obs.evaluate_results(T, households, disrupted_roads, disruption_duration, per_firm=export_impact_per_firm, export_folder=None)
+        obs.evaluate_results(T, households, disruption, disruption_analysis['duration'],
+         per_firm=export_impact_per_firm)
+
         if export_time_series:
             exportTimeSeries(obs, exp_folder)
 
         if export_criticality:
-            writeCriticalityResults(criticality_export_file, disruption_analysis)
+            writeCriticalityResults(criticality_export_file, obs, disruption, 
+                disruption_analysis['duration'], computation_time)
 
         if export_impact_per_firm:
-            if disrupted_stuff == disruption_list[0]:
-                logging.debug('export extra spending and consumption with header')
-                with open(os.path.join(exp_folder, 'extra_spending.csv'), 'w') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_extra_spending_per_firm}).transpose().to_csv(f, header=True)
-                with open(os.path.join(exp_folder, 'extra_consumption.csv'), 'w') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=True)
-            else:
-                with open(os.path.join(exp_folder, 'extra_spending.csv'), 'a') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_extra_spending_per_firm}).transpose().to_csv(f, header=False)
-                with open(os.path.join(exp_folder, 'extra_consumption.csv'), 'a') as f:
-                    pd.DataFrame({str(disrupted_stuff): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=False)
+            writeResPerFirmResults(extra_spending_export_file, 
+                missing_consumption_export_file, obs, disruption)
+
         del obs
         
     logging.info("End of simulation")

@@ -290,34 +290,50 @@ def initializeCriticalityExportFile(export_folder):
     return criticality_export_file
 
 
-def writeCriticalityResults(criticality_export_file, disruption_analysis):
-    # The first two columns is disrupted_node, disrupted_edge
-    if disruption_analysis['disrupt_nodes_or_edges'] == 'nodes':
-        write_disrupted_stuff = str(disrupted_stuff) + ',' + 'NA'
-    elif disruption_analysis['disrupt_nodes_or_edges'] == 'edges':
-        write_disrupted_stuff = 'NA' + ',' + str(disrupted_stuff)
-    else:
-        raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
+def initializeResPerFirmExportFile(export_folder, firm_list):
+    extra_spending_export_file = open(os.path.join(export_folder, 'hh_extra_spending_per_firm.csv'), 'w')
+    missing_consumption_export_file = open(os.path.join(export_folder, 'hh_missing_consumption_per_firm.csv'), 'w')
+    list_firm_id = [str(firm.pid) for firm in firm_list]
+    extra_spending_export_file.write('disrupted_node,disrupted_edge,'+','.join(list_firm_id)+"\n")
+    missing_consumption_export_file.write('disrupted_node,disrupted_edge,'+','.join(list_firm_id)+"\n")
+    return extra_spending_export_file, missing_consumption_export_file
 
-    criticality_export_file.write(write_disrupted_stuff \
+
+def writeCriticalityResults(criticality_export_file, observer, disruption, 
+    disruption_duration, computation_time):
+    criticality_export_file.write(str(disruption['node']) \
+        + ', '+ str(disruption['edge']) \
         + ',' + str(disruption_duration) \
-        + ',' + str(obs.households_extra_spending) \
-        + ',' + str(obs.households_extra_spending_local) \
-        + ',' + str(obs.spending_recovered) \
-        + ',' + str(obs.countries_extra_spending) \
-        + ',' + str(obs.countries_consumption_loss) \
-        + ',' + str(obs.households_consumption_loss) \
-        + ',' + str(obs.households_consumption_loss_local) \
-        + ',' + str(obs.consumption_recovered) \
-        + ',' + str(obs.generalized_cost_normal) \
-        + ',' + str(obs.generalized_cost_disruption) \
-        + ',' + str(obs.generalized_cost_country_normal) \
-        + ',' + str(obs.generalized_cost_country_disruption) \
-        + ',' + str(obs.usd_transported_normal) \
-        + ',' + str(obs.usd_transported_disruption) \
-        + ',' + str(obs.tons_transported_normal) \
-        + ',' + str(obs.tons_transported_disruption) \
-        + ',' + str(obs.tonkm_transported_normal) \
-        + ',' + str(obs.tonkm_transported_disruption) \
-        + ',' + str((time.time()-t0)/60) \
+        + ',' + str(observer.households_extra_spending) \
+        + ',' + str(observer.households_extra_spending_local) \
+        + ',' + str(observer.spending_recovered) \
+        + ',' + str(observer.countries_extra_spending) \
+        + ',' + str(observer.countries_consumption_loss) \
+        + ',' + str(observer.households_consumption_loss) \
+        + ',' + str(observer.households_consumption_loss_local) \
+        + ',' + str(observer.consumption_recovered) \
+        + ',' + str(observer.generalized_cost_normal) \
+        + ',' + str(observer.generalized_cost_disruption) \
+        + ',' + str(observer.generalized_cost_country_normal) \
+        + ',' + str(observer.generalized_cost_country_disruption) \
+        + ',' + str(observer.usd_transported_normal) \
+        + ',' + str(observer.usd_transported_disruption) \
+        + ',' + str(observer.tons_transported_normal) \
+        + ',' + str(observer.tons_transported_disruption) \
+        + ',' + str(observer.tonkm_transported_normal) \
+        + ',' + str(observer.tonkm_transported_disruption) \
+        + ',' + str(computation_time/60) \
         + "\n")
+
+def writeResPerFirmResults(extra_spending_export_file, missing_consumption_export_file, 
+    observer, disruption):
+    val = [str(x) for x in observer.households_extra_spending_per_firm.tolist()]
+    extra_spending_export_file.write(
+        str(disruption['node'])+','+str(disruption['edge'])+','+",".join(val)+"\n"
+    )
+    val = [str(x) for x in observer.households_consumption_loss_per_firm.tolist()]
+    missing_consumption_export_file.write(
+        str(disruption['node'])+','+str(disruption['edge'])+','+",".join(val)+"\n"
+    )
+    # pd.DataFrame({str(disruption): obs.households_extra_spending_per_firm}).transpose().to_csv(extra_spending_export_file, header=False, mode='a')
+    # pd.DataFrame({str(disruption): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=False)

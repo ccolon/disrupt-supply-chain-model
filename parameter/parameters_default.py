@@ -234,11 +234,5 @@ duration_dic = {
     4:15
 }
 
-# The duration of the simulation, in time steps
-if disruption_analysis is not None:
-    Tfinal = duration_dic[disruption_analysis['duration']]
-else:
-    Tfinal = 0
-
 # Whether or not to load extra roads in the model
 new_roads = False

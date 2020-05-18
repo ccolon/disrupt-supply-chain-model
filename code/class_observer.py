@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import networkx as nx
 import geopandas as gpd
+import logging
 
 from functions import rescale_values
 
@@ -141,24 +142,26 @@ class Observer(object):
             raise ValueError("'agent_type' should be 'firm', 'country', or 'firm+country'")
     
         
-    def evaluate_results(self, transport_network, households, disrupted_roads, disruption_duration, per_firm=False):
+    def evaluate_results(self, transport_network, households, 
+        disruption, disruption_duration, per_firm=False):
+
         self.households_extra_spending = households.extra_spending
-        print("Impact of disruption-induced price change on households:", '{:.4f}'.format(self.households_extra_spending))
+        logging.info("Impact of price change on households: "+'{:.4f}'.format(self.households_extra_spending))
         tot_spending_ts = pd.Series({t: sum(val['spending'].values()) for t, val in self.households.items()})
         self.spending_recovered = (tot_spending_ts.iloc[-1] - tot_spending_ts.iloc[0]) < 1e-6
         if self.spending_recovered:
-            print("\tHouseholds spending has recovered")
+            logging.info("Households spending has recovered")
         else:
-            print("\tHouseholds spending has not recovered")
+            logging.info("Households spending has not recovered")
             
         self.households_consumption_loss = households.consumption_loss
-        print("Impact of disruption-induced input shortages on households:", '{:.4f}'.format(self.households_consumption_loss))
+        logging.info("Impact of shortages on households: "+'{:.4f}'.format(self.households_consumption_loss))
         tot_consumption_ts = pd.Series({t: sum(val['consumption'].values()) for t, val in self.households.items()})
         self.consumption_recovered = (tot_consumption_ts.iloc[-1] - tot_consumption_ts.iloc[0]) < 1e-6
         if self.consumption_recovered:
-            print("\tHouseholds consumption has recovered")
+            logging.info("Households consumption has recovered")
         else:
-            print("\tHouseholds consumption has not recovered")
+            logging.info("Households consumption has not recovered")
         
         tot_ts = self.get_ts_feature_agg_all_agents('generalized_transport_cost', 'firm+country')
         self.generalized_cost_normal = tot_ts.loc[1]
@@ -187,7 +190,10 @@ class Observer(object):
         self.countries_consumption_loss = tot_ts.sum()
         
         # Measure local impact
-        firm_id_in_disrupted_nodes = [firm_id for disrupted_node in disrupted_roads['node_nb'] for firm_id in transport_network.node[disrupted_node]['firms_there']]
+        firm_id_in_disrupted_nodes = [
+            firm_id for disrupted_node in disruption['node'] 
+            for firm_id in transport_network.node[disrupted_node]['firms_there']
+        ]
 
         extra_spending_per_firm = pd.DataFrame({t: val['spending'] for t, val in self.households.items()}).transpose()
         extra_spending_per_firm = extra_spending_per_firm.sum() - extra_spending_per_firm.shape[0]*extra_spending_per_firm.iloc[0,:]

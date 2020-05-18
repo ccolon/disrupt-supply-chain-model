@@ -292,19 +292,30 @@ class Firm(object):
         In addition, upon delivery, price will be adjusted for each client to reflect potential rerouting
         """ 
         if self.check_if_supplier_changed_price(graph, firm_list):
-            if False:
-                self.delta_price_input = self.calculate_input_induced_price_change(graph)
-                logging.debug('Firm '+str(self.pid)+': Input prices have changed, I set my price to '+'{:.4f}'.format(self.eq_price*(1+self.delta_price_input))+" instead of "+str(self.eq_price))
-                
-            elif True:
-                eq_theoretical_input_cost = 0
-                current_theoretical_input_cost = 0
-                for edge in graph.in_edges(self):
-                    eq_theoretical_input_cost += graph[edge[0]][self]['object'].eq_price * graph[edge[0]][self]['weight']
-                    current_theoretical_input_cost += graph[edge[0]][self]['object'].price * graph[edge[0]][self]['weight']
-                added_input_cost = (current_theoretical_input_cost - eq_theoretical_input_cost) * self.total_order
-                self.delta_price_input = added_input_cost / self.total_order
-                logging.debug('Firm '+str(self.pid)+': Input prices have changed, I set my price to '+'{:.4f}'.format(self.eq_price*(1+self.delta_price_input/self.total_order))+" instead of "+str(self.eq_price))
+            # One way to compute it is commented.
+            #     self.delta_price_input = self.calculate_input_induced_price_change(graph)
+            #     logging.debug('Firm '+str(self.pid)+': Input prices have changed, I set '+
+            #     "my price to "+'{:.4f}'.format(self.eq_price*(1+self.delta_price_input))+
+            #     " instead of "+str(self.eq_price))
+
+            # I compute how much would be my input cost to produce one unit of output
+            # if I had to buy the input at this price
+            eq_unitary_input_cost = 0
+            est_unitary_input_cost_at_current_price = 0
+            for edge in graph.in_edges(self):
+                eq_unitary_input_cost += graph[edge[0]][self]['object'].eq_price * graph[edge[0]][self]['weight']
+                est_unitary_input_cost_at_current_price += graph[edge[0]][self]['object'].price * graph[edge[0]][self]['weight']
+            # I scale this added cost to my total orders
+            self.delta_price_input = est_unitary_input_cost_at_current_price - eq_unitary_input_cost
+            if self.delta_price_input is np.nan:
+                print(self.delta_price_input)
+                print(est_unitary_input_cost_at_current_price)
+                print(eq_unitary_input_cost)
+            # added_input_cost = (est_unitary_input_cost_at_current_price - eq_unitary_input_cost) * self.total_order
+            # self.delta_price_input = added_input_cost / self.total_order
+            logging.debug('Firm '+str(self.pid)+': Input prices have changed, I set my price to '+
+                '{:.4f}'.format(self.eq_price*(1+self.delta_price_input))+
+                " instead of "+str(self.eq_price))
         else:
             self.delta_price_input = 0
 
@@ -404,25 +415,25 @@ class Firm(object):
     def check_if_supplier_changed_price(self, graph, firm_list):# firms could record the last price they paid their input
         for edge in graph.in_edges(self):
             if abs(graph[edge[0]][self]['object'].price - graph[edge[0]][self]['object'].eq_price) > 1e-6:
-                if True:
-                    if str(graph[edge[0]][self]['object'].supplier_id)[0] == "C":
-                        sector_of_supplier = "C"
-                        same_place = 0
-                        distance_of_supplier = 0
-                    else:
-                        sector_of_supplier = firm_list[graph[edge[0]][self]['object'].supplier_id].sector
-                        distance_of_supplier = self.distance_to_other(firm_list[graph[edge[0]][self]['object'].supplier_id])
-                        if self.odpoint == firm_list[graph[edge[0]][self]['object'].supplier_id].odpoint:
-                            same_place = 1
-                        else:
-                            same_place = 0
-                    if -1 in self.clients.keys():
-                        sales_to_hh = self.clients[-1]['share'] * self.production_target
-                    else:
-                        sales_to_hh = 0
+                # if True:
+                #     if isinstance(graph[edge[0]][self]['object'].supplier_id, str):
+                #         sector_of_supplier = "IMP"
+                #         same_place = 0
+                #         distance_of_supplier = 0
+                #     else:
+                #         sector_of_supplier = firm_list[graph[edge[0]][self]['object'].supplier_id].sector
+                #         distance_of_supplier = self.distance_to_other(firm_list[graph[edge[0]][self]['object'].supplier_id])
+                #         if self.odpoint == firm_list[graph[edge[0]][self]['object'].supplier_id].odpoint:
+                #             same_place = 1
+                #         else:
+                #             same_place = 0
+                #     if -1 in self.clients.keys():
+                #         sales_to_hh = self.clients[-1]['share'] * self.production_target
+                #     else:
+                #         sales_to_hh = 0
                     
-                    logging.debug("Firm "+str(+self.pid)+" of sector "+str(self.sector)+" who sells "+str(sales_to_hh)+" to households"+\
-                    " has supplier "+str(graph[edge[0]][self]['object'].supplier_id)+" of sector "+str(sector_of_supplier)+" who is located at "+str(distance_of_supplier)+" increased price")
+                #     logging.debug("Firm "+str(+self.pid)+" of sector "+str(self.sector)+" who sells "+str(sales_to_hh)+" to households"+\
+                #     " has supplier "+str(graph[edge[0]][self]['object'].supplier_id)+" of sector "+str(sector_of_supplier)+" who is located at "+str(distance_of_supplier)+" increased price")
                 return True
         return False
     
