@@ -596,6 +596,8 @@ class Firm(object):
                     + added_costmUSD_per_mUSD
                 relative_price_change_transport = \
                     commercial_link.price / (commercial_link.eq_price + self.delta_price_input) - 1
+                if (commercial_link.price is None) or (commercial_link.price is np.nan):
+                    raise ValueError("Price should be a float, it is "+str(commercial_link.price))
                 
                 logging.debug('Firm '+str(self.pid)+": qty "+str(commercial_link.delivery / (self.usd_per_ton*1e-6)) +
                 " increase in route cost per ton "+ str((commercial_link.alternative_route_cost_per_ton-commercial_link.route_cost_per_ton)/commercial_link.route_cost_per_ton)+
@@ -614,7 +616,7 @@ class Firm(object):
             # Print information
             logging.debug("Firm "+str(self.pid)+": found an alternative route to "+
                 str(commercial_link.buyer_id)+", it is costlier by "+
-                '{:.0f}'.format(100*relative_price_change_transport)+"%, price is "+
+                '{:.2f}'.format(100*relative_price_change_transport)+"%, price is "+
                 '{:.4f}'.format(commercial_link.price)+" instead of "+
                 '{:.4f}'.format(commercial_link.eq_price*(1+self.delta_price_input)))
         

@@ -145,10 +145,13 @@ class Observer(object):
     def evaluate_results(self, transport_network, households, 
         disruption, disruption_duration, per_firm=False):
 
+        initial_time_step = 0
+
+        # Compute indirect cost
         self.households_extra_spending = households.extra_spending
         logging.info("Impact of price change on households: "+'{:.4f}'.format(self.households_extra_spending))
         tot_spending_ts = pd.Series({t: sum(val['spending'].values()) for t, val in self.households.items()})
-        self.spending_recovered = (tot_spending_ts.iloc[-1] - tot_spending_ts.iloc[0]) < 1e-6
+        self.spending_recovered = (tot_spending_ts.iloc[-1] - tot_spending_ts.loc[initial_time_step]) < 1e-6
         if self.spending_recovered:
             logging.info("Households spending has recovered")
         else:
@@ -157,30 +160,31 @@ class Observer(object):
         self.households_consumption_loss = households.consumption_loss
         logging.info("Impact of shortages on households: "+'{:.4f}'.format(self.households_consumption_loss))
         tot_consumption_ts = pd.Series({t: sum(val['consumption'].values()) for t, val in self.households.items()})
-        self.consumption_recovered = (tot_consumption_ts.iloc[-1] - tot_consumption_ts.iloc[0]) < 1e-6
+        self.consumption_recovered = (tot_consumption_ts.iloc[-1] - tot_consumption_ts.loc[initial_time_step]) < 1e-6
         if self.consumption_recovered:
             logging.info("Households consumption has recovered")
         else:
             logging.info("Households consumption has not recovered")
         
+        # Compute other indicators
         tot_ts = self.get_ts_feature_agg_all_agents('generalized_transport_cost', 'firm+country')
-        self.generalized_cost_normal = tot_ts.loc[1]
+        self.generalized_cost_normal = tot_ts.loc[initial_time_step]
         self.generalized_cost_disruption = tot_ts.loc[self.disruption_time]
         
         tot_ts = self.get_ts_feature_agg_all_agents('generalized_transport_cost', 'country')
-        self.generalized_cost_country_normal = tot_ts.loc[1]
+        self.generalized_cost_country_normal = tot_ts.loc[initial_time_step]
         self.generalized_cost_country_disruption = tot_ts.loc[self.disruption_time]
         
         tot_ts = self.get_ts_feature_agg_all_agents('usd_transported', 'firm+country')
-        self.usd_transported_normal = tot_ts.loc[1]
+        self.usd_transported_normal = tot_ts.loc[initial_time_step]
         self.usd_transported_disruption = tot_ts.loc[self.disruption_time]
 
         tot_ts = self.get_ts_feature_agg_all_agents('tons_transported', 'firm+country')
-        self.tons_transported_normal = tot_ts.loc[1]
+        self.tons_transported_normal = tot_ts.loc[initial_time_step]
         self.tons_transported_disruption = tot_ts.loc[self.disruption_time]
         
         tot_ts = self.get_ts_feature_agg_all_agents('tonkm_transported', 'firm+country')
-        self.tonkm_transported_normal = tot_ts.loc[1]
+        self.tonkm_transported_normal = tot_ts.loc[initial_time_step]
         self.tonkm_transported_disruption = tot_ts.loc[self.disruption_time]
         
         tot_ts = self.get_ts_feature_agg_all_agents('extra_spending', 'country')
@@ -189,7 +193,7 @@ class Observer(object):
         tot_ts = self.get_ts_feature_agg_all_agents('consumption_loss', 'country')
         self.countries_consumption_loss = tot_ts.sum()
         
-        # Measure local impact
+        # Measure impact per firm
         firm_id_in_disrupted_nodes = [
             firm_id for disrupted_node in disruption['node'] 
             for firm_id in transport_network.node[disrupted_node]['firms_there']

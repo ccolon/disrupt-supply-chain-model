@@ -229,11 +229,10 @@ model_IO = False
 
 # Provides default simulation duration Tfinal for different disruption duration
 duration_dic = {
-    0:2,
-    1:5, 
-    2:9, 
-    3:12, 
-    4:15
+    1:4, 
+    2:8, 
+    3:11, 
+    4:14
 }
 
 # Whether or not to load extra roads in the model

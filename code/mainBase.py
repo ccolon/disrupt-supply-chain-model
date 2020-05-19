@@ -3,7 +3,6 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
-print("organize export boolean, put loop in simulation, check nan delta")
 # Import modules
 import os
 import networkx as nx
@@ -31,7 +30,6 @@ from class_transport_network import TransportNetwork
 project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, project_path)
 from parameter.parameters_default import *
-print(export)
 from parameter.parameters import *
 from parameter.filepaths_default import *
 from parameter.filepaths import *
@@ -241,11 +239,13 @@ logging.info('The supplier--buyer graph is now connected to the transport networ
 
 logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
 
+
 if disruption_analysis is None:
     logging.info("No disruption. Simulation of the initial state")
     t0 = time.time()
 
     # comments: not sure if the other initialization mode is (i) working and (ii) useful
+    logging.info("Calculating the equilibrium")
     setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
         country_list=country_list, households=households, initialization_mode="equilibrium")
 
@@ -268,9 +268,12 @@ if disruption_analysis is None:
     if export['inventories']:
         exportInventories(firm_list, export_folder=exp_folder)
 
-    ### Run the simulation
+    ### Run the simulation at the initial state
+    logging.info("Simulating the initial state")
     runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
         country_list=country_list, households=households,
+        disruption=None,
+        congestion=congestion,
         propagate_input_price_change=propagate_input_price_change,
         rationing_mode=rationing_mode,
         observer=obs,
@@ -279,13 +282,16 @@ if disruption_analysis is None:
         export_flows=export['flows'], 
         flow_types_to_export = flow_types_to_export,
         filepath_road_edges = filepath_road_edges,
-        export_sc_flow_analysis=export['sc_flow_analysis'], 
-        export_agent_data=export['agent_data'])
+        export_sc_flow_analysis=export['sc_flow_analysis'])
+
+    if export['agent_data']:
+        exportAgentData(observer, export_folder)
 
     logging.info("Simulation completed, "+str((time.time()-t0)/60)+" min")
 
 
 else:
+    logging.info("Criticality analysis. Defining the list of disruptions")
     disruption_list = defineDisruptionList(disruption_analysis, transport_network=T,
         nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn)
     logging.info(str(len(disruption_list))+" disruptions to simulates.")
@@ -299,70 +305,75 @@ else:
 
     ### Disruption Loop
     for disruption in disruption_list:
+        logging.info("Simulating disruption "+str(disruption))
         t0 = time.time()
 
-
         ### Set initial conditions and create observer
+        logging.info("Calculating the equilibrium")
         setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
             country_list=country_list, households=households, initialization_mode="equilibrium")
 
-        Tfinal = duration_dic[disruption_analysis['duration']]
+        Tfinal = duration_dic[disruption['duration']]
         obs = Observer(firm_list, Tfinal)
 
-        ### Run the simulation
-        obs.disruption_time = disruption_analysis['duration']
+        logging.info("Simulating the initial state")
+        runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
+            country_list=country_list, households=households,
+            disruption=None,
+            congestion=congestion,
+            propagate_input_price_change=propagate_input_price_change,
+            rationing_mode=rationing_mode,
+            observer=obs,
+            time_step=0,
+            export_folder=exp_folder,
+            export_flows=export['flows'], 
+            flow_types_to_export = flow_types_to_export,
+            filepath_road_edges = filepath_road_edges,
+            export_sc_flow_analysis=export['sc_flow_analysis'])
+
+        if disruption == disruption_list[0]:
+            if export['district_sector_table']:
+                exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
+
+            if export['firm_table'] or export['odpoint_table']:
+                exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepath_road_nodes,
+            export_firm_table=export['firm_table'], export_odpoint_table=export['odpoint_table'], 
+            export_folder=exp_folder)
+
+            if export['country_table']:
+                exportCountryTable(country_list, export_folder=exp_folder)
+
+            if export['edgelist_table']:
+                exportEdgelistTable(supply_chain_network=G, export_folder=exp_folder)
+
+            if export['inventories']:
+                exportInventories(firm_list, export_folder=exp_folder)
+
+        obs.disruption_time = disruption['duration']
         logging.info('Simulation will last '+str(Tfinal)+' time steps.')
         logging.info('A disruption will occur at time 1, it will affect '+
                      str(len(disruption['node']))+' nodes and '+
                      str(len(disruption['edge']))+' edges for '+
-                     str(disruption_analysis['duration']) +' time steps.')
+                     str(disruption['duration']) +' time steps.')
         
         logging.info("Starting time loop")
         for t in range(1, Tfinal+1):
             logging.info('Time t='+str(t))
-            if (disruption_analysis['duration']>0) and (t == 1):
-                T.disrupt_roads(disruption, disruption_analysis['duration'])
-                # if model_IO:
-                #     if len(disrupted_roads['node_nb']) == 0:
-                #         logging.error('With model_IO, nodes should be disrupted')
-                #     else:
-                #         sectoral_shocks = evaluate_sectoral_shock(firm_table, disrupted_roads['node_nb'])
-                #         logging.info("Shock on the following sectors: "+str(sectoral_shocks[sectoral_shocks>0]))
-                #         apply_sectoral_shocks(sectoral_shocks, firm_list)
-            # if (model_IO) and (disruption_duration>0) and (t == disruption_time + disruption_duration):
-            #     recover_from_sectoral_shocks(firm_list)
-                
-                
-            allFirmsRetrieveOrders(G, firm_list)
-            allFirmsPlanProduction(firm_list, G, price_fct_input=propagate_input_price_change)
-            allFirmsPlanPurchase(firm_list)
-            allAgentsSendPurchaseOrders(G, firm_list, households, country_list)
-            allFirmsProduce(firm_list)
-            allAgentsDeliver(G, firm_list, country_list, T, rationing_mode=rationing_mode)
-            if export['flows']:
-                T.compute_flow_per_segment(flow_types_to_export)
-            if congestion:
-                if (t==1):
-                    T.evaluate_normal_traffic()
-                else:
-                    T.evaluate_congestion()
-                    if len(T.congestionned_edges)>0:
-                        logging.info("Nb of congestionned segments: "+str(len(T.congestionned_edges)))
-                for firm in firm_list:
-                    firm.add_congestion_malus2(G, T)
-                for country in country_list:
-                    country.add_congestion_malus2(G, T)
-            if export['flows']:
-                obs.collect_transport_flows(T, t, flow_types_to_export)
-            if export['flows'] and (t==Tfinal):
-                with open(os.path.join(exp_folder, 'flows.json'), 'w') as jsonfile:
-                    json.dump(obs.flows_snapshot, jsonfile)
-            allAgentsReceiveProducts(G, firm_list, households, country_list, T)
-            T.update_road_state()
-            obs.collect_agent_data(firm_list, households, country_list, t)
-            if export['flows'] and (t==1) and False: #legacy, should be removed, we shall do these kind of analysis outside of the core model
-                obs.analyzeSupplyChainFlows(G, firm_list, exp_folder)
+            runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
+                country_list=country_list, households=households,
+                disruption=disruption,
+                congestion=congestion,
+                propagate_input_price_change=propagate_input_price_change,
+                rationing_mode=rationing_mode,
+                observer=obs,
+                time_step=t,
+                export_folder=exp_folder,
+                export_flows=False, 
+                flow_types_to_export=flow_types_to_export,
+                filepath_road_edges=filepath_road_edges,
+                export_sc_flow_analysis=False)
             logging.debug('End of t='+str(t))
+
         computation_time = time.time()-t0
         logging.info("Time loop completed, {:.02f} min".format(computation_time/60))
 
@@ -380,6 +391,9 @@ else:
         if export['impact_per_firm']:
             writeResPerFirmResults(extra_spending_export_file, 
                 missing_consumption_export_file, obs, disruption)
+
+        # if export['agent_data']:
+        #     exportAgentData(obs, export_folder=exp_folder)
 
         del obs
         

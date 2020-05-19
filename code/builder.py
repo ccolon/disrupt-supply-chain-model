@@ -827,19 +827,19 @@ def defineDisruptionList(disruption_analysis, transport_network,
         disruption_list = disruption_list[nodeedge_tested_skipn:]
 
     # reformat disruption list. It is a list of dic
-    # [{"node":[1,2,3], "edge"=[]}, {"node":[4], "edge"=[]}]
+    # [{"node":[1,2,3], "edge"=[], "duration"=2}, {"node":[4], "edge"=[], "duration"=1}]
     if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
         disruption_list = [
-            {"node":disrupted_stuff, "edge":[]}
+            {"node":disrupted_stuff, "edge":[], "duration":disruption_analysis["duration"]}
             if isinstance(disrupted_stuff, list)
-            else {"node":[disrupted_stuff], "edge":[]}
+            else {"node":[disrupted_stuff], "edge":[], "duration":disruption_analysis["duration"]}
             for disrupted_stuff in disruption_list
         ]
     elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
         disruption_list = [
-            {"node":[], "edge":disrupted_stuff}
+            {"node":[], "edge":disrupted_stuff, "duration":disruption_analysis["duration"]}
             if isinstance(disrupted_stuff, list)
-            else {"node":[], "edge":[disrupted_stuff]}
+            else {"node":[], "edge":[disrupted_stuff], "duration":disruption_analysis["duration"]}
             for disrupted_stuff in disruption_list
         ]
 

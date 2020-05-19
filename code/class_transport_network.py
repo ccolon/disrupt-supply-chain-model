@@ -148,12 +148,12 @@ class TransportNetwork(nx.Graph):
         return TransportNetwork(available_subgraph)
         
         
-    def disrupt_roads(self, disruption, duration=1):
+    def disrupt_roads(self, disruption):
         # Disrupting nodes
         for node_id in disruption['node']:
             logging.info('Road node '+str(node_id)+
-                ' gets disrupted for '+str(duration)+ ' time steps')
-            self.node[node_id]['disruption_duration'] = duration
+                ' gets disrupted for '+str(disruption['duration'])+ ' time steps')
+            self.node[node_id]['disruption_duration'] = disruption['duration']
         # Disrupting edges
         for edge in self.edges:
             if self[edge[0]][edge[1]]['type'] == 'virtual':
@@ -161,8 +161,8 @@ class TransportNetwork(nx.Graph):
             else:
                 if self[edge[0]][edge[1]]['id'] in disruption['edge']:
                     logging.info('Road edge '+str(self[edge[0]][edge[1]]['link'])+
-                        ' gets disrupted for '+str(duration)+ ' time steps')                                            
-                    self[edge[0]][edge[1]]['disruption_duration'] = duration
+                        ' gets disrupted for '+str(disruption['duration'])+ ' time steps')                                            
+                    self[edge[0]][edge[1]]['disruption_duration'] = disruption['duration']
             
             
     def update_road_state(self):
@@ -262,42 +262,61 @@ class TransportNetwork(nx.Graph):
 
   
     def evaluate_normal_traffic(self, sectorId_to_volumeCoef=None):
+        self.evaluate_traffic(sectorId_to_volumeCoef)
         self.congestionned_edges = []
-        if sectorId_to_volumeCoef is not None:
-            sectors_causing_congestion = [sector for sector, coefficient in sectorId_to_volumeCoef.items() if coefficient > 0]
         for edge in self.edges():
-            if self[edge[0]][edge[1]]['type'] != 'virtual':
-                if sectorId_to_volumeCoef is not None:
-                    volume = 0
-                    for sector_id in sectors_causing_congestion:
-                        list_montetary_flows = [shipment['quantity'] for shipment in self[edge[0]][edge[1]]["shipments"].values() if shipment['product_type'] == sector_id]
-                        volume += sectorId_to_volumeCoef[sector_id] * sum(list_montetary_flows)
-                    self[edge[0]][edge[1]]['traffic_normal'] = volume
-                else:
-                    monetary_value_of_flows = sum([shipment['quantity'] for shipment in self[edge[0]][edge[1]]["shipments"].values()])
-                    self[edge[0]][edge[1]]['traffic_normal'] = monetary_value_of_flows
-                self[edge[0]][edge[1]]['traffic_current'] = self[edge[0]][edge[1]]['traffic_normal']
-                self[edge[0]][edge[1]]['congestion'] = 0
+            if self[edge[0]][edge[1]]['type'] == 'virtual':
+                continue
+            self[edge[0]][edge[1]]['traffic_normal'] = self[edge[0]][edge[1]]['traffic_current']
+            self[edge[0]][edge[1]]['congestion'] = 0
 
 
     def evaluate_congestion(self, sectorId_to_volumeCoef=None):
+        self.evaluate_traffic(sectorId_to_volumeCoef)
         self.congestionned_edges = []
-        if sectorId_to_volumeCoef is not None:
-            sectors_causing_congestion = [sector for sector, coefficient in sectorId_to_volumeCoef.items() if coefficient > 0]
         for edge in self.edges():
-            if self[edge[0]][edge[1]]['type'] != 'virtual':
-                if sectorId_to_volumeCoef is not None:
-                    volume = 0
-                    for sector_id in sectors_causing_congestion:
-                        list_montetary_flows = [shipment['quantity'] for shipment in self[edge[0]][edge[1]]["shipments"].values() if shipment['product_type'] == sector_id]
-                        volume += sectorId_to_volumeCoef[sector_id] * sum(list_montetary_flows)
-                    self[edge[0]][edge[1]]['traffic_current'] = volume
-                else:
-                    monetary_value_of_flows = sum([shipment['quantity'] for shipment in self[edge[0]][edge[1]]["shipments"].values()])
-                    self[edge[0]][edge[1]]['traffic_current'] = monetary_value_of_flows
-                self[edge[0]][edge[1]]['congestion'] = congestion_function(self[edge[0]][edge[1]]['traffic_current'], self[edge[0]][edge[1]]['traffic_normal'])
-                if self[edge[0]][edge[1]]['congestion'] > 1e-6:
-                    self.congestionned_edges += [edge]
+            if self[edge[0]][edge[1]]['type'] == 'virtual':
+                continue
+            self[edge[0]][edge[1]]['congestion'] = congestion_function(
+                self[edge[0]][edge[1]]['traffic_current'], 
+                self[edge[0]][edge[1]]['traffic_normal']
+            )
+            if self[edge[0]][edge[1]]['congestion'] > 1e-6:
+                self.congestionned_edges += [edge]
+
+
+    def evaluate_traffic(self, sectorId_to_volumeCoef=None):
+        # If we have a correspondance of sector moneraty flow to volume,
+        # we identify the sector that generate volume
+        if sectorId_to_volumeCoef is not None:
+            sectors_causing_congestion = [
+                sector 
+                for sector, coefficient in sectorId_to_volumeCoef.items() 
+                if coefficient > 0
+            ]
+
+        for edge in self.edges():
+            if self[edge[0]][edge[1]]['type'] == 'virtual':
+                continue
+            # If we have a correspondance of sector moneraty flow to volume,
+            # we use volume
+            if sectorId_to_volumeCoef is not None:
+                volume = 0
+                for sector_id in sectors_causing_congestion:
+                    list_montetary_flows = [
+                        shipment['quantity'] 
+                        for shipment in self[edge[0]][edge[1]]["shipments"].values() 
+                        if shipment['product_type'] == sector_id
+                    ]
+                    volume += sectorId_to_volumeCoef[sector_id] * sum(list_montetary_flows)
+                self[edge[0]][edge[1]]['traffic_current'] = volume
+            # Otherwise we use montery flow directly
+            else:
+                monetary_value_of_flows = sum([
+                    shipment['quantity'] 
+                    for shipment in self[edge[0]][edge[1]]["shipments"].values()
+                ])
+                self[edge[0]][edge[1]]['traffic_current'] = monetary_value_of_flows
 
 
     def reinitialize_flows_and_disruptions(self):

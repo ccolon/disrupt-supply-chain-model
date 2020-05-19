@@ -36,6 +36,8 @@ def setInitialSCConditions(transport_network, sc_network, firm_list,
 
 def runOneTimeStep(transport_network, sc_network, firm_list, 
     country_list, households, observer,
+    disruption=None,
+    congestion=False,
     propagate_input_price_change=True,
     rationing_mode="household_first",
     time_step=0,
@@ -43,8 +45,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     export_flows=False, 
     flow_types_to_export=['total'],
     filepath_road_edges="",
-    export_sc_flow_analysis=False, 
-    export_agent_data=False):
+    export_sc_flow_analysis=False):
     """
     Run one time step
 
@@ -62,6 +63,10 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         Households
     observer : Observer
         Observer
+    disruption : dic
+        Dictionary {'node':disrupted node id, 'node':disrupted edge id, 'duration':disruption duration}
+    congestion : Boolean
+        Whether or not to measure congestion
     propagate_input_price_change : Boolean
         Whether or not firms should readjust their price to changes in input prices
     rationing_mode : string
@@ -79,6 +84,8 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     -------
     Nothing
     """
+    if (disruption is not None) and (time_step == 1):
+        transport_network.disrupt_roads(disruption)
 
     allFirmsRetrieveOrders(sc_network, firm_list)
 
@@ -93,24 +100,36 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     allAgentsDeliver(sc_network, firm_list, country_list, transport_network, 
         rationing_mode=rationing_mode)
     
-    if export_flows: #should be done at this stage, while the goods are on their way
+    if congestion:
+        if (time_step == 0):
+            transport_network.evaluate_normal_traffic()
+        else:
+            transport_network.evaluate_congestion()
+            if len(transport_network.congestionned_edges) > 0:
+                logging.info("Nb of congestionned segments: "+
+                    str(len(transport_network.congestionned_edges)))
+        for firm in firm_list:
+            firm.add_congestion_malus2(sc_network, transport_network)
+        for country in country_list:
+            country.add_congestion_malus2(sc_network, transport_network)
+
+    if (time_step == 0) and (export_flows): #should be done at this stage, while the goods are on their way
         transport_network.compute_flow_per_segment(flow_types_to_export)
-        # obs.collect_transport_flows(T_noCountries, time_step=0, flow_types_to_export=flow_types_to_export)
         observer.collect_transport_flows(transport_network, 
             time_step=time_step, flow_types=flow_types_to_export)
         exportTransportFlows(observer, export_folder)
         exportTransportFlowsShp(observer, export_folder, time_step=time_step, 
             filepath_road_edges=filepath_road_edges)
     
-    if export_sc_flow_analysis: #should be done at this stage, while the goods are on their way
+    if (time_step == 0) and (export_sc_flow_analysis): #should be done at this stage, while the goods are on their way
         analyzeSupplyChainFlows(sc_network, firm_list, export_folder)
     
     allAgentsReceiveProducts(sc_network, firm_list, households, 
         country_list, transport_network)
     
-    if export_agent_data:
-        observer.collect_agent_data(firm_list, households, country_list, 
-            time_step=time_step)
-        exportAgentData(observer, export_folder)
+    transport_network.update_road_state()
+
+    observer.collect_agent_data(firm_list, households, country_list, 
+        time_step=time_step)
 
     compareProductionPurchasePlans(firm_list, country_list, households)
