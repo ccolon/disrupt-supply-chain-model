@@ -31,6 +31,7 @@ from class_transport_network import TransportNetwork
 project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, project_path)
 from parameter.parameters_default import *
+print(export)
 from parameter.parameters import *
 from parameter.filepaths_default import *
 from parameter.filepaths import *
@@ -40,12 +41,7 @@ t0 = time.time()
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 # If there is sth to export, then we create the output folder
-exporting_sth = [
-    export_log, export_criticality, export_impact_per_firm, export_time_series, export_flows,
-    export_firm_table, export_odpoint_table, export_country_table, export_edgelist_table,
-    export_inventories, export_district_sector_table, export_sc_network_summary
-]
-if any(exporting_sth):
+if any(list(export.values())):
     exp_folder = os.path.join('output', input_folder, timestamp)
     if not os.path.isdir(os.path.join('output', input_folder)):
         os.mkdir(os.path.join('output', input_folder))
@@ -55,7 +51,7 @@ else:
 
 # Set logging parameters
 logging_level = logging.DEBUG
-if export_log:
+if export['log']:
     log_filename = os.path.join(exp_folder, 'exp.log')
     importlib.reload(logging)
     logging.basicConfig(
@@ -228,7 +224,7 @@ for firm in firm_list:
         import_code=import_code)
 
 logging.info('The nodes and edges of the supplier--buyer have been created')
-if export_sc_network_summary:
+if export['sc_network_summary']:
     exportSupplyChainNetworkSummary(G, firm_list, exp_folder)
 
 ### Coupling transportation network T and production network G
@@ -255,20 +251,21 @@ if disruption_analysis is None:
 
     obs = Observer(firm_list, 0)
 
-    if export_district_sector_table:
+    if export['district_sector_table']:
         exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
 
-    if export_firm_table or export_odpoint_table:
+    if export['firm_table'] or export['odpoint_table']:
         exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepath_road_nodes,
-    export_firm_table=export_firm_table, export_odpoint_table=export_odpoint_table, export_folder=exp_folder)
+    export_firm_table=export['firm_table'], export_odpoint_table=export['odpoint_table'], 
+    export_folder=exp_folder)
 
-    if export_country_table:
+    if export['country_table']:
         exportCountryTable(country_list, export_folder=exp_folder)
 
-    if export_edgelist_table:
+    if export['edgelist_table']:
         exportEdgelistTable(supply_chain_network=G, export_folder=exp_folder)
 
-    if export_inventories:
+    if export['inventories']:
         exportInventories(firm_list, export_folder=exp_folder)
 
     ### Run the simulation
@@ -279,11 +276,11 @@ if disruption_analysis is None:
         observer=obs,
         time_step=0,
         export_folder=exp_folder,
-        export_flows=export_flows, 
+        export_flows=export['flows'], 
         flow_types_to_export = flow_types_to_export,
         filepath_road_edges = filepath_road_edges,
-        export_sc_flow_analysis=export_sc_flow_analysis, 
-        export_agent_data=export_agent_data)
+        export_sc_flow_analysis=export['sc_flow_analysis'], 
+        export_agent_data=export['agent_data'])
 
     logging.info("Simulation completed, "+str((time.time()-t0)/60)+" min")
 
@@ -293,10 +290,10 @@ else:
         nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn)
     logging.info(str(len(disruption_list))+" disruptions to simulates.")
 
-    if export_criticality:
+    if export['criticality']:
         criticality_export_file = initializeCriticalityExportFile(export_folder=exp_folder)
 
-    if export_impact_per_firm:
+    if export['impact_per_firm']:
         extra_spending_export_file, missing_consumption_export_file = \
             initializeResPerFirmExportFile(exp_folder, firm_list)
 
@@ -342,7 +339,7 @@ else:
             allAgentsSendPurchaseOrders(G, firm_list, households, country_list)
             allFirmsProduce(firm_list)
             allAgentsDeliver(G, firm_list, country_list, T, rationing_mode=rationing_mode)
-            if export_flows:
+            if export['flows']:
                 T.compute_flow_per_segment(flow_types_to_export)
             if congestion:
                 if (t==1):
@@ -355,15 +352,15 @@ else:
                     firm.add_congestion_malus2(G, T)
                 for country in country_list:
                     country.add_congestion_malus2(G, T)
-            if export_flows:
+            if export['flows']:
                 obs.collect_transport_flows(T, t, flow_types_to_export)
-            if export_flows and (t==Tfinal):
+            if export['flows'] and (t==Tfinal):
                 with open(os.path.join(exp_folder, 'flows.json'), 'w') as jsonfile:
                     json.dump(obs.flows_snapshot, jsonfile)
             allAgentsReceiveProducts(G, firm_list, households, country_list, T)
             T.update_road_state()
             obs.collect_agent_data(firm_list, households, country_list, t)
-            if export_flows and (t==1) and False: #legacy, should be removed, we shall do these kind of analysis outside of the core model
+            if export['flows'] and (t==1) and False: #legacy, should be removed, we shall do these kind of analysis outside of the core model
                 obs.analyzeSupplyChainFlows(G, firm_list, exp_folder)
             logging.debug('End of t='+str(t))
         computation_time = time.time()-t0
@@ -371,16 +368,16 @@ else:
 
 
         obs.evaluate_results(T, households, disruption, disruption_analysis['duration'],
-         per_firm=export_impact_per_firm)
+         per_firm=export['impact_per_firm'])
 
-        if export_time_series:
+        if export['time_series']:
             exportTimeSeries(obs, exp_folder)
 
-        if export_criticality:
+        if export['criticality']:
             writeCriticalityResults(criticality_export_file, obs, disruption, 
                 disruption_analysis['duration'], computation_time)
 
-        if export_impact_per_firm:
+        if export['impact_per_firm']:
             writeResPerFirmResults(extra_spending_export_file, 
                 missing_consumption_export_file, obs, disruption)
 

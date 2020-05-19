@@ -1,76 +1,78 @@
 # Indicate the subfolder of the input folder that contains the input files
 input_folder = "Tanzania"
 
-# Save a log file in the output folder, called "exp.log"
-export_log = True
+export = {
+    # Save a log file in the output folder, called "exp.log"
+    "log": True,
 
-# Save the main result in a "criticality.csv" file in the output folder
-# Each line is a simulation, it saves what is disrupted and for how long, and aggregate observables
-export_criticality = True
+    # Save the main result in a "criticality.csv" file in the output folder
+    # Each line is a simulation, it saves what is disrupted and for how long, and aggregate observables
+    "criticality": True,
 
-# Save the amount of good flowing on each transport segment
-# It saves a flows.json file in the output folder
-# The structure is a dic {"timestep = {"transport_link_id = {"sector_id = flow_quantity}}
-# Can be True or False
-export_flows = False
+    # Save the amount of good flowing on each transport segment
+    # It saves a flows.json file in the output folder
+    # The structure is a dic {"timestep: {"transport_link_id: {"sector_id: flow_quantity}}
+    # Can be True or False
+    "flows": False,
 
-# Export information on aggregate supply chain flow at initial conditions
-# Used only if "disruption_analysis = None"
-# See analyzeSupplyChainFlows function for details
-export_sc_flow_analysis = False
+    # Export information on aggregate supply chain flow at initial conditions
+    # Used only if "disruption_analysis: None"
+    # See analyzeSupplyChainFlows function for details
+    "sc_flow_analysis": False,
 
-# Whether or not to export data for each agent for each time steps
-# See exportAgentData function for details.
-export_agent_data = False
+    # Whether or not to export data for each agent for each time steps
+    # See exportAgentData function for details.
+    "agent_data": False,
 
-# Save firm-level impact results
-# It creates an "extra_spending.csv" file and an "extra_consumption.csv" file in the output folder
-# Each line is a simulation, it saves what was disrupted and the corresponding impact for each firm
-export_impact_per_firm = False
+    # Save firm-level impact results
+    # It creates an "extra_spending.csv" file and an "extra_consumption.csv" file in the output folder
+    # Each line is a simulation, it saves what was disrupted and the corresponding impact for each firm
+    "impact_per_firm": False,
 
-# Save aggregated time series
-# It creates an "aggregate_ts.csv" file in the output folder
-# Each columns is a time series
-# Exports:
-# - aggregate production
-# - total profit, 
-# - household consumption, 
-# - household expenditure, 
-# - total transport costs, 
-# - average inventories.
-export_time_series = False
+    # Save aggregated time series
+    # It creates an "aggregate_ts.csv" file in the output folder
+    # Each columns is a time series
+    # Exports:
+    # - aggregate production
+    # - total profit, 
+    # - household consumption, 
+    # - household expenditure, 
+    # - total transport costs, 
+    # - average inventories.
+    "time_series": False,
 
-# Save the firm table
-# It creates a "firm_table.xlsx" file in the output folder
-# It gives the properties of each firm, along with production, sales to households, to other firms, exports
-export_firm_table = True
+    # Save the firm table
+    # It creates a "firm_table.xlsx" file in the output folder
+    # It gives the properties of each firm, along with production, sales to households, to other firms, exports
+    "firm_table": True,
 
 
-# Save the OD point table
-# It creates a "odpoint_table.xlsx" file in the output folder
-# It gives the properties of each OD point, along with production, sales to households, to other firms, exports
-export_odpoint_table = True
+    # Save the OD point table
+    # It creates a "odpoint_table.xlsx" file in the output folder
+    # It gives the properties of each OD point, along with production, sales to households, to other firms, exports
+    "odpoint_table": True,
 
-# Save the country table
-# It creates a "country_table.xlsx" file in the output folder
-# It gives the trade profile of each country
-export_country_table = True
+    # Save the country table
+    # It creates a "country_table.xlsx" file in the output folder
+    # It gives the trade profile of each country
+    "country_table": True,
 
-# Save the edgelist table
-# It creates a "edgelist_table.xlsx" file in the output folder
-# It gives, for each supplier-buyer link, the distance and amounts of good that flows
-export_edgelist_table = True
+    # Save the edgelist table
+    # It creates a "edgelist_table.xlsx" file in the output folder
+    # It gives, for each supplier-buyer link, the distance and amounts of good that flows
+    "edgelist_table": True,
 
-# Save inventories per sector
-# It creates an "inventories.xlsx" file in the output folder
-export_inventories = False
+    # Save inventories per sector
+    # It creates an "inventories.xlsx" file in the output folder
+    "inventories": False,
 
-# Save the combination of district and sector that are over the cutoffs value
-# It creates an "filtered_district_sector.xlsx" file in the output folder
-export_district_sector_table = False
+    # Save the combination of district and sector that are over the cutoffs value
+    # It creates an "filtered_district_sector.xlsx" file in the output folder
+    "district_sector_table": False,
 
-# Whether or not to export a csv summarizing some topological caracteristics of the supply chain network
-export_sc_network_summary = True
+    # Whether or not to export a csv summarizing some topological caracteristics of the supply chain network
+    "sc_network_summary": True
+}
 
 # Monetary units to use in model. 'USD', 'kUSD', 'mUSD'
 monetary_units_in_model = "mUSD"
