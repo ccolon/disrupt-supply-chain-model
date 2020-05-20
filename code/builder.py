@@ -51,12 +51,12 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges,
     road_edges.index = road_edges['id']
 
     # Check conformity
-    if (road_nodes['id'].isduplicated().sum()>0):
+    if (road_nodes['id'].duplicated().sum()>0):
         raise ValueError('The following node ids are duplicated: '+
-            road_nodes.loc[road_nodes['id'].isduplicated(), "id"])
-    if (road_edges['id'].isduplicated().sum()>0):
+            road_nodes.loc[road_nodes['id'].duplicated(), "id"])
+    if (road_edges['id'].duplicated().sum()>0):
         raise ValueError('The following edge ids are duplicated: '+
-            road_edges.loc[road_edges['id'].isduplicated(), "id"])
+            road_edges.loc[road_edges['id'].duplicated(), "id"])
     edge_ends = set(road_edges['end1'].tolist()+road_edges['end2'].tolist())
     edge_ends_not_in_node_data = edge_ends - set(road_nodes['id'])
     if len(edge_ends_not_in_node_data)>0:

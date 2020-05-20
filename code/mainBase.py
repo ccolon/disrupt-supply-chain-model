@@ -3,6 +3,13 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
+# print('Launch first criticality loop on Cloud')
+# print('Deal with multilayer: create edge that link them, parameter for cost')
+# print('Put SEZ')
+
+# xlrd >= 1.0.0 #for excel inputs, to be removed
+# openpyxl >= 3.0.0 #for excel inputs, to be removed
+
 # Import modules
 import os
 import networkx as nx
