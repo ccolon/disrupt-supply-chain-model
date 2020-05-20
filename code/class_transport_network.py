@@ -160,7 +160,7 @@ class TransportNetwork(nx.Graph):
                 continue
             else:
                 if self[edge[0]][edge[1]]['id'] in disruption['edge']:
-                    logging.info('Road edge '+str(self[edge[0]][edge[1]]['link'])+
+                    logging.info('Road edge '+str(self[edge[0]][edge[1]]['id'])+
                         ' gets disrupted for '+str(disruption['duration'])+ ' time steps')                                            
                     self[edge[0]][edge[1]]['disruption_duration'] = disruption['duration']
             
