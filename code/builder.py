@@ -795,13 +795,15 @@ def defineDisruptionList(disruption_analysis, transport_network,
 
     # if 'all' is indicated, need to retrieve all node or edge ids from the transport network
     elif disruption_analysis['nodeedge_tested'] == 'all':
-        actual_transport_network =  transport_network.subgraph(
-            [node for node in transport_network.nodes if transport_network.nodes[node]['type']!='virtual']
-        )
+        actual_transport_network =  transport_network.subgraph([
+            node 
+            for node in transport_network.nodes 
+            if transport_network.nodes[node]['type']!='virtual'
+            ])
         if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
             disruption_list = list(actual_transport_network.nodes)
         elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
-            disruption_list = list(nx.get_edge_attributes(actual_transport_network, 'link').values())
+            disruption_list = list(nx.get_edge_attributes(actual_transport_network, 'id').values())
         else:
             raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
 
