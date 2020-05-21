@@ -44,7 +44,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     export_folder=None,
     export_flows=False, 
     flow_types_to_export=['total'],
-    filepath_road_edges="",
+    transport_edges=None,
     export_sc_flow_analysis=False):
     """
     Run one time step
@@ -119,7 +119,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
             time_step=time_step, flow_types=flow_types_to_export)
         exportTransportFlows(observer, export_folder)
         exportTransportFlowsShp(observer, export_folder, time_step=time_step, 
-            filepath_road_edges=filepath_road_edges)
+            transport_edges=transport_edges)
     
     if (time_step == 0) and (export_sc_flow_analysis): #should be done at this stage, while the goods are on their way
         analyzeSupplyChainFlows(sc_network, firm_list, export_folder)

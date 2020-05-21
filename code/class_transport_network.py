@@ -18,16 +18,19 @@ class TransportNetwork(nx.Graph):
         
     def add_transport_edge_with_nodes(self, edge_id, all_edges_data, all_nodes_data): # used
         # edge_attributes = ['link', 'roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry", "time_cost", 'cost_travel_time', 'cost_variability']
-        edge_attributes = ['id', 'surface', "geometry", "class", "km",
+        edge_attributes = ['id', "type", 'surface', "geometry", "class", "km",
             "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
         edge_data = all_edges_data.loc[edge_id, edge_attributes].to_dict()
-        edge_data['type'] = "road"
         end_ids = all_edges_data.loc[edge_id, ["end1", "end2"]].tolist()
         # Creating the start and end nodes
-        self.add_transport_node(end_ids[0], all_nodes_data)
-        self.add_transport_node(end_ids[1], all_nodes_data)
+        if end_ids[0] not in self.nodes:
+            self.add_transport_node(end_ids[0], all_nodes_data)
+        if end_ids[1] not in self.nodes:
+            self.add_transport_node(end_ids[1], all_nodes_data)
         # Creating the edge
         self.add_edge(end_ids[0], end_ids[1], **edge_data)
+        # print("edge id:", edge_id, "| end1:", end_ids[0], "| end2:", end_ids[1], "| nb edges:", len(self.edges))
+        # print(self.edges)
         self[end_ids[0]][end_ids[1]]['node_tuple'] = (end_ids[0], end_ids[1])
         self[end_ids[0]][end_ids[1]]['shipments'] = {}
         self[end_ids[0]][end_ids[1]]['disruption_duration'] = 0
@@ -79,8 +82,8 @@ class TransportNetwork(nx.Graph):
                     distance += self[segment[0]][segment[1]]['km']
                     time_cost += self[segment[0]][segment[1]]['time_cost']
                     surface = self[segment[0]][segment[1]]['surface']
-                    cost_per_ton += (surface=='paved')*self.graph['unit_cost']['road']['paved']+\
-                                 (surface=='unpaved')*self.graph['unit_cost']['road']['unpaved']
+                    cost_per_ton += (surface=='paved')*self.graph['unit_cost']['roads']['paved']+\
+                                 (surface=='unpaved')*self.graph['unit_cost']['roads']['unpaved']
                     
         return distance, time_cost, cost_per_ton
         

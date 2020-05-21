@@ -74,6 +74,9 @@ export = {
     "sc_network_summary": True
 }
 
+# List of transport modes to include
+transport_modes = ['roads']
+
 # Monetary units to use in model. 'USD', 'kUSD', 'mUSD'
 monetary_units_in_model = "mUSD"
 
@@ -236,4 +239,4 @@ duration_dic = {
 }
 
 # Whether or not to load extra roads in the model
-new_roads = False
+extra_roads = False

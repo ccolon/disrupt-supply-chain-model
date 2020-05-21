@@ -105,13 +105,12 @@ def exportTransportFlows(observer, export_folder):
         json.dump(observer.flows_snapshot, jsonfile)
 
 
-def exportTransportFlowsShp(observer, export_folder, time_step, filepath_road_edges):
-    road_edges = gpd.read_file(filepath_road_edges)
+def exportTransportFlowsShp(observer, export_folder, time_step, transport_edges):
     #extract flows of the desired time step
     flow_table = pd.DataFrame(observer.flows_snapshot[time_step]).transpose()
     flow_table['id'] = flow_table.index.astype(int)
-    road_edges = road_edges.merge(flow_table, on='id', how='left')
-    road_edges.to_file(os.path.join(export_folder, 'flow_table_'+str(time_step)+'.shp'))
+    transport_edges = transport_edges.merge(flow_table, on='id', how='left')
+    transport_edges.to_file(os.path.join(export_folder, 'flow_table_'+str(time_step)+'.shp'))
     
 
 def exportAgentData(observer, export_folder):

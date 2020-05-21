@@ -6,6 +6,7 @@ import networkx as nx
 import math
 import numpy as np
 import yaml
+from shapely.geometry import Point, LineString
 
 from class_firm import Firm
 from class_households import Households
@@ -13,8 +14,147 @@ from class_transport_network import TransportNetwork
 from class_country import Country
 
 
-def createTransportNetwork(filepath_road_nodes, filepath_road_edges, 
-    transport_params, filepath_extra_road_edges=None):
+def loadTransportData(filepaths, transport_params, transport_mode, additional_roads=None):
+    # Determines whether there are nodes and/or edges to load
+    any_edge = False
+    any_node = False
+    if transport_mode in ["roads", "railways", "waterways"]:
+        any_node = True
+    if transport_mode in ["roads", "railways", "waterways", "multimodal"]:
+        any_edge = True
+
+    # Load nodes
+    if any_node:
+        nodes = gpd.read_file(filepaths[transport_mode+'_nodes'])
+        nodes.index = nodes['id']
+        nodes.index.name = 'index'
+        nodes['type'] = transport_mode
+
+    # Load edges
+    if any_edge:
+        edges = gpd.read_file(filepaths[transport_mode+'_edges'])
+        edges.index = edges['id']
+        edges.index.name = 'index'
+        edges['type'] = transport_mode
+
+        # Add additional edges, if any
+        if (transport_mode == "roads") and additional_roads:
+            offset_edge_id = edges['id'].max()+1
+            new_road_edges = gpd.read_file(filepaths['extra_roads_edges'])
+            new_road_edges['id'] = new_road_edges['id'] + offset_edge_id
+            new_road_edges.index = new_road_edges['id']
+            new_road_edges['type'] = 'road'
+            edges = edges.append(new_road_edges, ignore_index=False, 
+                verify_integrity=True, sort=False)
+
+    # Compute how much it costs to transport one USD worth of good on each edge
+    edges = computeCostTravelTimeEdges(edges, transport_params, edge_type=transport_mode)
+
+    if any_node and any_edge:
+        return nodes, edges
+    if any_node and ~any_edge:
+        return nodes
+    if ~any_node and any_edge:
+        return edges
+
+
+def computeCostTravelTimeEdges(edges, transport_params, edge_type):
+    # Compute travel time
+    if edge_type == "roads":
+        # Differentiate between paved and unpaved roads
+        edges['travel_time'] = edges['km'] * (
+                (edges['surface']=='unpaved') / transport_params['speeds']['roads']['unpaved'] +\
+                (edges['surface']=='paved') / transport_params['speeds']['roads']['paved']
+            )
+    elif edge_type in ['railways', 'waterways']:
+        edges['travel_time'] = edges['km'] * transport_params['speeds'][edge_type]
+
+    elif edge_type == "multimodal":
+        edges['travel_time'] = edges['multimodes'].map(transport_params['loading_time'])
+
+    else:
+        raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
+
+    # Compute cost of travel time
+    edges['cost_travel_time'] = edges['travel_time'] * \
+        transport_params["travel_cost_of_time"]
+
+    # Compute variability cost
+    if edge_type == "roads":
+        # Differentiate between paved and unpaved roads
+        edges['cost_variability'] = edges['cost_travel_time'] * \
+            transport_params['variability_coef'] * (
+                (edges['surface']=='unpaved') * transport_params["variability"]['roads']['unpaved'] +\
+                (edges['surface']=='paved') * transport_params['variability']['roads']['paved']
+            )
+
+    elif edge_type in ['railways', 'waterways']:
+        edges['cost_variability'] = edges['cost_travel_time'] * \
+        transport_params['variability_coef'] * \
+        transport_params["variability"][edge_type]
+
+    elif edge_type == "multimodal":
+        edges['cost_variability'] = edges['cost_travel_time'] * \
+        transport_params['variability_coef'] * \
+        edges['multimodes'].map(transport_params['variability']['multimodal'])
+
+    else:
+        raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
+
+    # Finally, add up both cost to get the cost of time of each road edges
+    edges['time_cost'] = edges['cost_travel_time'] + edges['cost_variability']
+
+    return edges
+
+
+def offsetIds(nodes, edges, offset_node_id, offset_edge_id):
+    # offset node id
+    nodes['id'] = nodes['id'] + offset_node_id
+    nodes.index = nodes['id']
+    nodes.index.name = "index"
+    # offset edge id
+    edges['id'] = edges['id'] + offset_edge_id
+    edges.index = edges['id']
+    edges.index.name = "index"
+    # offset end1, end2
+    edges['end1'] = edges['end1'] + offset_node_id
+    edges['end2'] = edges['end2'] + offset_node_id
+
+    return nodes, edges
+
+
+def filterMultimodalEdges(multimodal_edges, transport_modes):
+    # Select multimodal edges between the specified transport modes
+    modes = multimodal_edges['multimodes'].str.split('-', expand=True)
+    boolean = modes.iloc[:,0].isin(transport_modes) & modes.iloc[:,1].isin(transport_modes)
+    return multimodal_edges[boolean]
+
+
+def assignEndpointsOneEdge(row, df_nodes):
+    p1, p2 = getEndPointsFromLine(row['geometry'])
+    id_closest_point1 = getIndexClosestPoint(p1, df_nodes)
+    id_closest_point2 = getIndexClosestPoint(p2, df_nodes)
+    row['end1'] = id_closest_point1
+    row['end2'] = id_closest_point2
+    return row
+
+
+def assignEndpoints(df_links, df_nodes):
+    return df_links.apply(lambda row: assignEndpointsOneEdge(row, df_nodes), axis=1)
+    
+
+def getEndPointsFromLine(linestring_obj):
+    end1Coord = linestring_obj.coords[0]
+    end2Coord = linestring_obj.coords[-1]
+    return Point(*end1Coord), Point(*end2Coord)
+
+
+def getIndexClosestPoint(point, df_with_points):
+    distList = [point.distance(item) for item in df_with_points['geometry'].tolist()]
+    return int(df_with_points.index[distList.index(min(distList))])
+
+
+def createTransportNetwork(transport_modes, filepaths, transport_params, extra_roads=False):
     """Create the transport network object
 
     It uses one shapefile for the nodes and another for the edges.
@@ -23,21 +163,18 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges,
 
     Parameters
     ----------
-    filepath_road_nodes : string
-        Path of the shapefile of the road nodes 
+    transport_modes : list
+        List of transport modes to include, ['roads', 'railways', 'waterways']
 
-    filepath_road_edges : string
-        Path of the shapefile of the road edges 
+    filepaths : dic
+        Dic of filepaths
 
     transport_params : dictionary
         Transport parameters. Should be in a specific format.
 
-    filepath_extra_road_edges : string
-        Path of the shapefile of any extra road edges to include. Default to None.
-
     Returns
     -------
-    TransportNetwork
+    TransportNetwork, transport_edges geopandas.DataFrame
     """
 
     # Create the transport network object, and set the "unit_cost" parameter, which is the ton.km cost of transporting sth
@@ -45,54 +182,77 @@ def createTransportNetwork(filepath_road_nodes, filepath_road_edges,
     T.graph['unit_cost'] = transport_params['transport_cost_per_tonkm']
     
     # Load node and edge data
-    road_nodes = gpd.read_file(filepath_road_nodes)
-    road_nodes.index = road_nodes['id']
-    road_edges = gpd.read_file(filepath_road_edges)
-    road_edges.index = road_edges['id']
+    # Load in the following order: roads, railways, waterways
+    # Ids are adjusted to be unique
+    # E.g., if roads and railways are included, the ids of railways nodes are offset such that 
+    # the first railway node id is the last road node id + 1
+    # similarly for edges
+    # the nodes ids in "end1", "end2" of edges are also offseted
+    logging.debug('Loading roads data')
+    nodes, edges = loadTransportData(filepaths, transport_params,
+        transport_mode = "roads", additional_roads = extra_roads)
+    logging.debug(str(nodes.shape[0])+" roads nodes and "+
+        str(edges.shape[0])+ " roads edges")
+
+    if "railways" in transport_modes:
+        logging.debug('Loading railways data')
+        railways_nodes, railways_edges = loadTransportData(filepaths, transport_params, "railways")
+        logging.debug(str(railways_nodes.shape[0])+" railways nodes and "+
+            str(railways_edges.shape[0])+ " railways edges")
+        railways_nodes, railways_edges = offsetIds(railways_nodes, railways_edges,
+            offset_node_id = nodes['id'].max()+1,
+            offset_edge_id = edges['id'].max()+1)
+        nodes = nodes.append(railways_nodes, ignore_index=False, 
+            verify_integrity=True, sort=False)
+        edges = edges.append(railways_edges, ignore_index=False, 
+            verify_integrity=True, sort=False)
+
+    if "waterways" in transport_modes:
+        logging.debug('Loading waterways data')
+        waterways_nodes, waterways_edges = loadTransportData(filepaths, transport_params, "waterways")
+        logging.debug(str(waterways_nodes.shape[0])+" waterways nodes and "+
+            str(waterways_edges.shape[0])+ " waterways edges")
+        waterways_nodes, waterways_edges = offsetIds(waterways_nodes, waterways_edges,
+            offset_node_id = nodes['id'].max()+1,
+            offset_edge_id = edges['id'].max()+1)
+        nodes = nodes.append(waterways_nodes, ignore_index=False, 
+            verify_integrity=True, sort=False)
+        edges = edges.append(waterways_edges, ignore_index=False, 
+            verify_integrity=True, sort=False)
+
+    if len(transport_modes) >= 2:
+        logging.debug('Loading multimodal data')
+        multimodal_edges = loadTransportData(filepaths, transport_params, "multimodal")
+        multimodal_edges = filterMultimodalEdges(multimodal_edges, transport_modes)
+        logging.debug(str(multimodal_edges.shape[0])+ " multimodal edges")
+        multimodal_edges = assignEndpoints(multimodal_edges, nodes)
+        multimodal_edges['id'] = multimodal_edges['id'] + edges['id'].max() + 1
+        multimodal_edges.index = multimodal_edges['id']
+        multimodal_edges.index.name = "index"
+        edges = edges.append(multimodal_edges, ignore_index=False, 
+            verify_integrity=True, sort=False)
+        logging.debug('Total nb of transport nodes: '+str(nodes.shape[0]))
+        logging.debug('Total nb of transport edges: '+str(edges.shape[0]))
 
     # Check conformity
-    if (road_nodes['id'].duplicated().sum()>0):
+    if (nodes['id'].duplicated().sum()>0):
         raise ValueError('The following node ids are duplicated: '+
-            road_nodes.loc[road_nodes['id'].duplicated(), "id"])
-    if (road_edges['id'].duplicated().sum()>0):
+            nodes.loc[nodes['id'].duplicated(), "id"])
+    if (edges['id'].duplicated().sum()>0):
         raise ValueError('The following edge ids are duplicated: '+
-            road_edges.loc[road_edges['id'].duplicated(), "id"])
-    edge_ends = set(road_edges['end1'].tolist()+road_edges['end2'].tolist())
-    edge_ends_not_in_node_data = edge_ends - set(road_nodes['id'])
+            edges.loc[edges['id'].duplicated(), "id"])
+    edge_ends = set(edges['end1'].tolist()+edges['end2'].tolist())
+    edge_ends_not_in_node_data = edge_ends - set(nodes['id'])
     if len(edge_ends_not_in_node_data)>0:
-        raise KeyError("The following node id are given as 'end1' or 'end2' in edge data \
-            but are not in the node data: "+str(edge_ends_not_in_node_data))
-
-    # Add additional edges, if any
-    if filepath_extra_road_edges is not None:
-        new_road_edges = gpd.read_file(filepath_extra_road_edges)
-        new_road_edges.index = new_road_edges['id']
-        # new_road_edges.index = [road_edges.index.max()+1+item for item in list(range(new_road_edges.shape[0]))]
-        road_edges = pd.concat([road_edges, new_road_edges])
-        #road_edges = road_edges.append(new_road_edges.reindex(), verify_integrity=True)
+        raise KeyError("The following node ids are given as 'end1' or 'end2' in edge data "+\
+            "but are not in the node data: "+str(edge_ends_not_in_node_data))
     
-    # Compute how much it costs to transport one USD worth of good on each road edge
-    # compute travel time. Differentiate between paved and unpaved roads
-    road_edges['travel_time'] = road_edges['km'] * (
-            (road_edges['surface']=='unpaved') / transport_params['speeds']['road']['unpaved'] +\
-            (road_edges['surface']=='paved') / transport_params['speeds']['road']['paved']
-        )
-    # compute cost of travel time
-    road_edges['cost_travel_time'] = road_edges['travel_time'] * \
-        transport_params["travel_cost_of_time"]
-    # compute variability cost. Differentiate between paved and unpaved roads
-    road_edges['cost_variability'] = road_edges['cost_travel_time'] * \
-        transport_params['variability_coef'] * (
-            (road_edges['surface']=='unpaved') * transport_params["variability"]['road']['unpaved'] +\
-            (road_edges['surface']=='paved') * transport_params['variability']['road']['paved']
-        )
-    # finally, add up both cost to get the cost of time of each road edges
-    road_edges['time_cost'] = road_edges['cost_travel_time'] + road_edges['cost_variability']
     # Load the nodes and edges on the transport network object
-    for road in road_edges['id']:
-        T.add_transport_edge_with_nodes(road, road_edges, road_nodes)
+    logging.debug('Creating transport nodes and edges as a network')
+    for road in edges['id']:
+        T.add_transport_edge_with_nodes(road, edges, nodes)
 
-    return T
+    return T, edges
 
     
 def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage", 

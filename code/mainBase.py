@@ -3,9 +3,10 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
-# print('Launch first criticality loop on Cloud')
-# print('Deal with multilayer: create edge that link them, parameter for cost')
-# print('Put SEZ')
+print('Give route characteristics: include cost of other transport modes')
+print('Operationalize port layer for intl trade')
+print('Add country node and intl edges')
+
 
 # xlrd >= 1.0.0 #for excel inputs, to be removed
 # openpyxl >= 3.0.0 #for excel inputs, to be removed
@@ -75,48 +76,46 @@ else:
 logging.info('Simulation '+timestamp+' starting using '+input_folder+' input data.')
 
 # Create transport network
-with open(filepath_transport_parameters, "r") as yamlfile:
+with open(filepaths['transport_parameters'], "r") as yamlfile:
     transport_params = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
 ## Creating the transport network consumes time
 ## To accelerate, we enable storing the transport network as pickle for later reuse
 ## With new input data, run the model with first arg = 0, it generates the pickle
 ## Then use first arg = 1, to skip network building and use directly the pickle
+pickle_suffix = '_'.join([mode[:3] for mode in transport_modes])+'_pickle'
+extra_road_log = ""
+if extra_roads:
+    pickle_suffix = '_'.join([mode[:3] for mode in transport_modes])+'ext_pickle'
+    extra_road_log = " with extra roads"
+pickle_transNet_filename = "transNet_"+pickle_suffix
+pickle_transEdg_filename = "transEdg_"+pickle_suffix
 if sys.argv[1] == "0":
-    pickle_filename = 'transport_network_base_pickle'
-    if new_roads:
-        pickle_filename = 'transport_network_modified_pickle'
-        extra_road_log = " with extra roads"
-    else:
-        extra_road_log = ""
-        filepath_extra_road_edges = None
-    logging.info('Creating transport network'+extra_road_log+'.'+
-        'Speeds: '+str(transport_params['speeds'])+
-        ', travel_cost_of_time: '+str(transport_params['travel_cost_of_time']))
-    T = createTransportNetwork(filepath_road_nodes, filepath_road_edges,
-        transport_params, filepath_extra_road_edges=filepath_extra_road_edges)
-    logging.info('Transport network'+extra_road_log+' created.'+
-        'Nb of nodes: '+str(len(T.nodes))+
-        ', Nb of edges: '+str(len(T.edges)))
-    pickle.dump(T, open(os.path.join('tmp', pickle_filename), 'wb'))
-    logging.info('Transport network saved in tmp folder: '+pickle_filename)
+    logging.info('Creating transport network'+extra_road_log)
+    T, transport_edges = createTransportNetwork(transport_modes, filepaths, transport_params)
+    logging.info('Transport network'+extra_road_log+' created.')
+    pickle.dump(T, open(os.path.join('tmp', pickle_transNet_filename), 'wb'))
+    pickle.dump(transport_edges, open(os.path.join('tmp', pickle_transEdg_filename), 'wb'))
+    logging.info('Transport network saved in tmp folder: '+pickle_transNet_filename)
 else:
-    if new_roads:
-        extra_road_log = " with extra roads"
-        pickle_filename = 'transport_network_modified_pickle'
-    else:
-        extra_road_log = ""
-        pickle_filename = 'transport_network_base_pickle'
-    T = pickle.load(open(os.path.join('tmp', pickle_filename), 'rb'))
-    logging.info('Transport network'+extra_road_log+' generated from temp file.'+
-        'Speeds: '+str(transport_params['speeds'])+
-        ', travel_cost_of_time: '+str(transport_params["travel_cost_of_time"]))
-    
+    T = pickle.load(open(os.path.join('tmp', pickle_transNet_filename), 'rb'))
+    transport_edges = pickle.load(open(os.path.join('tmp', pickle_transEdg_filename), 'rb'))
+    logging.info('Transport network'+extra_road_log+' generated from temp file.')
+km_per_mode = pd.DataFrame({"km": nx.get_edge_attributes(T, "km"), "type": nx.get_edge_attributes(T, "type")})
+
+km_per_mode = km_per_mode.groupby('type')['km'].sum().to_dict()
+logging.info("Total length of transport network is: "+
+    "{:.0f} km".format(sum(km_per_mode.values())))
+for mode, km in km_per_mode.items():
+    logging.info(mode+": {:.0f} km".format(km))
+logging.info('Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
+
+
 ### Filter sectors
 logging.info('Filtering the sectors based on their output. '+
     "Cutoff type is "+cutoff_sector_output['type']+
     ", cutoff value is "+str(cutoff_sector_output['value']))
-sector_table = pd.read_csv(filepath_sector_table)
+sector_table = pd.read_csv(filepaths['sector_table'])
 filtered_sectors = filterSector(sector_table, cutoff=cutoff_sector_output['value'],
     cutoff_type=cutoff_sector_output['type'],
     sectors_to_include=sectors_to_include)
@@ -128,8 +127,8 @@ logging.info('Generating the firm table. '+
     'Districts included: '+str(districts_to_include)+
     ', district sector cutoff: '+str(district_sector_cutoff))
 firm_table, odpoint_table, filtered_district_sector_table = \
-    rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, sector_table,
-        district_sector_cutoff, nb_top_district_per_sector,
+    rescaleNbFirms(filepaths['district_sector_importance'], filepaths['odpoints'], 
+        sector_table, district_sector_cutoff, nb_top_district_per_sector,
         sectors_to_include=filtered_sectors, districts_to_include=districts_to_include)
 #firm_table.to_csv(os.path.join("output", "Test", 'firm_table.csv'))
 logging.info('Firm and OD tables generated')
@@ -149,12 +148,12 @@ logging.info('Sectors present are: '+str(present_sectors))
 
 # Loading the technical coefficients
 import_code = sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]
-firm_list = loadTechnicalCoefficients(firm_list, filepath_tech_coef, io_cutoff, import_code)
+firm_list = loadTechnicalCoefficients(firm_list, filepaths['tech_coef'], io_cutoff, import_code)
 logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 
 # Loading the inventories
 firm_list = loadInventories(firm_list, inventory_duration_target=inventory_duration_target, 
-    filepath_inventory_duration_targets=filepath_inventory_duration_targets, 
+    filepath_inventory_duration_targets=filepaths['inventory_duration_targets'], 
     extra_inventory_target=extra_inventory_target, 
     inputs_with_extra_inventories=inputs_with_extra_inventories, 
     buying_sectors_with_extra_inventories=buying_sectors_with_extra_inventories,
@@ -182,8 +181,8 @@ logging.info('Firms located on the transport network')
 
 ### Create agents: Countries
 logging.info('Creating country_list. Countries included: '+str(countries_to_include))
-country_list = createCountries(filepath_imports, filepath_exports, 
-    filepath_transit_matrix, filepath_entry_points, 
+country_list = createCountries(filepaths['imports'], filepaths['exports'], 
+    filepaths['transit_matrix'], filepaths['entry_points'], 
     present_sectors, countries_to_include=countries_to_include, 
     time_resolution=time_resolution,
     target_units=monetary_units_in_model, input_units=monetary_units_inputed)
@@ -203,7 +202,7 @@ firm_list, country_list = loadTonUsdEquivalence(sector_table, firm_list, country
 ### Create agents: Households
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
 firm_table = defineFinalDemand(firm_table, odpoint_table, 
-    filepath_population=filepath_population, filepath_final_demand=filepath_final_demand,
+    filepath_population=filepaths['population'], filepath_final_demand=filepaths['final_demand'],
     time_resolution=time_resolution, 
     target_units=monetary_units_in_model, input_units=monetary_units_inputed)
 logging.info('Creating households and loaded their purchase plan')
@@ -262,7 +261,7 @@ if disruption_analysis is None:
         exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
 
     if export['firm_table'] or export['odpoint_table']:
-        exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepath_road_nodes,
+        exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepaths['roads_nodes'],
     export_firm_table=export['firm_table'], export_odpoint_table=export['odpoint_table'], 
     export_folder=exp_folder)
 
@@ -288,7 +287,7 @@ if disruption_analysis is None:
         export_folder=exp_folder,
         export_flows=export['flows'], 
         flow_types_to_export = flow_types_to_export,
-        filepath_road_edges = filepath_road_edges,
+        transport_edges = transport_edges,
         export_sc_flow_analysis=export['sc_flow_analysis'])
 
     if export['agent_data']:
@@ -335,7 +334,7 @@ else:
             export_folder=exp_folder,
             export_flows=export['flows'], 
             flow_types_to_export = flow_types_to_export,
-            filepath_road_edges = filepath_road_edges,
+            transport_edges = transport_edges,
             export_sc_flow_analysis=export['sc_flow_analysis'])
 
         if disruption == disruption_list[0]:
@@ -343,7 +342,7 @@ else:
                 exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
 
             if export['firm_table'] or export['odpoint_table']:
-                exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepath_road_nodes,
+                exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepaths['roads_nodes'],
             export_firm_table=export['firm_table'], export_odpoint_table=export['odpoint_table'], 
             export_folder=exp_folder)
 
@@ -377,7 +376,7 @@ else:
                 export_folder=exp_folder,
                 export_flows=False, 
                 flow_types_to_export=flow_types_to_export,
-                filepath_road_edges=filepath_road_edges,
+                transport_edges = transport_edges,
                 export_sc_flow_analysis=False)
             logging.debug('End of t='+str(t))
 
@@ -404,4 +403,7 @@ else:
 
         del obs
         
+    if export['criticality']:
+        criticality_export_file.close()
+
     logging.info("End of simulation")
