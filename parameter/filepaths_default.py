@@ -19,6 +19,8 @@ filepaths = {
     "waterways_nodes": os.path.join('input', input_folder, 'Transport', 'Waterways', 'waterways_nodes.shp'),
     "waterways_edges": os.path.join('input', input_folder, 'Transport', 'Waterways', 'waterways_edges.shp'),
     "multimodal_edges": os.path.join('input', input_folder, 'Transport', 'Multimodal', 'multimodal_edges.shp'),
+    "maritime_nodes": os.path.join('input', input_folder, 'Transport', 'Maritime', 'maritime_nodes.shp'),
+    "maritime_edges": os.path.join('input', input_folder, 'Transport', 'Maritime', 'maritime_edges.shp'),
     "extra_roads_edges": os.path.join('input', input_folder, 'Transport', 'Roads', "road_edges_extra.shp"),
     "odpoints": os.path.join('input', input_folder, 'Transport', "odpoints.csv"),
     ## Supply

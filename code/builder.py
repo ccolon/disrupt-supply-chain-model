@@ -18,9 +18,9 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
     # Determines whether there are nodes and/or edges to load
     any_edge = False
     any_node = False
-    if transport_mode in ["roads", "railways", "waterways"]:
+    if transport_mode in ["roads", "railways", "waterways", "maritime"]:
         any_node = True
-    if transport_mode in ["roads", "railways", "waterways", "multimodal"]:
+    if transport_mode in ["roads", "railways", "waterways", "maritime", "multimodal"]:
         any_edge = True
 
     # Load nodes
@@ -47,9 +47,10 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
             edges = edges.append(new_road_edges, ignore_index=False, 
                 verify_integrity=True, sort=False)
 
-    # Compute how much it costs to transport one USD worth of good on each edge
-    edges = computeCostTravelTimeEdges(edges, transport_params, edge_type=transport_mode)
+        # Compute how much it costs to transport one USD worth of good on each edge
+        edges = computeCostTravelTimeEdges(edges, transport_params, edge_type=transport_mode)
 
+    # Return nodes, edges, or both
     if any_node and any_edge:
         return nodes, edges
     if any_node and ~any_edge:
@@ -59,27 +60,44 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
 
 
 def computeCostTravelTimeEdges(edges, transport_params, edge_type):
-    # Compute travel time
+    # A. Compute price per ton to be paid to transporter
+    if edge_type == "roads":
+        # Differentiate between paved and unpaved roads
+        edges['cost_per_ton'] = edges['km'] * (
+                (edges['surface']=='unpaved') * transport_params['transport_cost_per_tonkm']['roads']['unpaved'] +\
+                (edges['surface']=='paved') * transport_params['transport_cost_per_tonkm']['roads']['paved']
+            )
+    elif edge_type in ['railways', 'waterways', 'maritime']:
+        edges['cost_per_ton'] = edges['km'] * transport_params['transport_cost_per_tonkm'][edge_type]
+
+    elif edge_type == "multimodal":
+        edges['cost_per_ton'] = edges['multimodes'].map(transport_params['loading_cost_per_ton'])
+
+    else:
+        raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
+
+    # B. Compute generalized cost of transport
+    # B.1. Compute travel time
     if edge_type == "roads":
         # Differentiate between paved and unpaved roads
         edges['travel_time'] = edges['km'] * (
                 (edges['surface']=='unpaved') / transport_params['speeds']['roads']['unpaved'] +\
                 (edges['surface']=='paved') / transport_params['speeds']['roads']['paved']
             )
-    elif edge_type in ['railways', 'waterways']:
-        edges['travel_time'] = edges['km'] * transport_params['speeds'][edge_type]
+    elif edge_type in ['railways', 'waterways', 'maritime']:
+        edges['travel_time'] = edges['km'] / transport_params['speeds'][edge_type]
 
     elif edge_type == "multimodal":
-        edges['travel_time'] = edges['multimodes'].map(transport_params['loading_time'])
+        edges['travel_time'] = edges['km'] / edges['multimodes'].map(transport_params['loading_time'])
 
     else:
         raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
 
-    # Compute cost of travel time
+    # B.2. Compute cost of travel time
     edges['cost_travel_time'] = edges['travel_time'] * \
         transport_params["travel_cost_of_time"]
 
-    # Compute variability cost
+    # B.3. Compute variability cost
     if edge_type == "roads":
         # Differentiate between paved and unpaved roads
         edges['cost_variability'] = edges['cost_travel_time'] * \
@@ -88,7 +106,7 @@ def computeCostTravelTimeEdges(edges, transport_params, edge_type):
                 (edges['surface']=='paved') * transport_params['variability']['roads']['paved']
             )
 
-    elif edge_type in ['railways', 'waterways']:
+    elif edge_type in ['railways', 'waterways', 'maritime']:
         edges['cost_variability'] = edges['cost_travel_time'] * \
         transport_params['variability_coef'] * \
         transport_params["variability"][edge_type]
@@ -101,7 +119,7 @@ def computeCostTravelTimeEdges(edges, transport_params, edge_type):
     else:
         raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
 
-    # Finally, add up both cost to get the cost of time of each road edges
+    # B.4. Finally, add up both cost to get the cost of time of each road edges
     edges['time_cost'] = edges['cost_travel_time'] + edges['cost_variability']
 
     return edges
@@ -177,9 +195,9 @@ def createTransportNetwork(transport_modes, filepaths, transport_params, extra_r
     TransportNetwork, transport_edges geopandas.DataFrame
     """
 
-    # Create the transport network object, and set the "unit_cost" parameter, which is the ton.km cost of transporting sth
+    # Create the transport network object
     T = TransportNetwork()
-    T.graph['unit_cost'] = transport_params['transport_cost_per_tonkm']
+    # T.graph['unit_cost'] = transport_params['transport_cost_per_tonkm']
     
     # Load node and edge data
     # Load in the following order: roads, railways, waterways
@@ -220,6 +238,19 @@ def createTransportNetwork(transport_modes, filepaths, transport_params, extra_r
         edges = edges.append(waterways_edges, ignore_index=False, 
             verify_integrity=True, sort=False)
 
+    if "maritime" in transport_modes:
+        logging.debug('Loading maritime data')
+        maritime_nodes, maritime_edges = loadTransportData(filepaths, transport_params, "maritime")
+        logging.debug(str(maritime_nodes.shape[0])+" maritime nodes and "+
+            str(maritime_edges.shape[0])+ " maritime edges")
+        maritime_nodes, maritime_edges = offsetIds(maritime_nodes, maritime_edges,
+            offset_node_id = nodes['id'].max()+1,
+            offset_edge_id = edges['id'].max()+1)
+        nodes = nodes.append(maritime_nodes, ignore_index=False, 
+            verify_integrity=True, sort=False)
+        edges = edges.append(maritime_edges, ignore_index=False, 
+            verify_integrity=True, sort=False)
+
     if len(transport_modes) >= 2:
         logging.debug('Loading multimodal data')
         multimodal_edges = loadTransportData(filepaths, transport_params, "multimodal")
@@ -252,7 +283,7 @@ def createTransportNetwork(transport_modes, filepaths, transport_params, extra_r
     for road in edges['id']:
         T.add_transport_edge_with_nodes(road, edges, nodes)
 
-    return T, edges
+    return T, nodes, edges
 
     
 def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage", 
@@ -723,7 +754,8 @@ def rescaleMonetaryValues(values, time_resolution="week", target_units="mUSD", i
 
 
 
-def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, filepath_entry_points,
+def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, 
+    nodes,
     present_sectors, countries_to_include='all', 
     time_resolution="week", target_units="mUSD", input_units="USD"):
     """Create the countries
@@ -774,7 +806,7 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
         target_units=target_units,
         input_units=input_units
     )
-    entry_point_table = pd.read_csv(filepath_entry_points)
+    # entry_point_table = pd.read_csv(filepath_entry_points)
 
     # Keep only selected countries, if applicable
     if isinstance(countries_to_include, list):
@@ -798,9 +830,17 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     total_imports = import_table.sum().sum()
     for country in import_table.index.tolist():
         # transit points
-        entry_points = entry_point_table.loc[
-            entry_point_table['country']==country, 'entry_point'
-        ].astype(int).tolist()
+        # entry_points = entry_point_table.loc[
+        #     entry_point_table['country']==country, 'entry_point'
+        # ].astype(int).tolist()
+        # odpoint
+        odpoint = nodes.loc[nodes['special'] == country, "id"]
+        if len(odpoint) == 0:
+            raise ValueError('No odpoint found for '+country)
+        elif len(odpoint) > 2:
+            raise ValueError('More than 1 odpoint for '+country)
+        else:
+            odpoint = odpoint.iloc[0]
 
         # imports, i.e., sales of countries
         qty_sold = import_table.loc[country,:].to_dict()
@@ -820,7 +860,7 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
         country_list += [Country(pid=country,
                                 qty_sold=qty_sold,
                                 qty_purchased=qty_purchased,
-                                entry_points=entry_points,
+                                odpoint=odpoint,
                                 transit_from=transit_from,
                                 transit_to=transit_to,
                                 supply_importance=supply_importance

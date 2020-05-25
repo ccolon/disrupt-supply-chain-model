@@ -8,7 +8,7 @@ from functions import rescale_values, congestion_function
 class TransportNetwork(nx.Graph):
     
     def add_transport_node(self, node_id, all_nodes_data): #used in add_transport_edge_with_nodes
-        node_attributes = ["id", "geometry"]
+        node_attributes = ["id", "geometry", "special"]
         node_data = all_nodes_data.loc[node_id, node_attributes].to_dict()
         node_data['shipments'] = {}
         node_data['disruption_duration'] = 0
@@ -16,10 +16,11 @@ class TransportNetwork(nx.Graph):
         node_data['type'] = 'road'
         self.add_node(node_id, **node_data)
         
-    def add_transport_edge_with_nodes(self, edge_id, all_edges_data, all_nodes_data): # used
-        # edge_attributes = ['link', 'roadlabel', 'roadclass', 'kmpaved', 'kmunpaved', 'cor_name', "geometry", "time_cost", 'cost_travel_time', 'cost_variability']
+
+    def add_transport_edge_with_nodes(self, edge_id, all_edges_data, all_nodes_data):
+        # Selecting data
         edge_attributes = ['id', "type", 'surface', "geometry", "class", "km",
-            "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
+            "cost_per_ton", "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
         edge_data = all_edges_data.loc[edge_id, edge_attributes].to_dict()
         end_ids = all_edges_data.loc[edge_id, ["end1", "end2"]].tolist()
         # Creating the start and end nodes
@@ -36,43 +37,43 @@ class TransportNetwork(nx.Graph):
         self[end_ids[0]][end_ids[1]]['disruption_duration'] = 0
         
         
-    def connect_country(self, country):
-        self.add_node(country.pid, **{'type':'virtual'})
-        for entry_point in country.entry_points: #ATT so far works for road only
-            self.add_edge(entry_point, country.pid, 
-                **{'type':'virtual', 'time_cost':1000}
-            ) # high time cost to avoid that algo goes through countries
+    # def connect_country(self, country):
+    #     self.add_node(country.pid, **{'type':'virtual'})
+    #     for entry_point in country.entry_points: #ATT so far works for road only
+    #         self.add_edge(entry_point, country.pid, 
+    #             **{'type':'virtual', 'time_cost':1000}
+    #         ) # high time cost to avoid that algo goes through countries
 
             
-    def remove_countries(self, country_list):
-        country_node_to_remove = list(set(self.nodes) & set([country.pid for country in country_list]))
-        for country in country_node_to_remove:
-            self.remove_node(country)
+    # def remove_countries(self, country_list):
+    #     country_node_to_remove = list(set(self.nodes) & set([country.pid for country in country_list]))
+    #     for country in country_node_to_remove:
+    #         self.remove_node(country)
             
         
-    def giveRouteCost(self, route):
-        time_cost = 1 #cost cannot be 0
-        for segment in route:
-            if len(segment) == 2: #only edges have costs 
-                if self[segment[0]][segment[1]]['type'] != 'virtual':
-                    time_cost += self[segment[0]][segment[1]]['time_cost']
-        return time_cost
+    # def giveRouteCost(self, route):
+    #     time_cost = 1 #cost cannot be 0
+    #     for segment in route:
+    #         if len(segment) == 2: #only edges have costs 
+    #             if self[segment[0]][segment[1]]['type'] != 'virtual':
+    #                 time_cost += self[segment[0]][segment[1]]['time_cost']
+    #     return time_cost
         
         
-    def giveRouteCostAndTransportUnitCost(self, route):
-        time_cost = 1 #cost cannot be 0
-        cost_per_ton = 0
-        for segment in route:
-            if len(segment) == 2: #only edges have costs 
-                if self[segment[0]][segment[1]]['type'] != 'virtual':
-                    time_cost += self[segment[0]][segment[1]]['time_cost']
-                    cost_per_ton += (surface=='paved')*self.graph['unit_cost']['road']['paved']+\
-                                 (surface=='unpaved')*self.graph['unit_cost']['road']['unpaved']
+    # def giveRouteCostAndTransportUnitCost(self, route):
+    #     time_cost = 1 #cost cannot be 0
+    #     cost_per_ton = 0
+    #     for segment in route:
+    #         if len(segment) == 2: #only edges have costs 
+    #             if self[segment[0]][segment[1]]['type'] != 'virtual':
+    #                 time_cost += self[segment[0]][segment[1]]['time_cost']
+    #                 cost_per_ton += (surface=='paved')*self.graph['unit_cost']['road']['paved']+\
+    #                              (surface=='unpaved')*self.graph['unit_cost']['road']['unpaved']
 
-        return time_cost, cost_per_ton
+    #     return time_cost, cost_per_ton
     
     
-    def giveRouteCaracteristics(self, route):
+    def giveRouteCaracteristicsOld(self, route):
         distance = 0 # km
         time_cost = 1 #USD, cost cannot be 0
         cost_per_ton = 0 #USD/ton
@@ -84,6 +85,20 @@ class TransportNetwork(nx.Graph):
                     surface = self[segment[0]][segment[1]]['surface']
                     cost_per_ton += (surface=='paved')*self.graph['unit_cost']['roads']['paved']+\
                                  (surface=='unpaved')*self.graph['unit_cost']['roads']['unpaved']
+                    
+        return distance, time_cost, cost_per_ton    
+    
+
+    def giveRouteCaracteristics(self, route):
+        distance = 0 # km
+        time_cost = 1 #USD, cost cannot be 0
+        cost_per_ton = 0 #USD/ton
+        for segment in route:
+            if len(segment) == 2: #only edges have costs 
+                if self[segment[0]][segment[1]]['type'] != 'virtual':
+                    distance += self[segment[0]][segment[1]]['km']
+                    time_cost += self[segment[0]][segment[1]]['time_cost']
+                    cost_per_ton += self[segment[0]][segment[1]]['cost_per_ton']
                     
         return distance, time_cost, cost_per_ton
         
@@ -106,12 +121,12 @@ class TransportNetwork(nx.Graph):
         return congestion_time_cost
         
         
-    def giveRouteDistance(self, route):
-        distance = 0
-        for segment in route:
-            if len(segment) == 2: #only edges have distances 
-                distance += self[segment[0]][segment[1]]['km']
-        return distance
+    # def giveRouteDistance(self, route):
+    #     distance = 0
+    #     for segment in route:
+    #         if len(segment) == 2: #only edges have distances 
+    #             distance += self[segment[0]][segment[1]]['km']
+    #     return distance
     
     
     def locate_firms_on_nodes(self, firm_list):
@@ -139,7 +154,7 @@ class TransportNetwork(nx.Graph):
             return route
 
         else:
-            logging.info("There is no path between "+str(origin_node)+" and "+str(destination_node))
+            logging.warning("There is no path between "+str(origin_node)+" and "+str(destination_node))
             return None
 
         

@@ -3,9 +3,7 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
-print('Give route characteristics: include cost of other transport modes')
-print('Operationalize port layer for intl trade')
-print('Add country node and intl edges')
+print('Operationalize port & intl layers')
 
 
 # xlrd >= 1.0.0 #for excel inputs, to be removed
@@ -90,16 +88,19 @@ if extra_roads:
     extra_road_log = " with extra roads"
 pickle_transNet_filename = "transNet_"+pickle_suffix
 pickle_transEdg_filename = "transEdg_"+pickle_suffix
+pickle_transNod_filename = "transNod_"+pickle_suffix
 if sys.argv[1] == "0":
     logging.info('Creating transport network'+extra_road_log)
-    T, transport_edges = createTransportNetwork(transport_modes, filepaths, transport_params)
+    T, transport_nodes, transport_edges = createTransportNetwork(transport_modes, filepaths, transport_params)
     logging.info('Transport network'+extra_road_log+' created.')
     pickle.dump(T, open(os.path.join('tmp', pickle_transNet_filename), 'wb'))
     pickle.dump(transport_edges, open(os.path.join('tmp', pickle_transEdg_filename), 'wb'))
+    pickle.dump(transport_nodes, open(os.path.join('tmp', pickle_transNod_filename), 'wb'))
     logging.info('Transport network saved in tmp folder: '+pickle_transNet_filename)
 else:
     T = pickle.load(open(os.path.join('tmp', pickle_transNet_filename), 'rb'))
     transport_edges = pickle.load(open(os.path.join('tmp', pickle_transEdg_filename), 'rb'))
+    transport_nodes = pickle.load(open(os.path.join('tmp', pickle_transNod_filename), 'rb'))
     logging.info('Transport network'+extra_road_log+' generated from temp file.')
 km_per_mode = pd.DataFrame({"km": nx.get_edge_attributes(T, "km"), "type": nx.get_edge_attributes(T, "type")})
 
@@ -110,6 +111,8 @@ for mode, km in km_per_mode.items():
     logging.info(mode+": {:.0f} km".format(km))
 logging.info('Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
 
+transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.shp"))
+transport_edges.to_file(os.path.join(exp_folder, "transport_edges.shp"))
 
 ### Filter sectors
 logging.info('Filtering the sectors based on their output. '+
@@ -182,7 +185,7 @@ logging.info('Firms located on the transport network')
 ### Create agents: Countries
 logging.info('Creating country_list. Countries included: '+str(countries_to_include))
 country_list = createCountries(filepaths['imports'], filepaths['exports'], 
-    filepaths['transit_matrix'], filepaths['entry_points'], 
+    filepaths['transit_matrix'], transport_nodes, 
     present_sectors, countries_to_include=countries_to_include, 
     time_resolution=time_resolution,
     target_units=monetary_units_in_model, input_units=monetary_units_inputed)
@@ -190,9 +193,8 @@ logging.info('Country_list created: '+str([country.pid for country in country_li
 # Linking the countries to the the transport network via their transit point.
 # This creates "virtual nodes" in the transport network that corresponds to the countries.
 # We create a copy of the transport network without such nodes, it will be used for plotting purposes
-for country in country_list:
-    T.connect_country(country)
-
+# for country in country_list:
+#     T.connect_country(country)
 
 ### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
 # Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
