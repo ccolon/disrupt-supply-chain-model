@@ -3,7 +3,7 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
-print('Operationalize port & intl layers')
+print('Then use new way to define od nodes')
 
 
 # xlrd >= 1.0.0 #for excel inputs, to be removed
@@ -130,8 +130,8 @@ logging.info('Generating the firm table. '+
     'Districts included: '+str(districts_to_include)+
     ', district sector cutoff: '+str(district_sector_cutoff))
 firm_table, odpoint_table, filtered_district_sector_table = \
-    rescaleNbFirms(filepaths['district_sector_importance'], filepaths['odpoints'], 
-        sector_table, district_sector_cutoff, nb_top_district_per_sector,
+    rescaleNbFirms(filepaths['district_sector_importance'], sector_table, 
+        transport_nodes, district_sector_cutoff, nb_top_district_per_sector,
         sectors_to_include=filtered_sectors, districts_to_include=districts_to_include)
 #firm_table.to_csv(os.path.join("output", "Test", 'firm_table.csv'))
 logging.info('Firm and OD tables generated')

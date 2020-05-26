@@ -330,9 +330,18 @@ def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage",
         return filtered_sectors
 
 
-    
-def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints, 
-    sector_table,
+def extractOdpointTableFromTransportNodes(transport_nodes):
+    table_odpoints = transport_nodes.dropna(axis=0, subset=['special'])
+    table_odpoints = table_odpoints[table_odpoints['special'].str.contains('odpoint')]
+    table_odpoints['long'] = table_odpoints.geometry.x
+    table_odpoints['lat'] = table_odpoints.geometry.y
+    table_odpoints = table_odpoints[["id", "district", "long", "lat"]].rename(columns={'id': 'odpoint'})
+    table_odpoints['nb_points_same_district'] = table_odpoints['district'].map(table_odpoints['district'].value_counts())
+    return table_odpoints
+
+
+def rescaleNbFirms(filepath_district_sector_importance,
+    sector_table, transport_nodes,
     district_sector_cutoff, nb_top_district_per_sector, 
     sectors_to_include="all", districts_to_include="all"):
     """Generate the firm data
@@ -347,8 +356,8 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
     ----------
     filepath_district_sector_importance : string
         Path for the district_sector_importance table
-    filepath_odpoints : string
-        Path for the odpoint table
+    transport_nodes : geopandas.DataFrame
+        Table of transport nodes
     sector_table : pandas.DataFrame
         Sector table
     district_sector_cutoff : float
@@ -367,7 +376,8 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
     """
 
     # Load 
-    table_district_sector_importance = pd.read_csv(filepath_district_sector_importance)
+    table_district_sector_importance = pd.read_csv(filepath_district_sector_importance,
+        dtype={'district':str, 'sector':str, "importance":float})
 
     # Filter out combination with 0 importance
     table_district_sector_importance = \
@@ -418,8 +428,7 @@ def rescaleNbFirms(filepath_district_sector_importance, filepath_odpoints,
     
     # Generate the OD sector table
     # It only contains the OD points for the filtered district
-    table_odpoints = pd.read_csv(filepath_odpoints)
-    table_odpoints['nb_points_same_district'] = table_odpoints['district'].map(table_odpoints['district'].value_counts())
+    table_odpoints = extractOdpointTableFromTransportNodes(transport_nodes)
     od_sector_table = pd.merge(table_odpoints, filtered_district_sector_table, how='inner', on='district')
     od_sector_table['importance'] = od_sector_table['importance'] / od_sector_table['nb_points_same_district']
     logging.info('Initial nb of OD points: '+str(table_odpoints.shape[0]))
@@ -896,19 +905,22 @@ def defineFinalDemand(firm_table, od_table,
     firm_table
     """
     # Compute population allocated to each od point
-    population_per_district = pd.read_csv(filepath_population)
+    population_per_district = pd.read_csv(filepath_population,
+        dtype={'district':str, 'population':int})
     od_table = pd.merge(od_table, population_per_district, on='district', how='left')
     od_table['population'] = od_table['population'] / od_table['nb_points_same_district']
     od_table['perc_population'] = od_table['population'] / od_table['population'].sum()
-    logging.info('Population in district with firms: '+str(int(od_table['population'].sum()))+', total population is: '+str(population_per_district['population'].sum()))
+    logging.info('Population in district with firms: '+str(int(od_table['population'].sum()))+
+        ', total population is: '+str(population_per_district['population'].sum()))
     
     # Compute population allocated to each firm
     firm_table = firm_table[['id', 'sector', 'odpoint', 'importance']].merge(od_table, 
                                                                       on='odpoint', 
                                                                       how='left')
-    firm_table = firm_table.merge(firm_table.groupby(['odpoint', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
-                      on=['odpoint', 'sector'],
-                      how='left')
+    firm_table = firm_table.merge(
+        firm_table.groupby(['odpoint', 'sector'])['id'].count().reset_index().rename(columns={'id':'nb_firms_same_point_same_sector'}),
+        on=['odpoint', 'sector'],
+        how='left')
     firm_table.loc[firm_table['odpoint']==-1, 'perc_population'] = 1
     firm_table['final_demand_weight'] = firm_table['perc_population'] / firm_table['nb_firms_same_point_same_sector']
     
