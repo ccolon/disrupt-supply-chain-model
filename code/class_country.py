@@ -4,7 +4,11 @@ import math
 import logging
 
 from class_commerciallink import CommercialLink
-from functions import rescale_values, generate_weights_from_list
+from functions import rescale_values, \
+    generate_weights_from_list, \
+    determine_suppliers_and_weights,\
+    identify_firms_in_each_sector,\
+    identify_special_transport_nodes
 
 class Country(object):
 
@@ -45,9 +49,8 @@ class Country(object):
         self.extra_spending = 0
         self.consumption_loss = 0
         
-        
-    def select_suppliers(self, graph, firm_list, country_list, sector_table):
-        # Select other country as supplier: transit flows
+    
+    def create_transit_links(self, graph, country_list):
         for selling_country_pid, quantity in self.transit_from.items():
             selling_country_object = [country for country in country_list if country.pid==selling_country_pid][0]
             graph.add_edge(selling_country_object, self,
@@ -60,27 +63,44 @@ class Country(object):
             graph[selling_country_object][self]['weight'] = 1
             self.purchase_plan[selling_country_pid] = quantity
             selling_country_object.clients[self.pid] = {'sector':self.pid, 'share':0}
+
+
+    def select_suppliers(self, graph, firm_list, country_list, sector_table, transport_nodes):
+        # Select other country as supplier: transit flows
+        self.create_transit_links(graph, country_list)
             
         # Select Tanzanian suppliers
-        firm_id_each_sector = pd.DataFrame({
-            'firm': [firm.pid for firm in firm_list],
-            'sector': [firm.sector for firm in firm_list]})
-        dic_sector_to_firmid = firm_id_each_sector.groupby('sector')['firm'].apply(lambda x: list(x)).to_dict()
-        sectors = firm_id_each_sector['sector'].unique()
+        ## Identify firms from each sectors
+        dic_sector_to_firmid = identify_firms_in_each_sector(firm_list)
         share_exporting_firms = sector_table.set_index('sector')['share_exporting_firms'].to_dict()
-        for sector in list(set(self.qty_purchased.keys()) & set(dic_sector_to_firmid.keys())): #only select suppliers from sectors that are present
-            # Evaluate target nb of suppliers
+        ## Identify odpoints which exports
+        export_odpoints = identify_special_transport_nodes(transport_nodes, "export")
+        ## Identify sectors to buy from
+        present_sectors = list(set(list(dic_sector_to_firmid.keys())))
+        sectors_to_buy_from = list(self.qty_purchased.keys())
+        present_sectors_to_buy_from = list(set(present_sectors) & set(sectors_to_buy_from))
+        ## For each one of these sectors, select suppliers
+        supplier_selection_mode = {
+            "importance_export": {
+                "export_odpoints": export_odpoints,
+                "bonus": 10
+            }
+        }
+        for sector in present_sectors_to_buy_from: #only select suppliers from sectors that are present
+            # Identify potential suppliers
             potential_supplier_pid = dic_sector_to_firmid[sector]
-            nb_selected_suppliers = math.ceil(len(dic_sector_to_firmid[sector])*share_exporting_firms[sector])
-            # Evaluate probability of choosing
-            importance_of_each = rescale_values([firm_list[firm_pid].importance for firm_pid in potential_supplier_pid]) # Get importance for each of them
-            weight_choice = importance_of_each
+            # Evaluate how much to select
+            nb_selected_suppliers = math.ceil(
+                len(dic_sector_to_firmid[sector])*share_exporting_firms[sector]
+            )
             # Select supplier and weights
-            selected_supplier_id = random.choices(potential_supplier_pid, weights=weight_choice, k=nb_selected_suppliers)
-            selected_supplier_id = list(set(selected_supplier_id)) #may choose several times the same
-            supplier_weights = generate_weights_from_list([firm_list[firm_pid].importance for firm_pid in selected_supplier_id])
-            # Materialize the link
-            for supplier_id in selected_supplier_id:
+            selected_supplier_ids, supplier_weights = determine_suppliers_and_weights(
+                potential_supplier_pid,
+                nb_selected_suppliers,
+                firm_list,
+                mode=supplier_selection_mode)
+               # Materialize the link
+            for supplier_id in selected_supplier_ids:
                 # For each supplier, create an edge in the economic network
                 graph.add_edge(firm_list[supplier_id], self,
                            object=CommercialLink(
@@ -93,9 +113,14 @@ class Country(object):
                 weight = supplier_weights.pop(0)
                 graph[firm_list[supplier_id]][self]['weight'] = weight
                 # Households save the name of the retailer, its sector, its weight, and adds it to its purchase plan
-                self.qty_purchased_perfirm[supplier_id] = {'sector': sector, 'weight': weight, 'amount': self.qty_purchased[sector] * weight}
+                self.qty_purchased_perfirm[supplier_id] = {
+                    'sector': sector, 
+                    'weight': weight, 
+                    'amount': self.qty_purchased[sector] * weight
+                }
                 self.purchase_plan[supplier_id] = self.qty_purchased[sector] * weight
-                # The supplier saves the fact that it exports to this country. The share of sales cannot be calculated now, we put 0 for the moment
+                # The supplier saves the fact that it exports to this country. 
+                # The share of sales cannot be calculated now, we put 0 for the moment
                 firm_list[supplier_id].clients[self.pid] = {'sector':self.pid, 'share':0}
             
             

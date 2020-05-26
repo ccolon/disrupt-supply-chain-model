@@ -5,6 +5,12 @@ import geopandas as gpd
 import math
 import json
 import os
+import random
+
+def identify_special_transport_nodes(transport_nodes, special):
+    res = transport_nodes.dropna(subset=['special'])
+    res = res.loc[res['special'].str.contains(special), "id"].tolist()
+    return res
 
 
 def congestion_function(current_traffic, normal_traffic):
@@ -240,6 +246,50 @@ def generate_weights(nb_values):
 def generate_weights_from_list(list_nb):
     sum_list = sum(list_nb)
     return [nb/sum_list for nb in list_nb]
+
+
+def determine_suppliers_and_weights(potential_supplier_pid,
+    nb_selected_suppliers, firm_list, mode):
+    
+    # Get importance for each of them
+    if "importance_export" in mode.keys():
+        importance_of_each = rescale_values([
+            firm_list[firm_pid].importance * mode['importance_export']['bonus']
+            if firm_list[firm_pid].odpoint in mode['importance_export']['export_odpoints']
+            else firm_list[firm_pid].importance
+            for firm_pid in potential_supplier_pid
+        ])
+    elif "importance" in mode.keys():
+        importance_of_each = rescale_values([
+            firm_list[firm_pid].importance 
+            for firm_pid in potential_supplier_pid
+        ])
+
+    # Select supplier
+    prob_to_be_selected = np.array(importance_of_each)
+    prob_to_be_selected /= prob_to_be_selected.sum()
+    selected_supplier_ids = np.random.choice(potential_supplier_pid, 
+        p=prob_to_be_selected, size=nb_selected_suppliers, replace=False).tolist()
+
+    # Compute weights, based on importance only
+    supplier_weights = generate_weights_from_list([
+        firm_list[firm_pid].importance 
+        for firm_pid in selected_supplier_ids
+    ])
+
+    return selected_supplier_ids, supplier_weights
+
+
+def identify_firms_in_each_sector(firm_list):
+    firm_id_each_sector = pd.DataFrame({
+        'firm': [firm.pid for firm in firm_list],
+        'sector': [firm.sector for firm in firm_list]})
+    dic_sector_to_firmid = firm_id_each_sector\
+        .groupby('sector')['firm']\
+        .apply(lambda x: list(x))\
+        .to_dict()
+    return dic_sector_to_firmid
+
 
 def allFirmsSendPurchaseOrders(G, firm_list):
     for firm in firm_list:

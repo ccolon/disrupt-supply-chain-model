@@ -3,8 +3,6 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
-print('Then use new way to define od nodes')
-
 
 # xlrd >= 1.0.0 #for excel inputs, to be removed
 # openpyxl >= 3.0.0 #for excel inputs, to be removed
@@ -222,7 +220,7 @@ households.select_suppliers(G, firm_list, mode='inputed')
 logging.info('Tanzanian exporters are being selected by purchasing countries (export B2B flows)')
 logging.info('and trading countries are being connected (transit flows)')
 for country in country_list:
-    country.select_suppliers(G, firm_list, country_list, sector_table)
+    country.select_suppliers(G, firm_list, country_list, sector_table, transport_nodes)
 
 logging.info('Tanzanian firms are selecting their Tanzanian and international suppliers (import B2B flows) (domestric B2B flows). Weight localisation is '+str(weight_localization))
 for firm in firm_list:
