@@ -142,10 +142,12 @@ class TransportNetwork(nx.Graph):
     
     def provide_shortest_route(self, origin_node, destination_node):
         if (origin_node not in self.nodes):
-            raise KeyError("Origin node "+str(origin_node)+" not in the transport network")
+            logging.warning("Origin node "+str(origin_node)+" not in the available transport network")
+            return None
 
         elif (destination_node not in self.nodes):
-            raise KeyError("Destination node "+str(destination_node)+" not in the transport network")
+            logging.warning("Destination node "+str(destination_node)+" not in the available transport network")
+            return None
 
         elif nx.has_path(self, origin_node, destination_node):
             sp = nx.shortest_path(self, origin_node, destination_node, weight="time_cost")

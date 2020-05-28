@@ -3,3 +3,4 @@ output/
 tmp/
 code/__pycache__/
 parameter/__pycache__/
+parameter/parameters.py

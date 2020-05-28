@@ -460,6 +460,7 @@ class Firm(object):
 
     
     def deliver_products(self, graph, transport_network=None, rationing_mode="equal"):
+        # print("deliver_products", 0 in transport_network.nodes)
         # Do nothing if no orders
         if self.total_order == 0:
             logging.warning('Firm '+str(self.pid)+': no one ordered to me')
@@ -524,6 +525,7 @@ class Firm(object):
                     
                 
     def send_shipment(self, commercial_link, transport_network):
+        # print("send_shipment", 0 in transport_network.nodes)
         """Only apply to B2B flows 
         """
         if len(commercial_link.route) == 0:
