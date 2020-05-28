@@ -240,3 +240,8 @@ duration_dic = {
 
 # Whether or not to load extra roads in the model
 extra_roads = False
+
+# Value of the household extra spending and consumption loss under which we stop the simulation
+# Units is the monetary_units_in_model
+# If None, then we use the default simulation duration Tfinal, see duration_dic
+epsilon_stop_condition = 1e-3

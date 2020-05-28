@@ -170,9 +170,18 @@ class Firm(object):
             # If it is imports, identify international suppliers and calculate
             # their probability to be chosen, which is based on importance.
             if sector_id == import_code:
+                # Identify countries as suppliers if the corresponding sector does export
                 importance_threshold = 1e-6
-                potential_supplier_pid = [country.pid for country in country_list if country.supply_importance>importance_threshold]  # Identify countries as suppliers if the corresponding sector does export
-                importance_of_each = [country.supply_importance for country in country_list if country.supply_importance>importance_threshold]
+                potential_supplier_pid = [
+                    country.pid 
+                    for country in country_list 
+                    if country.supply_importance>importance_threshold
+                ]  
+                importance_of_each = [
+                    country.supply_importance 
+                    for country in country_list 
+                    if country.supply_importance>importance_threshold
+                ]
                 prob_to_be_selected = np.array(importance_of_each)
                 prob_to_be_selected /= prob_to_be_selected.sum()
             
@@ -209,7 +218,8 @@ class Firm(object):
 
             # Select the supplier(s). It there is 2 suppliers, then we generate 
             # random weight. It determines how much is bought from each supplier.
-            selected_supplier_id = np.random.choice(potential_supplier_pid, p=prob_to_be_selected, size=nb_suppliers_to_choose, replace=False).tolist()
+            selected_supplier_id = np.random.choice(potential_supplier_pid, 
+                p=prob_to_be_selected, size=nb_suppliers_to_choose, replace=False).tolist()
             supplier_weights = generate_weights(nb_suppliers_to_choose) # Generate one random weight per number of supplier, sum to 1
             
             # For each new supplier, create a new CommercialLink in the supply chain network.

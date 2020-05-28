@@ -380,6 +380,13 @@ else:
                 export_sc_flow_analysis=False)
             logging.debug('End of t='+str(t))
 
+            if (t > 1) and epsilon_stop_condition:
+                if (households.extra_spending <= epsilon_stop_condition) & \
+                   (households.consumption_loss <= epsilon_stop_condition):
+                    logging.info('Household extra spending and consumption loss are at pre-disruption value. '\
+                    +"Simulation stops.")
+                    break
+
         computation_time = time.time()-t0
         logging.info("Time loop completed, {:.02f} min".format(computation_time/60))
 
