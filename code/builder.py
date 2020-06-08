@@ -61,6 +61,7 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
 
 def computeCostTravelTimeEdges(edges, transport_params, edge_type):
     # A. Compute price per ton to be paid to transporter
+    # A1. Cost per km
     if edge_type == "roads":
         # Differentiate between paved and unpaved roads
         edges['cost_per_ton'] = edges['km'] * (
@@ -76,8 +77,14 @@ def computeCostTravelTimeEdges(edges, transport_params, edge_type):
     else:
         raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
 
+    # A2. Forwarding charges at borders
+    edges.loc[edges['special']=="custom", "cost_per_ton"] = \
+        edges.loc[edges['special']=="custom", "type"] \
+        .map(transport_params['custom_cost'])
+
+
     # B. Compute generalized cost of transport
-    # B.1. Compute travel time
+    # B.1a. Compute travel time
     if edge_type == "roads":
         # Differentiate between paved and unpaved roads
         edges['travel_time'] = edges['km'] * (
@@ -92,6 +99,12 @@ def computeCostTravelTimeEdges(edges, transport_params, edge_type):
 
     else:
         raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
+
+    # B.1b. Add crossing border time
+    edges.loc[edges['special']=="custom", "travel_time"] = \
+        edges.loc[edges['special']=="custom", "type"] \
+        .map(transport_params['custom_time'])
+
 
     # B.2. Compute cost of travel time
     edges['cost_travel_time'] = edges['travel_time'] * \
@@ -211,7 +224,7 @@ def createTransportNetwork(transport_modes, filepaths, transport_params, extra_r
         transport_mode = "roads", additional_roads = extra_roads)
     logging.debug(str(nodes.shape[0])+" roads nodes and "+
         str(edges.shape[0])+ " roads edges")
-
+    
     if "railways" in transport_modes:
         logging.debug('Loading railways data')
         railways_nodes, railways_edges = loadTransportData(filepaths, transport_params, "railways")

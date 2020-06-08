@@ -6,11 +6,12 @@ inventory_duration_target = "inputed"
 import os
 # nodeedge_tested = os.path.join('input', input_folder, "all_nodes_short_ranked.csv")
 disruption_analysis = {
-    "disrupt_nodes_or_edges": "nodes",
-    "nodeedge_tested": 'all',
+    "disrupt_nodes_or_edges": "edges",
+    "nodeedge_tested": [2001],
     "duration": 1
 }
-congestion = False
+disruption_analysis = None
+congestion = True
 # disruption_analysis = None
 district_sector_cutoff = 0.005*20
 cutoff_sector_output = {

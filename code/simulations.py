@@ -113,7 +113,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         for country in country_list:
             country.add_congestion_malus2(sc_network, transport_network)
 
-    if (time_step == 0) and (export_flows): #should be done at this stage, while the goods are on their way
+    if (time_step in [0,1,2]) and (export_flows): #should be done at this stage, while the goods are on their way
         transport_network.compute_flow_per_segment(flow_types_to_export)
         observer.collect_transport_flows(transport_network, 
             time_step=time_step, flow_types=flow_types_to_export)

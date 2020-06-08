@@ -291,7 +291,7 @@ if disruption_analysis is None:
         export_sc_flow_analysis=export['sc_flow_analysis'])
 
     if export['agent_data']:
-        exportAgentData(observer, export_folder)
+        exportAgentData(obs, exp_folder)
 
     logging.info("Simulation completed, "+str((time.time()-t0)/60)+" min")
 
@@ -322,6 +322,11 @@ else:
         Tfinal = duration_dic[disruption['duration']]
         obs = Observer(firm_list, Tfinal)
 
+        if disruption == disruption_list[0]:
+            export_flows = export['flows']
+        else:
+            export_flows = False
+            
         logging.info("Simulating the initial state")
         runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
             country_list=country_list, households=households,
@@ -332,7 +337,7 @@ else:
             observer=obs,
             time_step=0,
             export_folder=exp_folder,
-            export_flows=export['flows'], 
+            export_flows=export_flows, 
             flow_types_to_export = flow_types_to_export,
             transport_edges = transport_edges,
             export_sc_flow_analysis=export['sc_flow_analysis'])
@@ -374,7 +379,7 @@ else:
                 observer=obs,
                 time_step=t,
                 export_folder=exp_folder,
-                export_flows=False, 
+                export_flows=export_flows, 
                 flow_types_to_export=flow_types_to_export,
                 transport_edges = transport_edges,
                 export_sc_flow_analysis=False)

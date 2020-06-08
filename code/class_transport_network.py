@@ -19,7 +19,7 @@ class TransportNetwork(nx.Graph):
 
     def add_transport_edge_with_nodes(self, edge_id, all_edges_data, all_nodes_data):
         # Selecting data
-        edge_attributes = ['id', "type", 'surface', "geometry", "class", "km",
+        edge_attributes = ['id', "type", 'surface', "geometry", "class", "km", 'special',
             "cost_per_ton", "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
         edge_data = all_edges_data.loc[edge_id, edge_attributes].to_dict()
         end_ids = all_edges_data.loc[edge_id, ["end1", "end2"]].tolist()
