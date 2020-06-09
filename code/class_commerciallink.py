@@ -1,10 +1,13 @@
 class CommercialLink(object):
 
-    def __init__(self, pid=None, supplier_id=None, buyer_id=None, product=None, category=None, order=0, delivery=0, payment=0, route=None):
+    def __init__(self, pid=None, supplier_id=None, buyer_id=None, product=None, 
+        product_type=None, category=None, order=0, delivery=0, payment=0, 
+        route=None):
         # Parameter
         self.pid = pid
-        self.product = product
-        self.category = category
+        self.product = product #sector of producing firm
+        self.product_type = product_type #service, manufacturing, etc. (=sector_type)
+        self.category = category #import, export, domestic_B2B, transit
         self.route = route or [] # node_id path of the transport network, as
                                  # [(node1, ), (node1, node2), (node2, ), (node2, node3), (node3, )]
         self.route_length = 1

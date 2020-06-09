@@ -8,7 +8,7 @@ import numpy as np
 
 class Firm(object):
     
-    def __init__(self, pid, odpoint=0, sector=0, input_mix=None, target_margin=0.2, utilization_rate=0.8,
+    def __init__(self, pid, odpoint=0, sector=0, sector_type=None, input_mix=None, target_margin=0.2, utilization_rate=0.8,
                  importance=1, long=None, lat=None, geometry=None,
                  suppliers=None, clients=None, production=0, inventory_duration_target=1, reactivity_rate=1, usd_per_ton=2864):
         # Parameters depending on data
@@ -19,6 +19,7 @@ class Firm(object):
         self.geometry = geometry
         self.importance = importance
         self.sector = sector
+        self.sector_type = sector_type
         self.input_mix = input_mix or {}
         self.usd_per_ton = usd_per_ton
 
@@ -230,14 +231,17 @@ class Firm(object):
                 if sector_id == import_code:
                     supplier_object = [country for country in country_list if country.pid==supplier_id][0]
                     link_category = 'import'
+                    product_type = "imports"
                 else:
                     supplier_object = firm_list[supplier_id]
                     link_category = 'domestic_B2B'
+                    product_type = firm_list[supplier_id].sector_type
                 # Create an edge in the graph
                 graph.add_edge(supplier_object, self,
                                object=CommercialLink(
                                    pid=str(supplier_id)+"to"+str(self.pid),
                                    product=sector_id,
+                                   product_type=product_type,
                                    category=link_category, 
                                    supplier_id=supplier_id,
                                    buyer_id=self.pid)
@@ -255,7 +259,7 @@ class Firm(object):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
-            elif edge[1].odpoint == -1: # we do not create route for service firms 
+            elif edge[1].odpoint == -1: # we do not create route for service firms # deprecated
                 continue
             else:
                 # Find route
@@ -448,17 +452,7 @@ class Firm(object):
         return False
     
     
-    def deliver_without_infrastructure(self, commercial_link):
-        """ The firm deliver its products without using transportation infrastructure
-        This case applies to service firm, and to nonservice firms selling to service firms (they are not localized) and to households 
-        Note that we still account for transport cost, proportionnaly to the share of the clients
-        Price can be higher than 1, if there are changes in price inputs
-        """
-        commercial_link.price = commercial_link.eq_price * (1 + self.delta_price_input)
-        self.product_stock -= commercial_link.delivery
-        self.finance['costs']['transport'] += self.clients[commercial_link.buyer_id]['share'] * self.eq_finance['costs']['transport']
 
-    
     def deliver_products(self, graph, transport_network=None, rationing_mode="equal"):
         # print("deliver_products", 0 in transport_network.nodes)
         # Do nothing if no orders
@@ -511,27 +505,55 @@ class Firm(object):
         for edge in graph.out_edges(self):
             graph[self][edge[1]]['object'].delivery = quantity_to_deliver[edge[1].pid]
             
-            # If it's B2B and no service client, we send to the transport network, price will be adjusted according to transport conditions
-            if (self.odpoint != -1) and (edge[1].odpoint != -1) and (edge[1].pid != -1):
-                self.send_shipment(graph[self][edge[1]]['object'], transport_network)
-            
-            # If it's B2C, or B2B with service client, we send directly, and adjust price with input costs. There is still transport costs.
-            elif (self.odpoint == -1) or (edge[1].odpoint == -1) or (edge[1].pid == -1):
-                self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
-            
-            # If it's B2C, we send directly, and adjust price with input costs. There is still transport costs.
+            explicit_service_firm = True
+            if explicit_service_firm:
+                # B2C
+                if edge[1].pid == -1:
+                    self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
+                # If this is service flow, deliver without infrastructure
+                elif self.sector_type in ['utility', 'transport', 'services']:
+                    self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
+                # otherwise use infrastructure
+                else:
+                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+
             else:
-                logging.error('There should not be this other case.')
-                    
+                # If it's B2B and no service client, we send to the transport network, 
+                # price will be adjusted according to transport conditions
+                if (self.odpoint != -1) and (edge[1].odpoint != -1) and (edge[1].pid != -1):
+                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+                
+                # If it's B2C, or B2B with service client, we send directly, 
+                # and adjust price with input costs. There is still transport costs.
+                elif (self.odpoint == -1) or (edge[1].odpoint == -1) or (edge[1].pid == -1):
+                    self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
+
+                else:
+                    logging.error('There should not be this other case.')
+
+
+         
+    def deliver_without_infrastructure(self, commercial_link):
+        """ The firm deliver its products without using transportation infrastructure
+        This case applies to service firm and to households 
+        Note that we still account for transport cost, proportionnaly to the share of the clients
+        Price can be higher than 1, if there are changes in price inputs
+        """
+        commercial_link.price = commercial_link.eq_price * (1 + self.delta_price_input)
+        self.product_stock -= commercial_link.delivery
+        self.finance['costs']['transport'] += self.clients[commercial_link.buyer_id]['share'] * self.eq_finance['costs']['transport']
+
+
                 
     def send_shipment(self, commercial_link, transport_network):
         # print("send_shipment", 0 in transport_network.nodes)
         """Only apply to B2B flows 
         """
         if len(commercial_link.route) == 0:
-            raise ValueError("Firm "+str(self.pid)+": commercial link "+str(commercial_link.pid)+
+            raise ValueError("Firm "+str(self.pid)+" "+str(self.sector)+
+                ": commercial link "+str(commercial_link.pid)+" (qty "+str(commercial_link.order)+")"
                 " is not associated to any route, I cannot send any shipment to client "+
-                str(commercial_link.pid))
+                str(commercial_link.buyer_id))
 
         if self.check_route_avaibility(commercial_link, transport_network, 'main') == 'available':
             # If the normal route is available, we can send the shipment as usual 
@@ -727,11 +749,18 @@ class Firm(object):
         
         
     def receive_products_and_pay(self, graph, transport_network):
+        explicit_service_firm = True
         for edge in graph.in_edges(self): 
-            if (edge[0].odpoint == -1) or (self.odpoint == -1): # if service, directly
-                self.receive_service_and_pay(graph[edge[0]][self]['object'])
-            else: # else collect through transport network
-                self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
+            if explicit_service_firm == True:
+                if graph[edge[0]][self]['object'].product_type in ['services', 'utility', 'transport']:
+                    self.receive_service_and_pay(graph[edge[0]][self]['object'])
+                else:
+                    self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
+            else:
+                if (edge[0].odpoint == -1) or (self.odpoint == -1): # if service, directly
+                    self.receive_service_and_pay(graph[edge[0]][self]['object'])
+                else: # else collect through transport network
+                    self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
 
                 
     def receive_service_and_pay(self, commercial_link):
@@ -759,7 +788,7 @@ class Firm(object):
         # Log if quantity received differs from what it was supposed to be
         if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
             logging.debug("Agent "+str(self.pid)+": quantity delivered by "+
-                str(commercial_link.supplier_id), " is "+str(quantity_delivered)+
+                str(commercial_link.supplier_id)+" is "+str(quantity_delivered)+
                 ". It was supposed to be "+str(commercial_link.delivery)+".")
         # Make payment
         commercial_link.payment = quantity_delivered * price

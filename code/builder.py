@@ -224,7 +224,7 @@ def createTransportNetwork(transport_modes, filepaths, transport_params, extra_r
         transport_mode = "roads", additional_roads = extra_roads)
     logging.debug(str(nodes.shape[0])+" roads nodes and "+
         str(edges.shape[0])+ " roads edges")
-    
+
     if "railways" in transport_modes:
         logging.debug('Loading railways data')
         railways_nodes, railways_edges = loadTransportData(filepaths, transport_params, "railways")
@@ -455,37 +455,51 @@ def rescaleNbFirms(filepath_district_sector_importance,
     # To generate the firm table, remove utilities, transport, and services
     # Should be changed!!! The flow of those firms should be virtual.
     # But they should be spatially represented! Because they buy real stuff!
-    service_sectors = sector_table.loc[sector_table['type'].isin(
-            ['utility', 'transport', 'services']
-        ), 'sector'].tolist()
-    service_sectors_present = od_sector_table.loc[
-            od_sector_table['sector'].isin(service_sectors), 
-            'sector'
-        ].drop_duplicates().tolist()
-    od_sector_table_noservice = od_sector_table[
-        ~od_sector_table['sector'].isin(service_sectors_present)
-    ]
-    # We want two firms of the same sector in the same OD point,
-    # so duplicates rows, generate a unique id
-    firm_table = pd.concat(
-        [od_sector_table_noservice, od_sector_table_noservice], 
-        axis = 0, ignore_index=True
-    )
-    # Add utilities, transport, and services as virtuval firms
-    if len(service_sectors_present)>1:
-        firm_table_services = pd.DataFrame({
-            'odpoint':-1,
-            'importance': 1/2,
-            "sector": service_sectors_present*2
-        })
-        firm_table = pd.concat([firm_table, firm_table_services], 
-            axis=0, ignore_index=True, sort=True)
+    explicit_service_firm = True
+    if explicit_service_firm:
+        od_sector_table['sector_type'] = od_sector_table['sector']\
+            .map(sector_table.set_index("sector")['type'])
+        # We want two firms of the same sector in the same OD point,
+        # so duplicates rows, generate a unique id
+        firm_table = pd.concat(
+            [od_sector_table, od_sector_table], 
+            axis = 0, ignore_index=True
+        )
+
+    else:
+        service_sectors = sector_table.loc[sector_table['type'].isin(
+                ['utility', 'transport', 'services']
+            ), 'sector'].tolist()
+        service_sectors_present = od_sector_table.loc[
+                od_sector_table['sector'].isin(service_sectors), 
+                'sector'
+            ].drop_duplicates().tolist()
+        od_sector_table_noservice = od_sector_table[
+            ~od_sector_table['sector'].isin(service_sectors_present)
+        ]
+        # We want two firms of the same sector in the same OD point,
+        # so duplicates rows, generate a unique id
+        firm_table = pd.concat(
+            [od_sector_table_noservice, od_sector_table_noservice], 
+            axis = 0, ignore_index=True
+        )
+        # Add utilities, transport, and services as virtuval firms
+        if len(service_sectors_present)>1:
+            firm_table_services = pd.DataFrame({
+                'odpoint':-1,
+                'importance': 1/2,
+                "sector": service_sectors_present*2,
+                "sector_type": "services"
+            })
+            firm_table = pd.concat([firm_table, firm_table_services], 
+                axis=0, ignore_index=True, sort=True)
 
     # Format firm table
     firm_table = firm_table.sort_values('importance', ascending=False)
     firm_table = firm_table.sort_values(['district', 'sector'])
     firm_table['id'] = list(range(firm_table.shape[0]))
-    firm_table = firm_table[['id', 'sector', 'odpoint', 'importance', 'district', 'long', 'lat']]
+    col_to_keep = ['id', 'sector', 'sector_type', 'odpoint', 'importance', 'district', 'long', 'lat']
+    firm_table = firm_table[col_to_keep]
     
     # Create OD table
     od_table = od_sector_table.copy()
@@ -533,6 +547,7 @@ def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilizat
     firm_list= [
         Firm(i, 
              sector=firm_table.loc[i, "sector"], 
+             sector_type=firm_table.loc[i, "sector_type"], 
              odpoint=firm_table.loc[i, "odpoint"], 
              importance=firm_table.loc[i, 'importance'],
              # geometry=firm_table.loc[i, 'geometry'],
@@ -865,11 +880,13 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
             odpoint = odpoint.iloc[0]
 
         # imports, i.e., sales of countries
-        qty_sold = import_table.loc[country,:].to_dict()
+        qty_sold = import_table.loc[country,:]
+        qty_sold = qty_sold[qty_sold>0].to_dict()
         supply_importance = sum(qty_sold.values()) / total_imports
         
         # exports, i.e., purchases from countries
-        qty_purchased = export_table.loc[country,:].to_dict()
+        qty_purchased = export_table.loc[country,:]
+        qty_purchased = qty_purchased[qty_purchased>0].to_dict()
         
         # transits
         # Note that transit are not given per sector, so, if we only consider a few sector, the full transit flows will still be used

@@ -3,10 +3,6 @@ import sys
 if (len(sys.argv)<=1):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
-
-# xlrd >= 1.0.0 #for excel inputs, to be removed
-# openpyxl >= 3.0.0 #for excel inputs, to be removed
-
 # Import modules
 import os
 import networkx as nx
@@ -239,7 +235,7 @@ for country in country_list:
     country.decide_routes(G, T)
 logging.info('Routes for export flows and B2B domestic flows are being selected by Tanzanian firms finding routes to their clients')
 for firm in firm_list:
-    if firm.odpoint != -1:
+    if firm.sector_type not in ['services', 'utility', 'transport']:
         firm.decide_routes(G, T)
 logging.info('The supplier--buyer graph is now connected to the transport network')
 

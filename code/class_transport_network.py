@@ -150,7 +150,7 @@ class TransportNetwork(nx.Graph):
             return None
 
         elif nx.has_path(self, origin_node, destination_node):
-            sp = nx.shortest_path(self, origin_node, destination_node, weight="time_cost")
+            sp = nx.shortest_path(self, origin_node, destination_node, weight="cost_per_ton")#time_cost
             route = [[(sp[0],)]] + [[(sp[i], sp[i+1]), (sp[i+1],)] for i in range(0,len(sp)-1)]
             route = [item for item_tuple in route for item in item_tuple]
             return route

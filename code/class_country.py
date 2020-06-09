@@ -57,6 +57,7 @@ class Country(object):
                        object=CommercialLink(
                            pid=str(selling_country_pid)+'to'+str(self.pid),
                            product='transit',
+                           product_type="transit", #suppose that transit type are non service, material stuff
                            category="transit",
                            supplier_id=selling_country_pid,
                            buyer_id=self.pid))
@@ -106,6 +107,7 @@ class Country(object):
                            object=CommercialLink(
                                pid=str(supplier_id)+'to'+str(self.pid),
                                product=sector,
+                               product_type=firm_list[supplier_id].sector_type,
                                category="export",
                                supplier_id=supplier_id,
                                buyer_id=self.pid))
@@ -164,11 +166,22 @@ class Country(object):
         self.qty_sold = 0
         for edge in graph.out_edges(self):
             graph[self][edge[1]]['object'].delivery = graph[self][edge[1]]['object'].order
-            if (edge[1].odpoint != -1): # to non service firms, send shipment through transportation network                   
-                self.send_shipment(graph[self][edge[1]]['object'], transport_network)
-            else: # if it sends to service firms, nothing to do. price is equilibrium price
-                graph[self][edge[1]]['object'].price = graph[self][edge[1]]['object'].eq_price
-                self.qty_sold += graph[self][edge[1]]['object'].delivery
+
+            explicit_service_firm = True
+            if explicit_service_firm:
+                # If send services, no use of transport network
+                if graph[self][edge[1]]['object'].product_type in ['utility', 'transport', 'services']:
+                    graph[self][edge[1]]['object'].price = graph[self][edge[1]]['object'].eq_price
+                    self.qty_sold += graph[self][edge[1]]['object'].delivery
+                # Otherwise, send shipment through transportation network     
+                else:
+                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+            else:
+                if (edge[1].odpoint != -1): # to non service firms, send shipment through transportation network                   
+                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+                else: # if it sends to service firms, nothing to do. price is equilibrium price
+                    graph[self][edge[1]]['object'].price = graph[self][edge[1]]['object'].eq_price
+                    self.qty_sold += graph[self][edge[1]]['object'].delivery
 
 
     def send_shipment(self, commercial_link, transport_network):
@@ -318,7 +331,7 @@ class Country(object):
         # Log if quantity received does not match order
         if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
             logging.debug("Agent "+str(self.pid)+": quantity delivered by "+
-                str(commercial_link.supplier_id), " is "+str(quantity_delivered)+
+                str(commercial_link.supplier_id)+" is "+str(quantity_delivered)+
                 ". It was supposed to be "+str(commercial_link.delivery)+".")
         # Make payment
         commercial_link.payment = quantity_delivered * price
