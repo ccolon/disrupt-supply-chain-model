@@ -136,7 +136,7 @@ class Country(object):
             graph[edge[0]][self]['object'].order = quantity_to_buy
 
             
-    def decide_routes(self, graph, transport_network):
+    def decide_routes(self, graph, transport_network, route_optimization_weight):
         self.usual_transport_cost = 0
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
@@ -147,7 +147,9 @@ class Country(object):
                 #Find rounte
                 origin_node = self.odpoint
                 destination_node = edge[1].odpoint
-                route = transport_network.provide_shortest_route(origin_node, destination_node)
+                route = transport_network.provide_shortest_route(
+                    origin_node, destination_node,
+                    route_weight=route_optimization_weight)
                 #Store it into commercial link object
                 graph[self][edge[1]]['object'].route = route
                 distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
@@ -156,7 +158,7 @@ class Country(object):
                 graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
 
             
-    def deliver_products(self, graph, transport_network):
+    def deliver_products(self, graph, transport_network, route_optimization_weight):
         """ The quantity to be delivered is the quantity that was ordered (no rationning takes place)
         """
         self.generalized_transport_cost = 0
@@ -175,16 +177,24 @@ class Country(object):
                     self.qty_sold += graph[self][edge[1]]['object'].delivery
                 # Otherwise, send shipment through transportation network     
                 else:
-                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+                    self.send_shipment(
+                        graph[self][edge[1]]['object'], 
+                        transport_network,
+                        route_optimization_weight
+                    )
             else:
                 if (edge[1].odpoint != -1): # to non service firms, send shipment through transportation network                   
-                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+                    self.send_shipment(
+                        graph[self][edge[1]]['object'], 
+                        transport_network,
+                        route_optimization_weight
+                    )
                 else: # if it sends to service firms, nothing to do. price is equilibrium price
                     graph[self][edge[1]]['object'].price = graph[self][edge[1]]['object'].eq_price
                     self.qty_sold += graph[self][edge[1]]['object'].delivery
 
 
-    def send_shipment(self, commercial_link, transport_network):
+    def send_shipment(self, commercial_link, transport_network, route_optimization_weight):
         """Only apply to B2B flows 
         """
         if len(commercial_link.route)==0:
@@ -214,7 +224,10 @@ class Country(object):
         else:
             origin_node = self.odpoint
             destination_node = commercial_link.route[-1][0]
-            route = transport_network.available_subgraph().provide_shortest_route(origin_node, destination_node)
+            route = transport_network.available_subgraph()\
+                                     .provide_shortest_route(
+                                        origin_node, destination_node,
+                                        route_weight=route_optimization_weight)
             # We evaluate the cost of this new route
             if route is not None:
                 commercial_link.alternative_route = route

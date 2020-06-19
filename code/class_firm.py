@@ -255,7 +255,7 @@ class Firm(object):
                 supplier_object.clients[self.pid] = {'sector':self.sector, 'share':0, 'share_transport':0}
         
     
-    def decide_routes(self, graph, transport_network):
+    def decide_routes(self, graph, transport_network, route_optimization_weight):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
@@ -265,7 +265,8 @@ class Firm(object):
                 # Find route
                 origin_node = self.odpoint
                 destination_node = edge[1].odpoint
-                route = transport_network.provide_shortest_route(origin_node, destination_node)
+                route = transport_network.provide_shortest_route(origin_node,
+                    destination_node, route_weight=route_optimization_weight)
                 # Store it into commercial link object
                 graph[self][edge[1]]['object'].route = route
                 distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
@@ -453,7 +454,8 @@ class Firm(object):
     
     
 
-    def deliver_products(self, graph, transport_network=None, rationing_mode="equal"):
+    def deliver_products(self, graph, transport_network=None, 
+        rationing_mode="equal", route_optimization_weight='time_cost'):
         # print("deliver_products", 0 in transport_network.nodes)
         # Do nothing if no orders
         if self.total_order == 0:
@@ -515,13 +517,21 @@ class Firm(object):
                     self.deliver_without_infrastructure(graph[self][edge[1]]['object'])
                 # otherwise use infrastructure
                 else:
-                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+                    self.send_shipment(
+                        graph[self][edge[1]]['object'], 
+                        transport_network,
+                        route_optimization_weight
+                    )
 
             else:
                 # If it's B2B and no service client, we send to the transport network, 
                 # price will be adjusted according to transport conditions
                 if (self.odpoint != -1) and (edge[1].odpoint != -1) and (edge[1].pid != -1):
-                    self.send_shipment(graph[self][edge[1]]['object'], transport_network)
+                    self.send_shipment(
+                        graph[self][edge[1]]['object'], 
+                        transport_network,
+                        route_optimization_weight
+                    )
                 
                 # If it's B2C, or B2B with service client, we send directly, 
                 # and adjust price with input costs. There is still transport costs.
@@ -545,7 +555,7 @@ class Firm(object):
 
 
                 
-    def send_shipment(self, commercial_link, transport_network):
+    def send_shipment(self, commercial_link, transport_network, route_optimization_weight):
         # print("send_shipment", 0 in transport_network.nodes)
         """Only apply to B2B flows 
         """
@@ -586,7 +596,9 @@ class Firm(object):
             origin_node = self.odpoint
             destination_node = commercial_link.route[-1][0]
             route = transport_network.available_subgraph()\
-                                     .provide_shortest_route(origin_node, destination_node)
+                                     .provide_shortest_route(
+                                        origin_node, destination_node,
+                                        route_weight=route_optimization_weight)
             # If we find a new route, we save it as the alternative one
             if route is not None: 
                 commercial_link.alternative_route = route

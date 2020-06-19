@@ -245,3 +245,10 @@ extra_roads = False
 # Units is the monetary_units_in_model
 # If None, then we use the default simulation duration Tfinal, see duration_dic
 epsilon_stop_condition = 1e-3
+
+# Characteristic of the transport edges that the path chosen by firms to 
+# deliver to their to clients should minimized
+# Possible values are:
+# - time_cost
+# - cost_per_ton
+route_optimization_weight = "time_cost" 

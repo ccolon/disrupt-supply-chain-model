@@ -232,11 +232,11 @@ logging.info('The supplier--buyer graph is being connected to the transport netw
 logging.info('Each B2B and transit edge is being linked to a route of the transport network')
 logging.info('Routes for transit flows and import flows are being selected by trading countries finding routes to their clients')
 for country in country_list:
-    country.decide_routes(G, T)
+    country.decide_routes(G, T, route_optimization_weight)
 logging.info('Routes for export flows and B2B domestic flows are being selected by Tanzanian firms finding routes to their clients')
 for firm in firm_list:
     if firm.sector_type not in ['services', 'utility', 'transport']:
-        firm.decide_routes(G, T)
+        firm.decide_routes(G, T, route_optimization_weight)
 logging.info('The supplier--buyer graph is now connected to the transport network')
 
 logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
@@ -276,6 +276,7 @@ if disruption_analysis is None:
         country_list=country_list, households=households,
         disruption=None,
         congestion=congestion,
+        route_optimization_weight=route_optimization_weight,
         propagate_input_price_change=propagate_input_price_change,
         rationing_mode=rationing_mode,
         observer=obs,
@@ -328,6 +329,7 @@ else:
             country_list=country_list, households=households,
             disruption=None,
             congestion=congestion,
+            route_optimization_weight=route_optimization_weight,
             propagate_input_price_change=propagate_input_price_change,
             rationing_mode=rationing_mode,
             observer=obs,
@@ -370,6 +372,7 @@ else:
                 country_list=country_list, households=households,
                 disruption=disruption,
                 congestion=congestion,
+                route_optimization_weight=route_optimization_weight,
                 propagate_input_price_change=propagate_input_price_change,
                 rationing_mode=rationing_mode,
                 observer=obs,

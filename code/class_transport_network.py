@@ -140,7 +140,7 @@ class TransportNetwork(nx.Graph):
                     logging.error('Transport network has no node numbered: '+str(firm.odpoint))
     
     
-    def provide_shortest_route(self, origin_node, destination_node):
+    def provide_shortest_route(self, origin_node, destination_node, route_weight):
         if (origin_node not in self.nodes):
             logging.warning("Origin node "+str(origin_node)+" not in the available transport network")
             return None
@@ -150,7 +150,7 @@ class TransportNetwork(nx.Graph):
             return None
 
         elif nx.has_path(self, origin_node, destination_node):
-            sp = nx.shortest_path(self, origin_node, destination_node, weight="cost_per_ton")#time_cost
+            sp = nx.shortest_path(self, origin_node, destination_node, weight=route_weight)#time_cost
             route = [[(sp[0],)]] + [[(sp[i], sp[i+1]), (sp[i+1],)] for i in range(0,len(sp)-1)]
             route = [item for item_tuple in route for item in item_tuple]
             return route

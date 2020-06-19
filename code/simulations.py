@@ -38,6 +38,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     country_list, households, observer,
     disruption=None,
     congestion=False,
+    route_optimization_weight="time_cost",
     propagate_input_price_change=True,
     rationing_mode="household_first",
     time_step=0,
@@ -98,7 +99,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     allFirmsProduce(firm_list)
     
     allAgentsDeliver(sc_network, firm_list, country_list, transport_network, 
-        rationing_mode=rationing_mode)
+        rationing_mode, route_optimization_weight)
     
     if congestion:
         if (time_step == 0):

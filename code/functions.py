@@ -349,15 +349,15 @@ def allFirmsProduce(firm_list):
     for firm in firm_list:
         firm.produce()
         
-def allFirmsDeliver(G, firm_list, T, rationing_mode):
+def allFirmsDeliver(G, firm_list, T, rationing_mode, route_optimization_weight):
     for firm in firm_list:
-        firm.deliver_products(G, T, rationing_mode=rationing_mode)
+        firm.deliver_products(G, T, rationing_mode, route_optimization_weight)
 
-def allAgentsDeliver(G, firm_list, country_list, T, rationing_mode):
+def allAgentsDeliver(G, firm_list, country_list, T, rationing_mode, route_optimization_weight):
     for firm in firm_list:
-        firm.deliver_products(G, T, rationing_mode)
+        firm.deliver_products(G, T, rationing_mode, route_optimization_weight)
     for country in country_list:
-        country.deliver_products(G, T)
+        country.deliver_products(G, T, route_optimization_weight)
         
         
 def allAgentsReceiveProducts(G, firm_list, households, country_list, T):
