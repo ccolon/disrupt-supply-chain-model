@@ -1007,7 +1007,7 @@ def extractEdgeList(graph):
 
 
 def defineDisruptionList(disruption_analysis, transport_network, 
-    nodeedge_tested_topn=None, nodeedge_tested_skipn=None):
+    nodes, edges, nodeedge_tested_topn=None, nodeedge_tested_skipn=None):
     """Create list of infrastructure to disrupt
 
     Parameters
@@ -1017,6 +1017,12 @@ def defineDisruptionList(disruption_analysis, transport_network,
 
     transport_network : TransportNetwork object
         Transport network
+
+    nodes : geopandas.DataFrame
+        The nodes of the transport network
+
+    edges : geopandas.DataFrame
+        The edges of the transport network
 
     nodeedge_tested_topn : None or integer
         Nb of node/edge to test in the list. If None the full list is tested.
@@ -1033,7 +1039,23 @@ def defineDisruptionList(disruption_analysis, transport_network,
 
     # if a list is directly provided, then it is the list
     if isinstance(disruption_analysis['nodeedge_tested'], list):
-        disruption_list = disruption_analysis['nodeedge_tested']
+        if disruption_analysis['identified_by'] == "id":
+            disruption_list = disruption_analysis['nodeedge_tested']
+        elif disruption_analysis['identified_by'] == "name":
+            if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
+                disruption_list = nodes.loc[
+                        nodes['name'].isin(disruption_analysis['nodeedge_tested']), 
+                        'id'
+                    ].tolist()
+            elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
+                disruption_list = edges.loc[
+                        edges['name'].isin(disruption_analysis['nodeedge_tested']), 
+                        'id'
+                    ].tolist()
+            else:
+                raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
+        else:
+            raise ValueError("disruption_analysis['identified_by'] should be 'id' or 'name'")
 
     # if 'all' is indicated, need to retrieve all node or edge ids from the transport network
     elif disruption_analysis['nodeedge_tested'] == 'all':
@@ -1087,6 +1109,9 @@ def defineDisruptionList(disruption_analysis, transport_network,
             for disrupted_stuff in disruption_list
         ]
 
+    if len(disruption_list) == 0:
+        logging.warning('Nothing in the disruption list')
+        
     return disruption_list
 
 

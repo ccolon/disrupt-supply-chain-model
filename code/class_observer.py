@@ -16,7 +16,7 @@ class Observer(object):
         self.households = {}
         self.countries = {}
         sector_list = list(set([firm.sector for firm in firm_list]))
-        self.disruption_time = 2
+        self.disruption_time = 1
         self.production = pd.DataFrame(index=range(0,Tfinal+1), 
                                    columns=["firm_"+str(firm.pid) for firm in firm_list]+['total'], 
                                    data=0)
@@ -64,6 +64,7 @@ class Observer(object):
             'production': firm.production,
             'profit': firm.profit,
             'transport_cost': firm.finance['costs']['transport'],
+            'input_cost': firm.finance['costs']['input'],
             'inventory_duration': firm.current_inventory_duration,
             'generalized_transport_cost': firm.generalized_transport_cost,
             'usd_transported': firm.usd_transported,

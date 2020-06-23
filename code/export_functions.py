@@ -207,30 +207,31 @@ def analyzeSupplyChainFlows(sc_network, firm_list, export_folder):
     export_flows_per_country.to_csv(os.path.join(export_folder, 'initial_export_flows_per_country.csv'), index=False)
 
 
+def exportFirmTS(what, observer, export_folder):
+    ts = pd.DataFrame(
+        {t: \
+            {firm_id: val[what] for firm_id, val in observer.firms[t].items()} 
+        for t in observer.firms.keys()}
+    ).transpose()
+    ts.to_csv(os.path.join(export_folder, 'firm_'+what+'_ts.csv'), sep=',')
+    return ts
+
+
+def exportHouseholdsTS(what, observer, export_folder):
+    ts = pd.DataFrame(
+        {t: val[what] for t, val in observer.households.items()}
+    ).transpose()
+    ts.to_csv(os.path.join(export_folder, 'households_'+what+'_ts.csv'), sep=',')
+    return ts
+
 
 def exportTimeSeries(observer, export_folder):  
     # Export time series per agent
-    firm_production_ts = pd.DataFrame(
-        {t: \
-            {firm_id: val['production'] for firm_id, val in observer.firms[t].items()} 
-        for t in observer.firms.keys()}
-    ).transpose()
-    firm_production_ts.to_csv(os.path.join(export_folder, 'firm_production_ts.csv'), sep=',')
+    firm_production_ts = exportFirmTS('production', observer, export_folder)
+    firm_profit_ts = exportFirmTS('profit', observer, export_folder)
+    firm_transportcost_ts = exportFirmTS('transport_cost', observer, export_folder)
+    firm_inputcost_ts = exportFirmTS('input_cost', observer, export_folder)
 
-    firm_profit_ts = pd.DataFrame(
-        {t: \
-            {firm_id: val['profit'] for firm_id, val in observer.firms[t].items()} 
-        for t in observer.firms.keys()}
-    ).transpose()
-    firm_profit_ts.to_csv(os.path.join(export_folder, 'firm_profit_ts.csv'), sep=',')
-    
-    firm_transportcost_ts = pd.DataFrame(
-        {t: \
-            {firm_id: val['transport_cost'] for firm_id, val in observer.firms[t].items()} 
-        for t in observer.firms.keys()}
-    ).transpose()
-    firm_transportcost_ts.to_csv(os.path.join(export_folder, 'firm_transportcost_ts.csv'), sep=',')
-    
     firm_avinventoryduration_ts = pd.DataFrame(
         {t: \
             {firm_id: sum(val['inventory_duration'].values())/len(val['inventory_duration'].values()) for firm_id, val in observer.firms[t].items()} 
@@ -238,15 +239,8 @@ def exportTimeSeries(observer, export_folder):
     ).transpose()
     firm_avinventoryduration_ts.to_csv(os.path.join(export_folder, 'firm_avinventoryduration_ts.csv'), sep=',')
     
-    households_consumption_ts = pd.DataFrame(
-        {t: val['consumption'] for t, val in observer.households.items()}
-    ).transpose()
-    households_consumption_ts.to_csv(os.path.join(export_folder, 'households_consumption_ts.csv'), sep=',')
-    
-    households_spending_ts = pd.DataFrame(
-        {t: val['spending'] for t, val in observer.households.items()}
-    ).transpose()
-    households_spending_ts.to_csv(os.path.join(export_folder, 'households_spending_ts.csv'), sep=',')
+    households_consumption_ts = exportHouseholdsTS('consumption', observer, export_folder)
+    households_spending_ts = exportHouseholdsTS('spending', observer, export_folder)
 
     # Export aggregated time series
     agg_df = pd.DataFrame({

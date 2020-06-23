@@ -8,7 +8,7 @@ from functions import rescale_values, congestion_function
 class TransportNetwork(nx.Graph):
     
     def add_transport_node(self, node_id, all_nodes_data): #used in add_transport_edge_with_nodes
-        node_attributes = ["id", "geometry", "special"]
+        node_attributes = ["id", "geometry", "special", "name"]
         node_data = all_nodes_data.loc[node_id, node_attributes].to_dict()
         node_data['shipments'] = {}
         node_data['disruption_duration'] = 0
@@ -19,7 +19,7 @@ class TransportNetwork(nx.Graph):
 
     def add_transport_edge_with_nodes(self, edge_id, all_edges_data, all_nodes_data):
         # Selecting data
-        edge_attributes = ['id', "type", 'surface', "geometry", "class", "km", 'special',
+        edge_attributes = ['id', "type", 'surface', "geometry", "class", "km", 'special', "name",
             "cost_per_ton", "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
         edge_data = all_edges_data.loc[edge_id, edge_attributes].to_dict()
         end_ids = all_edges_data.loc[edge_id, ["end1", "end2"]].tolist()

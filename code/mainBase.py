@@ -295,7 +295,8 @@ if disruption_analysis is None:
 
 else:
     logging.info("Criticality analysis. Defining the list of disruptions")
-    disruption_list = defineDisruptionList(disruption_analysis, transport_network=T,
+    disruption_list = defineDisruptionList(disruption_analysis, transport_network=T, 
+        nodes=transport_nodes, edges=transport_edges,
         nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn)
     logging.info(str(len(disruption_list))+" disruptions to simulates.")
 
@@ -358,7 +359,7 @@ else:
             if export['inventories']:
                 exportInventories(firm_list, export_folder=exp_folder)
 
-        obs.disruption_time = disruption['duration']
+        obs.disruption_time = 1
         logging.info('Simulation will last '+str(Tfinal)+' time steps.')
         logging.info('A disruption will occur at time 1, it will affect '+
                      str(len(disruption['node']))+' nodes and '+
