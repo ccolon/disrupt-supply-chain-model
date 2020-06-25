@@ -1039,23 +1039,18 @@ def defineDisruptionList(disruption_analysis, transport_network,
 
     # if a list is directly provided, then it is the list
     if isinstance(disruption_analysis['nodeedge_tested'], list):
-        if disruption_analysis['identified_by'] == "id":
-            disruption_list = disruption_analysis['nodeedge_tested']
-        elif disruption_analysis['identified_by'] == "name":
-            if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
-                disruption_list = nodes.loc[
-                        nodes['name'].isin(disruption_analysis['nodeedge_tested']), 
-                        'id'
-                    ].tolist()
-            elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
-                disruption_list = edges.loc[
-                        edges['name'].isin(disruption_analysis['nodeedge_tested']), 
-                        'id'
-                    ].tolist()
-            else:
-                raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
+        if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
+            disruption_list = nodes.loc[
+                    nodes[disruption_analysis['identified_by']].isin(disruption_analysis['nodeedge_tested']), 
+                    'id'
+                ].tolist()
+        elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
+            disruption_list = edges.loc[
+                    edges[disruption_analysis['identified_by']].isin(disruption_analysis['nodeedge_tested']), 
+                    'id'
+                ].tolist()
         else:
-            raise ValueError("disruption_analysis['identified_by'] should be 'id' or 'name'")
+            raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
 
     # if 'all' is indicated, need to retrieve all node or edge ids from the transport network
     elif disruption_analysis['nodeedge_tested'] == 'all':
