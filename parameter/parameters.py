@@ -7,11 +7,11 @@ disruption_analysis = {
     "disrupt_nodes_or_edges": "nodes",
     "nodeedge_tested": ["Sihanoukville international port"],
     "identified_by": "name",
-    "duration": 2
+    "duration": 1
 }
 # disruption_analysis = None
 congestion = True
-district_sector_cutoff = 0.005
+district_sector_cutoff = 0.005*20
 cutoff_sector_output = {
     'type': 'percentage',
     'value': 0.01
@@ -23,5 +23,5 @@ route_optimization_weight = "cost_per_ton"
 
 export = {key: True for key in export.keys()}
 
-cost_repercussion_mode = "type3"
+cost_repercussion_mode = "type1"
 

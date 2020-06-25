@@ -259,7 +259,6 @@ class Country(object):
             self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_length
             self.qty_sold += commercial_link.delivery
 
-            cost_repercussion_mode = "type3"
             if cost_repercussion_mode == "type1": #relative cost change with actual bill
                 new_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_cost_per_ton
                 normal_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.route_cost_per_ton
