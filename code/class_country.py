@@ -158,7 +158,8 @@ class Country(object):
                 graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
 
             
-    def deliver_products(self, graph, transport_network, route_optimization_weight):
+    def deliver_products(self, graph, transport_network, route_optimization_weight,
+                        monetary_unit_transport_cost, monetary_unit_flow, cost_repercussion_mode):
         """ The quantity to be delivered is the quantity that was ordered (no rationning takes place)
         """
         self.generalized_transport_cost = 0
@@ -180,21 +181,35 @@ class Country(object):
                     self.send_shipment(
                         graph[self][edge[1]]['object'], 
                         transport_network,
-                        route_optimization_weight
+                        route_optimization_weight,
+                        monetary_unit_transport_cost,
+                        monetary_unit_flow,
+                        cost_repercussion_mode
                     )
             else:
                 if (edge[1].odpoint != -1): # to non service firms, send shipment through transportation network                   
                     self.send_shipment(
                         graph[self][edge[1]]['object'], 
                         transport_network,
-                        route_optimization_weight
+                        route_optimization_weight,
+                        monetary_unit_transport_cost,
+                        monetary_unit_flow,
+                        cost_repercussion_mode
                     )
                 else: # if it sends to service firms, nothing to do. price is equilibrium price
                     graph[self][edge[1]]['object'].price = graph[self][edge[1]]['object'].eq_price
                     self.qty_sold += graph[self][edge[1]]['object'].delivery
 
 
-    def send_shipment(self, commercial_link, transport_network, route_optimization_weight):
+    def send_shipment(self, commercial_link, transport_network, route_optimization_weight,
+        monetary_unit_transport_cost, monetary_unit_flow, cost_repercussion_mode):
+
+        monetary_unit_factor = {
+            "mUSD": 1e6,
+            "kUSD": 1e3,
+            "USD": 1
+        }
+        factor = monetary_unit_factor[monetary_unit_flow]
         """Only apply to B2B flows 
         """
         if len(commercial_link.route)==0:
@@ -209,10 +224,10 @@ class Country(object):
             commercial_link.price = commercial_link.eq_price
             transport_network.transport_shipment(commercial_link)
             
-            self.generalized_transport_cost += commercial_link.route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
+            self.generalized_transport_cost += commercial_link.route_time_cost + commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) *commercial_link.route_length
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) *commercial_link.route_length
             self.qty_sold += commercial_link.delivery
             return 0
 
@@ -238,29 +253,30 @@ class Country(object):
         
         if route is not None:
             commercial_link.current_route = 'alternative'
-            self.generalized_transport_cost += commercial_link.alternative_route_time_cost + commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
+            self.generalized_transport_cost += commercial_link.alternative_route_time_cost + commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_length
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_length
             self.qty_sold += commercial_link.delivery
 
-            if False: #relative cost change with actual bill
-                new_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
-                normal_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
+            cost_repercussion_mode = "type3"
+            if cost_repercussion_mode == "type1": #relative cost change with actual bill
+                new_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_cost_per_ton
+                normal_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.route_cost_per_ton
                 added_transport_bill = max(new_transport_bill - normal_transport_bill, 0)
                 relative_cost_change = added_transport_bill/normal_transport_bill
                 relative_price_change_transport = 0.2 * relative_cost_change
                 total_relative_price_change = relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
-            elif True: #actual repercussion de la bill
+            elif cost_repercussion_mode == "type2": #actual repercussion de la bill
                 added_costUSD_per_ton = max(commercial_link.alternative_route_cost_per_ton - commercial_link.route_cost_per_ton, 0)
-                added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton*1e-6)
-                added_costmUSD_per_mUSD = added_costUSD_per_mUSD*1e-6
+                added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton/factor)
+                added_costmUSD_per_mUSD = added_costUSD_per_mUSD/factor
                 commercial_link.price = commercial_link.eq_price + added_costmUSD_per_mUSD
                 relative_price_change_transport = commercial_link.price / commercial_link.eq_price - 1
                 
-            else:
+            elif cost_repercussion_mode == "type3":
                 # We translate this real cost into transport cost
                 relative_cost_change = (commercial_link.alternative_route_time_cost - commercial_link.route_time_cost)/commercial_link.route_time_cost
                 relative_price_change_transport = 0.2 * relative_cost_change

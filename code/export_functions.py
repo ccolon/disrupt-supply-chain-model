@@ -231,6 +231,7 @@ def exportTimeSeries(observer, export_folder):
     firm_profit_ts = exportFirmTS('profit', observer, export_folder)
     firm_transportcost_ts = exportFirmTS('transport_cost', observer, export_folder)
     firm_inputcost_ts = exportFirmTS('input_cost', observer, export_folder)
+    firm_othercost_ts = exportFirmTS('other_cost', observer, export_folder)
 
     firm_avinventoryduration_ts = pd.DataFrame(
         {t: \
@@ -330,3 +331,15 @@ def writeResPerFirmResults(extra_spending_export_file, missing_consumption_expor
     )
     # pd.DataFrame({str(disruption): obs.households_extra_spending_per_firm}).transpose().to_csv(extra_spending_export_file, header=False, mode='a')
     # pd.DataFrame({str(disruption): obs.households_consumption_loss_per_firm}).transpose().to_csv(f, header=False)
+
+
+def exportParameters(exp_folder):
+    copy_command = {
+        'nt': 'copy',
+        'posix': "cp"
+    }
+    os.system(copy_command[os.name]+" "+
+        os.path.join('parameter', "parameters.py")+" "+
+        os.path.join(exp_folder, "parameters.txt")
+    )
+    logging.info("Parameters exported in "+os.path.join(exp_folder, "parameters.txt"))

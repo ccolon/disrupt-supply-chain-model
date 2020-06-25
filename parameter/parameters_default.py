@@ -252,3 +252,6 @@ epsilon_stop_condition = 1e-3
 # - time_cost
 # - cost_per_ton
 route_optimization_weight = "time_cost" 
+
+# How to translate an increase in transport cost into increase in prices
+cost_repercussion_mode = "type1"

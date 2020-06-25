@@ -44,6 +44,7 @@ if any(list(export.values())):
     if not os.path.isdir(os.path.join('output', input_folder)):
         os.mkdir(os.path.join('output', input_folder))
     os.mkdir(exp_folder)
+    exportParameters(exp_folder)
 else:
     exp_folder = None
 
@@ -285,7 +286,10 @@ if disruption_analysis is None:
         export_flows=export['flows'], 
         flow_types_to_export = flow_types_to_export,
         transport_edges = transport_edges,
-        export_sc_flow_analysis=export['sc_flow_analysis'])
+        export_sc_flow_analysis=export['sc_flow_analysis'],
+        monetary_unit_transport_cost="USD", 
+        monetary_unit_flow=monetary_units_in_model,
+        cost_repercussion_mode=cost_repercussion_mode)
 
     if export['agent_data']:
         exportAgentData(obs, exp_folder)
@@ -339,7 +343,10 @@ else:
             export_flows=export_flows, 
             flow_types_to_export = flow_types_to_export,
             transport_edges = transport_edges,
-            export_sc_flow_analysis=export['sc_flow_analysis'])
+            export_sc_flow_analysis=export['sc_flow_analysis'],
+            monetary_unit_transport_cost="USD", 
+            monetary_unit_flow=monetary_units_in_model,
+            cost_repercussion_mode=cost_repercussion_mode)
 
         if disruption == disruption_list[0]:
             if export['district_sector_table']:
@@ -382,7 +389,10 @@ else:
                 export_flows=export_flows, 
                 flow_types_to_export=flow_types_to_export,
                 transport_edges = transport_edges,
-                export_sc_flow_analysis=False)
+                export_sc_flow_analysis=False,
+                monetary_unit_transport_cost="USD", 
+                monetary_unit_flow=monetary_units_in_model,
+                cost_repercussion_mode=cost_repercussion_mode)
             logging.debug('End of t='+str(t))
 
             if (t > 1) and epsilon_stop_condition:

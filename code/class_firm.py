@@ -455,7 +455,9 @@ class Firm(object):
     
 
     def deliver_products(self, graph, transport_network=None, 
-        rationing_mode="equal", route_optimization_weight='time_cost'):
+        rationing_mode="equal", route_optimization_weight='time_cost',
+        monetary_unit_transport_cost="USD", monetary_unit_flow="mUSD",
+        cost_repercussion_mode="type1"):
         # print("deliver_products", 0 in transport_network.nodes)
         # Do nothing if no orders
         if self.total_order == 0:
@@ -520,7 +522,10 @@ class Firm(object):
                     self.send_shipment(
                         graph[self][edge[1]]['object'], 
                         transport_network,
-                        route_optimization_weight
+                        route_optimization_weight,
+                        monetary_unit_transport_cost,
+                        monetary_unit_flow,
+                        cost_repercussion_mode
                     )
 
             else:
@@ -530,7 +535,10 @@ class Firm(object):
                     self.send_shipment(
                         graph[self][edge[1]]['object'], 
                         transport_network,
-                        route_optimization_weight
+                        route_optimization_weight,
+                        monetary_unit_transport_cost,
+                        monetary_unit_flow,
+                        cost_repercussion_mode
                     )
                 
                 # If it's B2C, or B2B with service client, we send directly, 
@@ -555,7 +563,15 @@ class Firm(object):
 
 
                 
-    def send_shipment(self, commercial_link, transport_network, route_optimization_weight):
+    def send_shipment(self, commercial_link, transport_network, route_optimization_weight,
+        monetary_unit_transport_cost, monetary_unit_flow, cost_repercussion_mode):
+
+        monetary_unit_factor = {
+            "mUSD": 1e6,
+            "kUSD": 1e3,
+            "USD": 1
+        }
+        factor = monetary_unit_factor[monetary_unit_flow]
         # print("send_shipment", 0 in transport_network.nodes)
         """Only apply to B2B flows 
         """
@@ -574,11 +590,11 @@ class Firm(object):
             self.product_stock -= commercial_link.delivery
             self.generalized_transport_cost += \
                 commercial_link.route_time_cost \
-                + commercial_link.delivery / (self.usd_per_ton*1e-6) \
+                + commercial_link.delivery / (self.usd_per_ton/factor) \
                 * commercial_link.route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) \
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) \
                                     * commercial_link.route_length
             self.finance['costs']['transport'] += \
                 self.clients[commercial_link.buyer_id]['share'] \
@@ -611,17 +627,18 @@ class Firm(object):
         if route is not None:
             commercial_link.current_route = 'alternative'
             self.generalized_transport_cost += commercial_link.alternative_route_time_cost \
-                + commercial_link.delivery / (self.usd_per_ton*1e-6) \
+                + commercial_link.delivery / (self.usd_per_ton/factor) \
                 * commercial_link.alternative_route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton*1e-6)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton*1e-6) \
+            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
+            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) \
                 * commercial_link.alternative_route_length
         
             # We translate this real cost into transport cost
-            if False: #relative cost change with actual bill
-                new_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.alternative_route_cost_per_ton
-                normal_transport_bill = commercial_link.delivery / (self.usd_per_ton*1e-6) * commercial_link.route_cost_per_ton
+            cost_repercussion_mode = "type3"
+            if cost_repercussion_mode == "type1": #relative cost change with actual bill
+                new_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_cost_per_ton
+                normal_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.route_cost_per_ton
                 added_transport_bill = max(new_transport_bill - normal_transport_bill, 0)
                 relative_cost_change = added_transport_bill/normal_transport_bill
                 self.finance['costs']['transport'] += self.eq_finance['costs']['transport'] * self.clients[commercial_link.buyer_id]['share'] * (1 + relative_cost_change)
@@ -629,11 +646,11 @@ class Firm(object):
                 total_relative_price_change = self.delta_price_input + relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
-            elif True: #actual repercussion de la bill
+            elif cost_repercussion_mode == "type2": #actual repercussion de la bill
                 added_costUSD_per_ton = max(commercial_link.alternative_route_cost_per_ton - \
                     commercial_link.route_cost_per_ton, 0)
-                added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton*1e-6)
-                added_costmUSD_per_mUSD = added_costUSD_per_mUSD*1e-6
+                added_costUSD_per_mUSD = added_costUSD_per_ton / (self.usd_per_ton/factor)
+                added_costmUSD_per_mUSD = added_costUSD_per_mUSD/factor
                 added_transport_bill = added_costmUSD_per_mUSD * commercial_link.delivery
                 self.finance['costs']['transport'] += \
                     self.eq_finance['costs']['transport'] + added_transport_bill
@@ -645,11 +662,11 @@ class Firm(object):
                 if (commercial_link.price is None) or (commercial_link.price is np.nan):
                     raise ValueError("Price should be a float, it is "+str(commercial_link.price))
                 
-                logging.debug('Firm '+str(self.pid)+": qty "+str(commercial_link.delivery / (self.usd_per_ton*1e-6)) +
+                logging.debug('Firm '+str(self.pid)+": qty "+str(commercial_link.delivery / (self.usd_per_ton/factor))+'tons'+
                 " increase in route cost per ton "+ str((commercial_link.alternative_route_cost_per_ton-commercial_link.route_cost_per_ton)/commercial_link.route_cost_per_ton)+
                 " increased bill mUSD "+str(added_costmUSD_per_mUSD*commercial_link.delivery))
                 
-            else:
+            elif cost_repercussion_mode == "type3":
                 relative_cost_change = (commercial_link.alternative_route_time_cost - commercial_link.route_time_cost)/commercial_link.route_time_cost
                 self.finance['costs']['transport'] += self.eq_finance['costs']['transport'] * self.clients[commercial_link.buyer_id]['share'] * (1 + relative_cost_change)
                 relative_price_change_transport = self.eq_finance['costs']['transport'] * relative_cost_change / ((1-self.target_margin) * self.eq_finance['sales'])

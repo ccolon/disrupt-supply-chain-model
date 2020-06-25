@@ -46,7 +46,10 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     export_flows=False, 
     flow_types_to_export=['total'],
     transport_edges=None,
-    export_sc_flow_analysis=False):
+    export_sc_flow_analysis=False,
+    monetary_unit_transport_cost="USD",
+    monetary_unit_flow="mUSD",
+    cost_repercussion_mode="type1"):
     """
     Run one time step
 
@@ -99,7 +102,9 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     allFirmsProduce(firm_list)
     
     allAgentsDeliver(sc_network, firm_list, country_list, transport_network, 
-        rationing_mode, route_optimization_weight)
+        rationing_mode, route_optimization_weight, 
+        monetary_unit_transport_cost="USD", monetary_unit_flow="mUSD",
+        cost_repercussion_mode=cost_repercussion_mode)
     
     if congestion:
         if (time_step == 0):

@@ -7,7 +7,7 @@ disruption_analysis = {
     "disrupt_nodes_or_edges": "nodes",
     "nodeedge_tested": ["Sihanoukville international port"],
     "identified_by": "name",
-    "duration": 1
+    "duration": 2
 }
 # disruption_analysis = None
 congestion = True
@@ -22,4 +22,6 @@ transport_modes = ['roads', 'railways', 'waterways', 'maritime']
 route_optimization_weight = "cost_per_ton" 
 
 export = {key: True for key in export.keys()}
+
+cost_repercussion_mode = "type3"
 

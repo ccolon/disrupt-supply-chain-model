@@ -65,6 +65,7 @@ class Observer(object):
             'profit': firm.profit,
             'transport_cost': firm.finance['costs']['transport'],
             'input_cost': firm.finance['costs']['input'],
+            'other_cost': firm.finance['costs']['other'],
             'inventory_duration': firm.current_inventory_duration,
             'generalized_transport_cost': firm.generalized_transport_cost,
             'usd_transported': firm.usd_transported,
