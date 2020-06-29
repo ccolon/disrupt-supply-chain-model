@@ -78,7 +78,8 @@ class Observer(object):
             'tons_transported': country.tons_transported,
             'tonkm_transported': country.tonkm_transported,
             'extra_spending': country.extra_spending,
-            'consumption_loss': country.consumption_loss
+            'consumption_loss': country.consumption_loss,
+            'spending': sum(list(country.qty_purchased.values()))
         } for country in country_list}
         self.households[time_step] = {
             'spending': households.spending,

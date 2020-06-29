@@ -217,6 +217,16 @@ def exportFirmTS(what, observer, export_folder):
     return ts
 
 
+def exportCountriesTS(what, observer, export_folder):
+    ts = pd.DataFrame(
+        {t: \
+            {country_id: val[what] for country_id, val in observer.countries[t].items()} 
+        for t in observer.firms.keys()}
+    ).transpose()
+    ts.to_csv(os.path.join(export_folder, 'countries_'+what+'_ts.csv'), sep=',')
+    return ts
+
+
 def exportHouseholdsTS(what, observer, export_folder):
     ts = pd.DataFrame(
         {t: val[what] for t, val in observer.households.items()}
@@ -243,6 +253,8 @@ def exportTimeSeries(observer, export_folder):
     households_consumption_ts = exportHouseholdsTS('consumption', observer, export_folder)
     households_spending_ts = exportHouseholdsTS('spending', observer, export_folder)
 
+    countries_spending_ts = exportCountriesTS('spending', observer, export_folder)
+
     # Export aggregated time series
     agg_df = pd.DataFrame({
         'firm_production': firm_production_ts.sum(axis=1),
@@ -250,7 +262,8 @@ def exportTimeSeries(observer, export_folder):
         'firm_transportcost': firm_transportcost_ts.mean(axis=1),
         'firm_avinventoryduration': firm_avinventoryduration_ts.mean(axis=1),
         'households_consumption': households_consumption_ts.sum(axis=1),
-        'households_spending': households_spending_ts.sum(axis=1)
+        'households_spending': households_spending_ts.sum(axis=1),
+        "countres_spending": countries_spending_ts.sum(axis=1)
     })
     agg_df.to_csv(os.path.join(export_folder, 'aggregate_ts.csv'), sep=',', index=False)
 

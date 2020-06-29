@@ -49,7 +49,6 @@ else:
     exp_folder = None
 
 # Set logging parameters
-logging_level = logging.DEBUG
 if export['log']:
     log_filename = os.path.join(exp_folder, 'exp.log')
     importlib.reload(logging)
