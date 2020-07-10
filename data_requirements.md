@@ -35,4 +35,4 @@
 ## Trade & national account
 
 - Input-output table (e.g., GTAP, produced by the country)
-- International trade date (e.g., GTAP, UNComtrade)
+- International trade date (e.g., GTAP, UNComtrade), in particular detailed trade flows that go through the transport system of the modeled country.
