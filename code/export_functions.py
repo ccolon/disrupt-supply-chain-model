@@ -33,13 +33,13 @@ def exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepath_road_n
     
     if export_odpoint_table:
         odpoint_table.to_csv(os.path.join(export_folder, 'odpoint_production_table.csv'), index=False)
-        exportODPointAsShp(odpoint_table, filepath_road_nodes, export_folder)
+        exportODPointLayer(odpoint_table, filepath_road_nodes, export_folder)
 
 
-def exportODPointAsShp(odpoint_table, filepath_road_nodes, export_folder):
+def exportODPointLayer(odpoint_table, filepath_road_nodes, export_folder):
     road_nodes = gpd.read_file(filepath_road_nodes)
     res = road_nodes[['id', 'geometry']].merge(odpoint_table, left_on='id', right_on="odpoint", how='right')
-    res.to_file(os.path.join(export_folder, 'odpoints_output.shp'))
+    res.to_file(os.path.join(export_folder, 'odpoints_output.geojson'), driver='GeoJSON')
 
 
 
@@ -105,12 +105,15 @@ def exportTransportFlows(observer, export_folder):
         json.dump(observer.flows_snapshot, jsonfile)
 
 
-def exportTransportFlowsShp(observer, export_folder, time_step, transport_edges):
+def exportTransportFlowsLayer(observer, export_folder, time_step, transport_edges):
     #extract flows of the desired time step
     flow_table = pd.DataFrame(observer.flows_snapshot[time_step]).transpose()
     flow_table['id'] = flow_table.index.astype(int)
     transport_edges = transport_edges.merge(flow_table, on='id', how='left')
-    transport_edges.to_file(os.path.join(export_folder, 'flow_table_'+str(time_step)+'.shp'))
+    transport_edges.to_file(
+        os.path.join(export_folder, 'flow_table_'+str(time_step)+'.geojson'), 
+        driver='GeoJSON'
+    )
     
 
 def exportAgentData(observer, export_folder):

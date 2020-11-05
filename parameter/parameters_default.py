@@ -127,6 +127,12 @@ district_sector_cutoff = 0.003
 # - Integer > 0: nb of top district to keep
 nb_top_district_per_sector = 1
 
+# If True, the service firms (utility, transport, service) are modeled as the nonservice firms
+# Their output will not use the transport network, but their inputs, if it comes from nonservice firms, will.
+# If False, then two firms per service sector will be modeled for the whole country
+# Neither their input nor output will use the transport network.
+explicit_service_firm = True
+
 # Duration target for the firm inventory
 # When firm holds the inventories meeting this target, then the firms can keep meeting their pre-disruption
 # production targets without ordering more inputs for the specified number of time steps.

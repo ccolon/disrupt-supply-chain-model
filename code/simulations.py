@@ -124,7 +124,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         observer.collect_transport_flows(transport_network, 
             time_step=time_step, flow_types=flow_types_to_export)
         exportTransportFlows(observer, export_folder)
-        exportTransportFlowsShp(observer, export_folder, time_step=time_step, 
+        exportTransportFlowsLayer(observer, export_folder, time_step=time_step, 
             transport_edges=transport_edges)
     
     if (time_step == 0) and (export_sc_flow_analysis): #should be done at this stage, while the goods are on their way

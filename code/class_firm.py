@@ -259,12 +259,13 @@ class Firm(object):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
-            elif edge[1].odpoint == -1: # we do not create route for service firms # deprecated
+            elif edge[1].odpoint == -1: # we do not create route for service firms if explicit_service_firms = False
                 continue
             else:
                 # Find route
                 origin_node = self.odpoint
                 destination_node = edge[1].odpoint
+                # if boat_or_
                 route = transport_network.provide_shortest_route(origin_node,
                     destination_node, route_weight=route_optimization_weight)
                 # Store it into commercial link object

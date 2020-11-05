@@ -355,7 +355,7 @@ def extractOdpointTableFromTransportNodes(transport_nodes):
 
 def rescaleNbFirms(filepath_district_sector_importance,
     sector_table, transport_nodes,
-    district_sector_cutoff, nb_top_district_per_sector, 
+    district_sector_cutoff, nb_top_district_per_sector, explicit_service_firm,
     sectors_to_include="all", districts_to_include="all"):
     """Generate the firm data
 
@@ -378,6 +378,8 @@ def rescaleNbFirms(filepath_district_sector_importance,
         For agricultural sector it is divided by two.
     nb_top_district_per_sector : None or integer
         Nb of extra district to keep based on importance rank per sector
+    explicit_service_firm : Boolean
+        Whether or not to explicitely model service firms
     sectors_to_include : list of string or 'all'
         list of the sectors to include. Default to "all"
     districts_to_include : list of string or 'all'
@@ -452,13 +454,14 @@ def rescaleNbFirms(filepath_district_sector_importance,
         format(od_sector_table.shape[0]/od_sector_table["odpoint"].nunique()))
     
     # Create firm table
-    # To generate the firm table, remove utilities, transport, and services
-    # Should be changed!!! The flow of those firms should be virtual.
-    # But they should be spatially represented! Because they buy real stuff!
-    explicit_service_firm = True
+    # Map the sector type onto the od sector table
+    od_sector_table['sector_type'] = od_sector_table['sector']\
+        .map(sector_table.set_index("sector")['type'])
+
+    # The firm table is created frmo the od_sector_table
+    # If service firm are explicitly modeled, we simply duplicate the od_sector_table to have 2 firms per od node
+    # Otherwise, we need to differentiate between service and nonservice firms
     if explicit_service_firm:
-        od_sector_table['sector_type'] = od_sector_table['sector']\
-            .map(sector_table.set_index("sector")['type'])
         # We want two firms of the same sector in the same OD point,
         # so duplicates rows, generate a unique id
         firm_table = pd.concat(
@@ -466,7 +469,7 @@ def rescaleNbFirms(filepath_district_sector_importance,
             axis = 0, ignore_index=True
         )
 
-    else:
+    else: #service sector added as two firms for the whole country
         service_sectors = sector_table.loc[sector_table['type'].isin(
                 ['utility', 'transport', 'services']
             ), 'sector'].tolist()

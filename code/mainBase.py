@@ -105,8 +105,8 @@ for mode, km in km_per_mode.items():
     logging.info(mode+": {:.0f} km".format(km))
 logging.info('Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
 
-transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.shp"))
-transport_edges.to_file(os.path.join(exp_folder, "transport_edges.shp"))
+transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.geojson"), driver='GeoJSON')
+transport_edges.to_file(os.path.join(exp_folder, "transport_edges.geojson"), driver='GeoJSON')
 
 ### Filter sectors
 logging.info('Filtering the sectors based on their output. '+
@@ -126,6 +126,7 @@ logging.info('Generating the firm table. '+
 firm_table, odpoint_table, filtered_district_sector_table = \
     rescaleNbFirms(filepaths['district_sector_importance'], sector_table, 
         transport_nodes, district_sector_cutoff, nb_top_district_per_sector,
+        explicit_service_firm=explicit_service_firm,
         sectors_to_include=filtered_sectors, districts_to_include=districts_to_include)
 #firm_table.to_csv(os.path.join("output", "Test", 'firm_table.csv'))
 logging.info('Firm and OD tables generated')
