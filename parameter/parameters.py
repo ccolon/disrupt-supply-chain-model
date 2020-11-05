@@ -23,7 +23,7 @@ disruption_analysis = {
 }
 # disruption_analysis = None
 congestion = True
-district_sector_cutoff = 0.05
+district_sector_cutoff = 0.09
 cutoff_sector_output = {
     'type': 'percentage',
     'value': 0.01
@@ -35,6 +35,6 @@ route_optimization_weight = "cost_per_ton" #cost_per_ton time_cost
 
 export = {key: True for key in export.keys()}
 
-cost_repercussion_mode = "type3"
+cost_repercussion_mode = "type1"
 
 logging_level = logging.INFO

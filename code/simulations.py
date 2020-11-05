@@ -38,7 +38,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     country_list, households, observer,
     disruption=None,
     congestion=False,
-    route_optimization_weight="time_cost",
+    explicit_service_firm=True,
     propagate_input_price_change=True,
     rationing_mode="household_first",
     time_step=0,
@@ -102,7 +102,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     allFirmsProduce(firm_list)
     
     allAgentsDeliver(sc_network, firm_list, country_list, transport_network, 
-        rationing_mode, route_optimization_weight, 
+        rationing_mode, explicit_service_firm, 
         monetary_unit_transport_cost="USD", monetary_unit_flow="mUSD",
         cost_repercussion_mode=cost_repercussion_mode)
     

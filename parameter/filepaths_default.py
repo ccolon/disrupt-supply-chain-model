@@ -12,6 +12,7 @@ import os
 ## Transport
 filepaths = {
     "transport_parameters": os.path.join('input', input_folder, 'Transport', 'transport_parameters.yaml'),
+    "transport_modes": os.path.join('input', input_folder, 'Transport', 'transport_modes.csv'),
     "roads_nodes": os.path.join('input', input_folder, 'Transport', 'Roads', 'roads_nodes.shp'),
     "roads_edges": os.path.join('input', input_folder, 'Transport', 'Roads', 'roads_edges.shp'),
     "railways_nodes": os.path.join('input', input_folder, 'Transport', 'Railways', 'railways_nodes.shp'),
@@ -28,7 +29,7 @@ filepaths = {
     "tech_coef": os.path.join('input', input_folder, 'Supply', "tech_coef_matrix.csv"),
     "inventory_duration_targets": os.path.join('input', input_folder, 'Supply', "inventory_duration_targets.csv"),
     ## Trade
-    "entry_points": os.path.join('input', input_folder, 'Trade', "entry_points.csv"),
+    # "entry_points": os.path.join('input', input_folder, 'Trade', "entry_points.csv"),
     "imports": os.path.join('input', input_folder, 'Trade', "import_table.csv"),
     "exports": os.path.join('input', input_folder, 'Trade', "export_table.csv"),
     "transit_matrix": os.path.join('input', input_folder, 'Trade', "transit_matrix.csv"),

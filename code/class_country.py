@@ -3,6 +3,7 @@ import pandas as pd
 import math
 import logging
 
+from class_firm import Firm
 from class_commerciallink import CommercialLink
 from functions import rescale_values, \
     generate_weights_from_list, \
@@ -135,31 +136,82 @@ class Country(object):
                 quantity_to_buy = 0
             graph[edge[0]][self]['object'].order = quantity_to_buy
 
-            
-    def decide_routes(self, graph, transport_network, route_optimization_weight):
-        self.usual_transport_cost = 0
+           
+    def choose_route(self, transport_network, 
+        origin_node, destination_node, 
+        possible_transport_modes):
+        
+        # If possible_transport_modes is "roads", then simply pick the shortest road route
+        if possible_transport_modes == "roads":
+            route = transport_network.provide_shortest_route(origin_node,
+                destination_node, route_weight="road_weight")
+            return route, "roads"
+        
+        # If possible_transport_modes is "intl_multimodes",
+        # pick routes for each modes
+        # and select one route choosing random weighted choice
+        if possible_transport_modes == "intl_multimodes":
+            modes = ['intl_road', 'intl_rail', 'intl_river']
+            routes = { 
+                mode: transport_network.provide_shortest_route(origin_node,
+                    destination_node, route_weight=mode+"_weight")
+                for mode in modes
+            }
+            modes_costs_per_ton = {
+                mode: transport_network.giveRouteCaracteristics(routes[mode])[2]
+                for mode in modes
+            }
+            selected_mode = random.choices(
+                list(modes_costs_per_ton.keys()), 
+                weights=list(modes_costs_per_ton.values()), 
+                k=1
+            )[0]
+            print("Country "+str(self.pid)+" chooses "+selected_mode+
+                " to serve a client located "+str(destination_node))
+            route = routes[selected_mode]
+            return route, selected_mode
+
+        raise ValueError("The transport_mode attributes of the commerical link\
+                          does not belong to ('roads', 'intl_multimodes')")
+
+
+    def decide_initial_routes(self, graph, transport_network, transport_modes):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
-            elif edge[1].odpoint == -1: # we do not create route for service firms 
+            elif edge[1].odpoint == -1: # we do not create route for service firms if explicit_service_firms = False
                 continue
             else:
-                #Find rounte
+                # Get the id of the orign and destination node
                 origin_node = self.odpoint
                 destination_node = edge[1].odpoint
-                route = transport_network.provide_shortest_route(
-                    origin_node, destination_node,
-                    route_weight=route_optimization_weight)
-                #Store it into commercial link object
-                graph[self][edge[1]]['object'].route = route
-                distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
-                graph[self][edge[1]]['object'].route_length = distance
-                graph[self][edge[1]]['object'].route_time_cost = route_time_cost
-                graph[self][edge[1]]['object'].route_cost_per_ton = cost_per_ton
+                # Define the type of transport mode to use
+                cond_from = (transport_modes['from'] == self.pid) #self is a country
+                if isinstance(edge[1], Firm): #see what is the other end
+                    cond_to = (transport_modes['to'] == "domestic")
+                else:
+                    cond_to = (transport_modes['to'] == edge[1].pid)
+                    # we have not implemented the "sector" condition
+                transport_mode = transport_modes.loc[cond_from & cond_to, "transport_mode"].iloc[0]
+                graph[self][edge[1]]['object'].transport_mode = transport_mode
+                route, selected_mode = self.choose_route(
+                    transport_network=transport_network, 
+                    origin_node=origin_node, 
+                    destination_node=destination_node, 
+                    possible_transport_modes=transport_mode
+                )
+                # Store it into commercial link object
+                graph[self][edge[1]]['object'].storeRouteInformation(
+                    route=route,
+                    transport_mode=selected_mode,
+                    main_or_alternative="main",
+                    transport_network=transport_network
+                )
 
             
-    def deliver_products(self, graph, transport_network, route_optimization_weight,
-                        monetary_unit_transport_cost, monetary_unit_flow, cost_repercussion_mode):
+    def deliver_products(self, graph, transport_network,
+                        monetary_unit_transport_cost, monetary_unit_flow, 
+                        cost_repercussion_mode, explicit_service_firm):
         """ The quantity to be delivered is the quantity that was ordered (no rationning takes place)
         """
         self.generalized_transport_cost = 0
@@ -181,7 +233,6 @@ class Country(object):
                     self.send_shipment(
                         graph[self][edge[1]]['object'], 
                         transport_network,
-                        route_optimization_weight,
                         monetary_unit_transport_cost,
                         monetary_unit_flow,
                         cost_repercussion_mode
@@ -191,7 +242,6 @@ class Country(object):
                     self.send_shipment(
                         graph[self][edge[1]]['object'], 
                         transport_network,
-                        route_optimization_weight,
                         monetary_unit_transport_cost,
                         monetary_unit_flow,
                         cost_repercussion_mode
@@ -201,7 +251,7 @@ class Country(object):
                     self.qty_sold += graph[self][edge[1]]['object'].delivery
 
 
-    def send_shipment(self, commercial_link, transport_network, route_optimization_weight,
+    def send_shipment(self, commercial_link, transport_network,
         monetary_unit_transport_cost, monetary_unit_flow, cost_repercussion_mode):
 
         monetary_unit_factor = {
@@ -239,20 +289,25 @@ class Country(object):
         else:
             origin_node = self.odpoint
             destination_node = commercial_link.route[-1][0]
-            route = transport_network.available_subgraph()\
-                                     .provide_shortest_route(
-                                        origin_node, destination_node,
-                                        route_weight=route_optimization_weight)
+            route, selected_mode = self.choose_route(
+                transport_network=transport_network.available_subgraph(), 
+                origin_node=origin_node,
+                destination_node=destination_node, 
+                possible_transport_modes=commercial_link.possible_transport_modes
+            )
             # We evaluate the cost of this new route
             if route is not None:
-                commercial_link.alternative_route = route
-                distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
-                commercial_link.alternative_route_length = distance
-                commercial_link.alternative_route_time_cost = route_time_cost
-                commercial_link.alternative_route_cost_per_ton = cost_per_ton
+                commercial_link.storeRouteInformation(
+                    route=route,
+                    transport_mode=selected_mode,
+                    main_or_alternative="alternative",
+                    transport_network=transport_network
+                )
         
+        # If the alternative route is available, or if we discovered one, we proceed
         if route is not None:
             commercial_link.current_route = 'alternative'
+            # Calculate contribution to generalized transport cost, to usd/tons/tonkms transported
             self.generalized_transport_cost += commercial_link.alternative_route_time_cost + commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_cost_per_ton
             self.usd_transported += commercial_link.delivery
             self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
@@ -260,10 +315,15 @@ class Country(object):
             self.qty_sold += commercial_link.delivery
 
             if cost_repercussion_mode == "type1": #relative cost change with actual bill
-                new_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_cost_per_ton
-                normal_transport_bill = commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.route_cost_per_ton
-                added_transport_bill = max(new_transport_bill - normal_transport_bill, 0)
-                relative_cost_change = added_transport_bill/normal_transport_bill
+                # Calculate relative increase in routing cost
+                new_transport_bill = commercial_link.delivery \
+                    / (self.usd_per_ton/factor) \
+                    * commercial_link.alternative_route_cost_per_ton
+                normal_transport_bill = commercial_link.delivery \
+                    / (self.usd_per_ton/factor) \
+                    * commercial_link.route_cost_per_ton
+                relative_cost_change = max(new_transport_bill - normal_transport_bill, 0)/normal_transport_bill
+                # Translate that into an increase in transport costs in the balance sheet
                 relative_price_change_transport = 0.2 * relative_cost_change
                 total_relative_price_change = relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
@@ -282,7 +342,6 @@ class Country(object):
                 # With that, we deliver the shipment
                 total_relative_price_change = relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
-                commercial_link.current_route = 'alternative'
 
             transport_network.transport_shipment(commercial_link)
             # Print information

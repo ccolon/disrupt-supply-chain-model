@@ -96,15 +96,18 @@ else:
     transport_edges = pickle.load(open(os.path.join('tmp', pickle_transEdg_filename), 'rb'))
     transport_nodes = pickle.load(open(os.path.join('tmp', pickle_transNod_filename), 'rb'))
     logging.info('Transport network'+extra_road_log+' generated from temp file.')
+# Generate weight
+logging.info('Generating shortest-path weights on transport network')
+T.defineWeights(route_optimization_weight)
+# Print data on km per modes
 km_per_mode = pd.DataFrame({"km": nx.get_edge_attributes(T, "km"), "type": nx.get_edge_attributes(T, "type")})
-
 km_per_mode = km_per_mode.groupby('type')['km'].sum().to_dict()
 logging.info("Total length of transport network is: "+
     "{:.0f} km".format(sum(km_per_mode.values())))
 for mode, km in km_per_mode.items():
     logging.info(mode+": {:.0f} km".format(km))
 logging.info('Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
-
+# Export transport network
 transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.geojson"), driver='GeoJSON')
 transport_edges.to_file(os.path.join(exp_folder, "transport_edges.geojson"), driver='GeoJSON')
 
@@ -185,7 +188,7 @@ country_list = createCountries(filepaths['imports'], filepaths['exports'],
     time_resolution=time_resolution,
     target_units=monetary_units_in_model, input_units=monetary_units_inputed)
 logging.info('Country_list created: '+str([country.pid for country in country_list]))
-# Linking the countries to the the transport network via their transit point.
+# [Deprecated] Linking the countries to the the transport network via their transit point.
 # This creates "virtual nodes" in the transport network that corresponds to the countries.
 # We create a copy of the transport network without such nodes, it will be used for plotting purposes
 # for country in country_list:
@@ -231,13 +234,14 @@ if export['sc_network_summary']:
 ### Coupling transportation network T and production network G
 logging.info('The supplier--buyer graph is being connected to the transport network')
 logging.info('Each B2B and transit edge is being linked to a route of the transport network')
+transport_modes = pd.read_csv(filepaths['transport_modes'])
 logging.info('Routes for transit flows and import flows are being selected by trading countries finding routes to their clients')
 for country in country_list:
-    country.decide_routes(G, T, route_optimization_weight)
+    country.decide_initial_routes(G, T, transport_modes)
 logging.info('Routes for export flows and B2B domestic flows are being selected by Tanzanian firms finding routes to their clients')
 for firm in firm_list:
     if firm.sector_type not in ['services', 'utility', 'transport']:
-        firm.decide_routes(G, T, route_optimization_weight)
+        firm.decide_initial_routes(G, T, transport_modes)
 logging.info('The supplier--buyer graph is now connected to the transport network')
 
 logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
@@ -277,7 +281,7 @@ if disruption_analysis is None:
         country_list=country_list, households=households,
         disruption=None,
         congestion=congestion,
-        route_optimization_weight=route_optimization_weight,
+        explicit_service_firm=explicit_service_firm,
         propagate_input_price_change=propagate_input_price_change,
         rationing_mode=rationing_mode,
         observer=obs,
@@ -334,7 +338,7 @@ else:
             country_list=country_list, households=households,
             disruption=None,
             congestion=congestion,
-            route_optimization_weight=route_optimization_weight,
+            explicit_service_firm=explicit_service_firm,
             propagate_input_price_change=propagate_input_price_change,
             rationing_mode=rationing_mode,
             observer=obs,
@@ -380,7 +384,7 @@ else:
                 country_list=country_list, households=households,
                 disruption=disruption,
                 congestion=congestion,
-                route_optimization_weight=route_optimization_weight,
+                explicit_service_firm=explicit_service_firm,
                 propagate_input_price_change=propagate_input_price_change,
                 rationing_mode=rationing_mode,
                 observer=obs,

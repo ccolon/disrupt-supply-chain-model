@@ -37,7 +37,7 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
         edges.index.name = 'index'
         edges['type'] = transport_mode
 
-        # Add additional edges, if any
+        # Add additional road edges, if any
         if (transport_mode == "roads") and additional_roads:
             offset_edge_id = edges['id'].max()+1
             new_road_edges = gpd.read_file(filepaths['extra_roads_edges'])
@@ -795,8 +795,7 @@ def rescaleMonetaryValues(values, time_resolution="week", target_units="mUSD", i
 
 
 def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, 
-    nodes,
-    present_sectors, countries_to_include='all', 
+    nodes, present_sectors, countries_to_include='all', 
     time_resolution="week", target_units="mUSD", input_units="USD"):
     """Create the countries
 
@@ -811,8 +810,8 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     filepath_transit_matrix : string
         path to transit matrix csv
 
-    filepath_entry_points : string
-        path to the table of transit points csv
+    nodes : pandas.DataFrame
+        transport nodes
 
     present_sectors : list of string
         list which sectors are included. Output of the rescaleFirms functions.

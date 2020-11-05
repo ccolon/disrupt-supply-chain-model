@@ -13,9 +13,11 @@ class CommercialLink(object):
         self.route_length = 1
         self.route_time_cost = 0
         self.route_cost_per_ton = 0
+        self.route_mode = "road"
         self.supplier_id = supplier_id
         self.buyer_id = buyer_id
         self.eq_price = 1
+        self.possible_transport_modes = "roads"
         
         # Variable
         self.current_route = 'main'
@@ -27,6 +29,7 @@ class CommercialLink(object):
         self.alternative_route_length = 1
         self.alternative_route_time_cost = 0
         self.alternative_route_cost_per_ton = 0
+        self.alternative_route_mode = None
         self.price = 1
 
     def print_info(self):
@@ -51,5 +54,28 @@ class CommercialLink(object):
         self.price = 1
         
         
+    def storeRouteInformation(self, route, transport_mode, 
+        main_or_alternative, transport_network):
 
+        distance, route_time_cost, cost_per_ton = transport_network.giveRouteCaracteristics(route)
+
+        if main_or_alternative == "main":
+            self.route = route
+            self.route_mode = transport_mode
+            self.route_length = distance
+            self.route_time_cost = route_time_cost
+            self.route_cost_per_ton = cost_per_ton
     
+        elif main_or_alternative == "alternative":
+            self.alternative_route = route
+            self.alternative_route_mode = transport_mode
+            self.alternative_route_length = distance
+            self.alternative_route_time_cost = route_time_cost
+            self.alternative_route_cost_per_ton = cost_per_ton
+
+            switching_cost = 0.05
+            if self.alternative_route_mode != self.route_mode:
+                self.alternative_route_cost_per_ton * (1 + switching_cost)
+
+        else:
+            raise ValueError("'main_or_alternative' is not in ['main', 'alternative']")

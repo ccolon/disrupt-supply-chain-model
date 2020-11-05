@@ -121,12 +121,46 @@ class TransportNetwork(nx.Graph):
         return congestion_time_cost
         
         
-    # def giveRouteDistance(self, route):
-    #     distance = 0
-    #     for segment in route:
-    #         if len(segment) == 2: #only edges have distances 
-    #             distance += self[segment[0]][segment[1]]['km']
-    #     return distance
+    def defineWeights(self, route_optimization_weight):
+        '''Define the edge weights used by firms and countries to decide routes
+
+        We generate different weights for different mode of transportation defined
+        in the commercial links. So far, we defined:
+            - dom_road_weight: domestic roads (used between national firms)
+            - intl_road_weight: internatinal route using primarily roads (maritime + roads)
+            - intl_rail_weight: internatinal route using primarily ails (maritime + rails + roads)
+            - intl_river_weight: internatinal route using primarily waterways (maritime + river + roads)
+
+        The idea is to weight more or less different part of the network 
+        to "force" agent to choose one mode or the other.
+
+        We start with the "route_optimization_weight" chosen as parameter (e.g., cost_per_ton, travel_time)
+        Then, we add a hugen burden if we want agents to avoid certain edges
+        Or we set the weight to 0 if we want to favor it
+        '''
+        burden_weight = 1e10
+        for edge in self.edges:
+            self[edge[0]][edge[1]]['road_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
+            self[edge[0]][edge[1]]['intl_road_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
+            self[edge[0]][edge[1]]['intl_rail_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
+            self[edge[0]][edge[1]]['intl_river_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
+            # road_weight => burden on everything else but roads
+            if self[edge[0]][edge[1]]['type'] != "roads":
+                self[edge[0]][edge[1]]['road_weight'] = burden_weight
+            # intl_road_weight => burden on rails and waterways
+            if self[edge[0]][edge[1]]['type'] in ['railways', 'waterways']:
+                self[edge[0]][edge[1]]['intl_road_weight'] = burden_weight
+            # intl_rail_weight => cost is 0 for rail, huge for waterways
+            if self[edge[0]][edge[1]]['type'] == 'railways':
+                self[edge[0]][edge[1]]['intl_rail_weight'] = 0
+            if self[edge[0]][edge[1]]['type'] == 'waterways':
+                self[edge[0]][edge[1]]['intl_rail_weight'] = burden_weight
+            # intl_river_weight => cost is 0 for river, huge for railways
+            if self[edge[0]][edge[1]]['type'] == 'waterways':
+                self[edge[0]][edge[1]]['intl_river_weight'] = 0
+            if self[edge[0]][edge[1]]['type'] == 'railways':
+                self[edge[0]][edge[1]]['intl_river_weight'] = burden_weight
+
     
     
     def locate_firms_on_nodes(self, firm_list):
