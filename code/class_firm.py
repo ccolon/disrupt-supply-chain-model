@@ -284,8 +284,8 @@ class Firm(object):
                 weights=list(modes_costs_per_ton.values()), 
                 k=1
             )[0]
-            print("Firm "+str(self.pid)+" chooses "+selected_mode+
-                " to serve a client located "+str(destination_node))
+            # print("Firm "+str(self.pid)+" chooses "+selected_mode+
+            #     " to serve a client located "+str(destination_node))
             route = routes[selected_mode]
             return route, selected_mode
 
