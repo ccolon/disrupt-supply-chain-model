@@ -106,6 +106,8 @@ class Observer(object):
         -------
         Nothing
         """
+
+        # Get disrupted nodes and edges
         self.disrupted_nodes[time_step] = [
             node 
             for node, val in nx.get_node_attributes(transport_network, "disruption_duration").items() 
@@ -116,6 +118,8 @@ class Observer(object):
             for edge, val in nx.get_edge_attributes(transport_network, "disruption_duration").items() 
             if val > 0
         ]
+
+        # Store flow
         flow_types = flow_types or ['total']
         self.flows_snapshot[time_step] = {
             str(transport_network[edge[0]][edge[1]]['id']): {
@@ -123,8 +127,11 @@ class Observer(object):
                 for flow_type in flow_types
             }
             for edge in transport_network.edges
-            if transport_network[edge[0]][edge[1]]['type'] != 'virtual'
+            if transport_network[edge[0]][edge[1]]['type'] != 'virtual' #deprecated, no virtual edges anymore
         }
+        for edge in transport_network.edges:
+            self.flows_snapshot[time_step][str(transport_network[edge[0]][edge[1]]['id'])]['total_tons'] = \
+                transport_network[edge[0]][edge[1]]["current_load"]
         
         
     def compute_sectoral_IO_table(self, graph):

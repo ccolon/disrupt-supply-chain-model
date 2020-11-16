@@ -261,3 +261,8 @@ route_optimization_weight = "time_cost"
 
 # How to translate an increase in transport cost into increase in prices
 cost_repercussion_mode = "type1"
+
+# Whether or not to account for transport network capacity
+# If True, then each shipment adds a "load" on transport edges 
+# it the load exceed the capacity, then the edges cannot be used anymore
+account_capacity = True

@@ -197,7 +197,7 @@ logging.info('Country_list created: '+str([country.pid for country in country_li
 ### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
 # Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
 # In this case, we use an average.
-firm_list, country_list = loadTonUsdEquivalence(sector_table, firm_list, country_list)
+firm_list, country_list, sector_to_usdPerTon = loadTonUsdEquivalence(sector_table, firm_list, country_list)
 
 ### Create agents: Households
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
@@ -231,17 +231,21 @@ logging.info('The nodes and edges of the supplier--buyer have been created')
 if export['sc_network_summary']:
     exportSupplyChainNetworkSummary(G, firm_list, exp_folder)
 
+logging.info('Compute the orders on each supplier--buyer link')
+setInitialSCConditions(T, G, firm_list, 
+    country_list, households, initialization_mode="equilibrium")
+
 ### Coupling transportation network T and production network G
 logging.info('The supplier--buyer graph is being connected to the transport network')
 logging.info('Each B2B and transit edge is being linked to a route of the transport network')
 transport_modes = pd.read_csv(filepaths['transport_modes'])
 logging.info('Routes for transit flows and import flows are being selected by trading countries finding routes to their clients')
 for country in country_list:
-    country.decide_initial_routes(G, T, transport_modes)
+    country.decide_initial_routes(G, T, transport_modes, account_capacity, monetary_units_in_model)
 logging.info('Routes for export flows and B2B domestic flows are being selected by Tanzanian firms finding routes to their clients')
 for firm in firm_list:
     if firm.sector_type not in ['services', 'utility', 'transport']:
-        firm.decide_initial_routes(G, T, transport_modes)
+        firm.decide_initial_routes(G, T, transport_modes, account_capacity, monetary_units_in_model)
 logging.info('The supplier--buyer graph is now connected to the transport network')
 
 logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
@@ -281,6 +285,7 @@ if disruption_analysis is None:
         country_list=country_list, households=households,
         disruption=None,
         congestion=congestion,
+        route_optimization_weight=route_optimization_weight,
         explicit_service_firm=explicit_service_firm,
         propagate_input_price_change=propagate_input_price_change,
         rationing_mode=rationing_mode,
@@ -338,6 +343,7 @@ else:
             country_list=country_list, households=households,
             disruption=None,
             congestion=congestion,
+            route_optimization_weight=route_optimization_weight,
             explicit_service_firm=explicit_service_firm,
             propagate_input_price_change=propagate_input_price_change,
             rationing_mode=rationing_mode,
@@ -384,6 +390,7 @@ else:
                 country_list=country_list, households=households,
                 disruption=disruption,
                 congestion=congestion,
+                route_optimization_weight=route_optimization_weight,
                 explicit_service_firm=explicit_service_firm,
                 propagate_input_price_change=propagate_input_price_change,
                 rationing_mode=rationing_mode,

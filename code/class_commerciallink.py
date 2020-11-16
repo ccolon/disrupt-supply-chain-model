@@ -33,13 +33,18 @@ class CommercialLink(object):
         self.price = 1
 
     def print_info(self):
-        print("\nCommercial Link from "+str(self.supplier_id)+" to "+str(self.buyer_id)+":")
-        print("route:", self.route)
-        print("alternative route:", self.alternative_route)
-        print("product:", self.product)
-        print("order:", self.order)
-        print("delivery:", self.delivery)
-        print("payment:", self.payment)
+        # print("\nCommercial Link from "+str(self.supplier_id)+" to "+str(self.buyer_id)+":")
+        # print("route:", self.route)
+        # print("alternative route:", self.alternative_route)
+        # print("product:", self.product)
+        # print("order:", self.order)
+        # print("delivery:", self.delivery)
+        # print("payment:", self.payment)
+        attribute_to_print = [a for a in dir(self) if not a.startswith('__') and not callable(getattr(self, a))]
+        for attribute in attribute_to_print:
+            print(attribute+": "+str(getattr(self, attribute)))
+            print("\n")
+
         
         
     def reset_variables(self):

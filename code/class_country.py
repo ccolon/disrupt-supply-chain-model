@@ -9,7 +9,8 @@ from functions import rescale_values, \
     generate_weights_from_list, \
     determine_suppliers_and_weights,\
     identify_firms_in_each_sector,\
-    identify_special_transport_nodes
+    identify_special_transport_nodes,\
+    transformUSDtoTons
 
 class Country(object):
 
@@ -148,34 +149,51 @@ class Country(object):
             return route, "roads"
         
         # If possible_transport_modes is "intl_multimodes",
-        # pick routes for each modes
-        # and select one route choosing random weighted choice
+        capacity_burden = 1e5
         if possible_transport_modes == "intl_multimodes":
+            # pick routes for each modes
             modes = ['intl_road', 'intl_rail', 'intl_river']
             routes = { 
                 mode: transport_network.provide_shortest_route(origin_node,
                     destination_node, route_weight=mode+"_weight")
                 for mode in modes
             }
-            modes_costs_per_ton = {
-                mode: transport_network.giveRouteCaracteristics(routes[mode])[2]
-                for mode in modes
+            # compute associated weight and capacity_weight
+            modes_weight = { 
+                mode: {
+                    mode+"_weight": transport_network.sum_indicator_on_route(route, mode+"_weight"),
+                    "weight": transport_network.sum_indicator_on_route(route, "weight"),
+                    "capacity_weight": transport_network.sum_indicator_on_route(route, "capacity_weight")
+                }
+                for mode, route in routes.items()
             }
+            # remove any mode which is over capacity (where capacity_weight > capacity_burden)
+            modes_weight = { 
+                mode: weight_dic['weight']
+                for mode, weight_dic in modes_weight.items()
+                if weight_dic['capacity_weight'] < capacity_burden
+            }
+            if len(modes_weight) == 0:
+                logging.warning("All transport modes are over capacity, no route selected!")
+                return None
+            # and select one route choosing random weighted choice
             selected_mode = random.choices(
-                list(modes_costs_per_ton.keys()), 
-                weights=list(modes_costs_per_ton.values()), 
+                list(modes_weight.keys()), 
+                weights=list(modes_weight.values()), 
                 k=1
             )[0]
+            route = routes[selected_mode]
             # print("Country "+str(self.pid)+" chooses "+selected_mode+
             #     " to serve a client located "+str(destination_node))
-            route = routes[selected_mode]
+            # print(transport_network.give_route_mode(route))
             return route, selected_mode
 
         raise ValueError("The transport_mode attributes of the commerical link\
                           does not belong to ('roads', 'intl_multimodes')")
 
 
-    def decide_initial_routes(self, graph, transport_network, transport_modes):
+    def decide_initial_routes(self, graph, transport_network, transport_modes,
+        account_capacity, monetary_unit_flow):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
@@ -207,6 +225,12 @@ class Country(object):
                     main_or_alternative="main",
                     transport_network=transport_network
                 )
+                # Update the "current load" on the transport network
+                # if current_load exceed burden, then add burden to the weight
+                if account_capacity:
+                    new_load_in_usd = graph[self][edge[1]]['object'].order
+                    new_load_in_tons = transformUSDtoTons(new_load_in_usd, monetary_unit_flow, self.usd_per_ton)
+                    transport_network.update_load_on_route(route, new_load_in_tons)
 
             
     def deliver_products(self, graph, transport_network,
@@ -272,7 +296,7 @@ class Country(object):
             # If the normal route is available, we can send the shipment as usual and pay the usual price
             commercial_link.current_route = 'main'
             commercial_link.price = commercial_link.eq_price
-            transport_network.transport_shipment(commercial_link)
+            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
             
             self.generalized_transport_cost += commercial_link.route_time_cost + commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.route_cost_per_ton
             self.usd_transported += commercial_link.delivery
@@ -290,7 +314,7 @@ class Country(object):
             origin_node = self.odpoint
             destination_node = commercial_link.route[-1][0]
             route, selected_mode = self.choose_route(
-                transport_network=transport_network.available_subgraph(), 
+                transport_network=transport_network.get_undisrupted_network(), 
                 origin_node=origin_node,
                 destination_node=destination_node, 
                 possible_transport_modes=commercial_link.possible_transport_modes
@@ -343,7 +367,7 @@ class Country(object):
                 total_relative_price_change = relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
-            transport_network.transport_shipment(commercial_link)
+            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
             # Print information
             logging.debug("Country "+str(self.pid)+": found an alternative route to client "+
                 str(commercial_link.buyer_id)+", it is costlier by "+

@@ -23,7 +23,7 @@ disruption_analysis = {
 }
 # disruption_analysis = None
 congestion = True
-district_sector_cutoff = 0.09
+district_sector_cutoff = 0.03
 cutoff_sector_output = {
     'type': 'percentage',
     'value': 0.01

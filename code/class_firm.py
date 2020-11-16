@@ -1,4 +1,7 @@
-from functions import purchase_planning_function, production_function, evaluate_inventory_duration, generate_weights, compute_distance_from_arcmin, rescale_values
+from functions import purchase_planning_function, production_function, \
+                      evaluate_inventory_duration, generate_weights, \
+                      compute_distance_from_arcmin, rescale_values, \
+                      transformUSDtoTons
 from class_commerciallink import CommercialLink
 import random
 import networkx as nx
@@ -258,7 +261,15 @@ class Firm(object):
     def choose_route(self, transport_network, 
         origin_node, destination_node, 
         possible_transport_modes):
-        
+        '''There are 3 types of weight to select routes
+        - 'weight': the weight itself (e.g., cost per ton)
+        - 'weight_with_capacity': same as weight, but burden added on edges on which 
+        load > capacity. Burden is arbitrary, made to force agents to avoid it
+        - 'road_weight', 'intl_road_weight', 'intl_rail_weight', 'intl_river_weight':
+        same as weight, but burden added on specific edges to force firm choose a
+        specific transport mode
+        '''
+
         # If possible_transport_modes is "roads", then simply pick the shortest road route
         if possible_transport_modes == "roads":
             route = transport_network.provide_shortest_route(origin_node,
@@ -266,22 +277,37 @@ class Firm(object):
             return route, "roads"
         
         # If possible_transport_modes is "intl_multimodes",
-        # pick routes for each modes
-        # and select one route choosing random weighted choice
+        capacity_burden = 1e5
         if possible_transport_modes == "intl_multimodes":
+            # pick routes for each modes
             modes = ['intl_road', 'intl_rail', 'intl_river']
             routes = { 
                 mode: transport_network.provide_shortest_route(origin_node,
                     destination_node, route_weight=mode+"_weight")
                 for mode in modes
             }
-            modes_costs_per_ton = {
-                mode: transport_network.giveRouteCaracteristics(routes[mode])[2]
-                for mode in modes
+            # compute associated weight and capacity_weight
+            modes_weight = { 
+                mode: {
+                    mode+"_weight": transport_network.sum_indicator_on_route(route, mode+"_weight"),
+                    "weight": transport_network.sum_indicator_on_route(route, "weight"),
+                    "capacity_weight": transport_network.sum_indicator_on_route(route, "capacity_weight")
+                }
+                for mode, route in routes.items()
             }
+            # remove any mode which is over capacity (where capacity_weight > capacity_burden)
+            modes_weight = { 
+                mode: weight_dic['weight']
+                for mode, weight_dic in modes_weight.items()
+                if weight_dic['capacity_weight'] < capacity_burden
+            }
+            if len(modes_weight) == 0:
+                logging.warning("All transport modes are over capacity, no route selected!")
+                return None
+            # and select one route choosing random weighted choice
             selected_mode = random.choices(
-                list(modes_costs_per_ton.keys()), 
-                weights=list(modes_costs_per_ton.values()), 
+                list(modes_weight.keys()), 
+                weights=list(modes_weight.values()), 
                 k=1
             )[0]
             # print("Firm "+str(self.pid)+" chooses "+selected_mode+
@@ -293,7 +319,8 @@ class Firm(object):
                           does not belong to ('roads', 'intl_multimodes')")
 
 
-    def decide_initial_routes(self, graph, transport_network, transport_modes):
+    def decide_initial_routes(self, graph, transport_network, transport_modes,
+        account_capacity, monetary_unit_flow):
         for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
@@ -312,6 +339,7 @@ class Firm(object):
                     # we have not implemented the "sector" condition
                 transport_mode = transport_modes.loc[cond_from & cond_to, "transport_mode"].iloc[0]
                 graph[self][edge[1]]['object'].transport_mode = transport_mode
+                # Choose the route and the corresponding mode
                 route, selected_mode = self.choose_route(
                     transport_network=transport_network, 
                     origin_node=origin_node, 
@@ -325,6 +353,12 @@ class Firm(object):
                     main_or_alternative="main",
                     transport_network=transport_network
                 )
+                # Update the "current load" on the transport network
+                # if current_load exceed burden, then add burden to the weight
+                if account_capacity:
+                    new_load_in_usd = graph[self][edge[1]]['object'].order
+                    new_load_in_tons = transformUSDtoTons(new_load_in_usd, monetary_unit_flow, self.usd_per_ton)
+                    transport_network.update_load_on_route(route, new_load_in_tons)
     
     
     def calculate_client_share_in_sales(self):
@@ -635,15 +669,15 @@ class Firm(object):
             # and pay the usual price
             commercial_link.price = commercial_link.eq_price * (1 + self.delta_price_input)
             commercial_link.current_route = 'main'
-            transport_network.transport_shipment(commercial_link)
+            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
             self.product_stock -= commercial_link.delivery
             self.generalized_transport_cost += \
                 commercial_link.route_time_cost \
-                + commercial_link.delivery / (self.usd_per_ton/factor) \
+                + transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
                 * commercial_link.route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) \
+            self.tons_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton)
+            self.tonkm_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
                                     * commercial_link.route_length
             self.finance['costs']['transport'] += \
                 self.clients[commercial_link.buyer_id]['share'] \
@@ -661,7 +695,7 @@ class Firm(object):
             origin_node = self.odpoint
             destination_node = commercial_link.route[-1][0]
             route, selected_mode = self.choose_route(
-                transport_network=transport_network.available_subgraph(), 
+                transport_network=transport_network.get_undisrupted_network(), 
                 origin_node=origin_node,
                 destination_node=destination_node, 
                 possible_transport_modes=commercial_link.possible_transport_modes
@@ -680,21 +714,19 @@ class Firm(object):
             commercial_link.current_route = 'alternative'
             # Calculate contribution to generalized transport cost, to usd/tons/tonkms transported
             self.generalized_transport_cost += commercial_link.alternative_route_time_cost \
-                + commercial_link.delivery / (self.usd_per_ton/factor) \
+                + transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
                 * commercial_link.alternative_route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) \
+            self.tons_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton)
+            self.tonkm_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
                 * commercial_link.alternative_route_length
         
             # We translate this real cost into transport cost
             if cost_repercussion_mode == "type1": #relative cost change with actual bill
                 # Calculate relative increase in routing cost
-                new_transport_bill = commercial_link.delivery \
-                    / (self.usd_per_ton/factor) \
+                new_transport_bill = transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
                     * commercial_link.alternative_route_cost_per_ton
-                normal_transport_bill = commercial_link.delivery \
-                    / (self.usd_per_ton/factor) \
+                normal_transport_bill = transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
                     * commercial_link.route_cost_per_ton
                 relative_cost_change = max(new_transport_bill - normal_transport_bill, 0)/normal_transport_bill
                 # Translate that into an increase in transport costs in the balance sheet
@@ -726,9 +758,11 @@ class Firm(object):
                 if (commercial_link.price is None) or (commercial_link.price is np.nan):
                     raise ValueError("Price should be a float, it is "+str(commercial_link.price))
                 
-                logging.debug('Firm '+str(self.pid)+": qty "+str(commercial_link.delivery / (self.usd_per_ton/factor))+'tons'+
-                " increase in route cost per ton "+ str((commercial_link.alternative_route_cost_per_ton-commercial_link.route_cost_per_ton)/commercial_link.route_cost_per_ton)+
-                " increased bill mUSD "+str(added_costmUSD_per_mUSD*commercial_link.delivery))
+                logging.debug('Firm '+str(self.pid)+
+                    ": qty "+transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton)+'tons'+
+                    " increase in route cost per ton "+ str((commercial_link.alternative_route_cost_per_ton-commercial_link.route_cost_per_ton)/commercial_link.route_cost_per_ton)+
+                    " increased bill mUSD "+str(added_costmUSD_per_mUSD*commercial_link.delivery)
+                )
                 
             elif cost_repercussion_mode == "type3":
                 relative_cost_change = \
@@ -748,7 +782,7 @@ class Firm(object):
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
             # With that, we deliver the shipment
-            transport_network.transport_shipment(commercial_link)
+            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
             self.product_stock -= commercial_link.delivery
             # Print information
             logging.debug("Firm "+str(self.pid)+": found an alternative route to "+
@@ -826,7 +860,7 @@ class Firm(object):
                     graph[self][edge[1]]['object'].price = new_price
                         
                     # Retransfer shipment
-                    transport_network.transport_shipment(graph[self][edge[1]]['object'])
+                    transport_network.transport_shipment(graph[self][edge[1]]['object'], monetary_unit_flow, self.usd_per_ton)
 
 
     def check_route_avaibility(self, commercial_link, transport_network, which_route='main'):

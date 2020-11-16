@@ -38,6 +38,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     country_list, households, observer,
     disruption=None,
     congestion=False,
+    route_optimization_weight="cost_per_ton",
     explicit_service_firm=True,
     propagate_input_price_change=True,
     rationing_mode="household_first",
@@ -88,6 +89,8 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     -------
     Nothing
     """
+    transport_network.reset_current_loads(route_optimization_weight)
+
     if (disruption is not None) and (time_step == 1):
         transport_network.disrupt_roads(disruption)
 

@@ -420,4 +420,15 @@ def recover_from_sectoral_shocks(firm_list):
         firm.production_capacity = firm.eq_production_capacity
 
 
+def transformUSDtoTons(monetary_flow, monetary_unit, usd_per_ton):
+    # Load monetary units
+    monetary_unit_factor = {
+        "mUSD": 1e6,
+        "kUSD": 1e3,
+        "USD": 1
+    }
+    factor = monetary_unit_factor[monetary_unit]
 
+    #sector_to_usdPerTon = sector_table.set_index('sector')['usd_per_ton']
+
+    return monetary_flow / (usd_per_ton/factor)

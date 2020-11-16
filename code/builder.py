@@ -50,6 +50,18 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
         # Compute how much it costs to transport one USD worth of good on each edge
         edges = computeCostTravelTimeEdges(edges, transport_params, edge_type=transport_mode)
 
+        # Define capacity (to be defined in the input data directly, in tons per week)
+        dic_capacity = {
+            "roads": 1000000,
+            "railways": 20000,
+            "waterways": 40000,
+            "maritime": 1e12,
+            "multimodal": 1e12
+        }
+        edges['capacity'] = dic_capacity[transport_mode]
+        if (transport_mode == "roads"):
+            edges.loc[edges['surface']=="unpaved", "capacity"] = 100000
+
     # Return nodes, edges, or both
     if any_node and any_edge:
         return nodes, edges
@@ -758,7 +770,7 @@ def loadTonUsdEquivalence(sector_table, firm_list, country_list):
         firm.usd_per_ton = sector_to_usdPerTon[firm.sector]
     for country in country_list:
         country.usd_per_ton = sector_to_usdPerTon.mean()
-    return firm_list, country_list
+    return firm_list, country_list, sector_to_usdPerTon #should disappear, we want only sector_to_usdPerTon
 
 
 def rescaleMonetaryValues(values, time_resolution="week", target_units="mUSD", input_units="USD"):
