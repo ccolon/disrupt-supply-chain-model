@@ -1,3 +1,5 @@
+import logging
+
 # Indicate the subfolder of the input folder that contains the input files
 input_folder = "Tanzania"
 
@@ -73,6 +75,9 @@ export = {
     # Whether or not to export a csv summarizing some topological caracteristics of the supply chain network
     "sc_network_summary": True
 }
+
+# Logging level
+logging_level = logging.INFO
 
 # List of transport modes to include
 transport_modes = ['roads']

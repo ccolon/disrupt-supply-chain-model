@@ -37,4 +37,4 @@ export = {key: True for key in export.keys()}
 
 cost_repercussion_mode = "type1"
 
-logging_level = logging.INFO
+# logging_level = logging.DEBUG

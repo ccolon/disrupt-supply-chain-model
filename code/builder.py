@@ -26,6 +26,8 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
     # Load nodes
     if any_node:
         nodes = gpd.read_file(filepaths[transport_mode+'_nodes'])
+        # if 'index' in nodes.columns: #remove any column named "index". Seems to create issues
+        #     nodes = nodes.drop('index', axis=1)
         nodes.index = nodes['id']
         nodes.index.name = 'index'
         nodes['type'] = transport_mode
@@ -33,6 +35,8 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
     # Load edges
     if any_edge:
         edges = gpd.read_file(filepaths[transport_mode+'_edges'])
+        # if 'index' in edges.columns: #remove any column named "index". Seems to create issues
+        #     edges = edges.drop('index', axis=1)
         edges.index = edges['id']
         edges.index.name = 'index'
         edges['type'] = transport_mode
@@ -41,6 +45,8 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
         if (transport_mode == "roads") and additional_roads:
             offset_edge_id = edges['id'].max()+1
             new_road_edges = gpd.read_file(filepaths['extra_roads_edges'])
+            # if 'index' in new_road_edges.columns: #remove any column named "index". Seems to create issues
+            #     new_road_edges = new_road_edges.drop('index', axis=1)
             new_road_edges['id'] = new_road_edges['id'] + offset_edge_id
             new_road_edges.index = new_road_edges['id']
             new_road_edges['type'] = 'road'
@@ -55,15 +61,15 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
         time_resolution = "week"
 
         dic_capacity = {
-            "roads": 1000000,
-            "railways": 20000,
-            "waterways": 40000,
-            "maritime": 1e12,
-            "multimodal": 1e12
+            "roads": 1000000*52,
+            "railways": 20000*52,
+            "waterways": 40000*52,
+            "maritime": 1e12*52,
+            "multimodal": 1e12*52
         }
         edges['capacity'] = dic_capacity[transport_mode] / periods[time_resolution]
         if (transport_mode == "roads"):
-            edges.loc[edges['surface']=="unpaved", "capacity"] = 100000
+            edges.loc[edges['surface']=="unpaved", "capacity"] = 100000*52 / periods[time_resolution]
 
     # Return nodes, edges, or both
     if any_node and any_edge:
