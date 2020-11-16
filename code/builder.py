@@ -51,6 +51,9 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
         edges = computeCostTravelTimeEdges(edges, transport_params, edge_type=transport_mode)
 
         # Define capacity (to be defined in the input data directly, in tons per week)
+        periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
+        time_resolution = "week"
+
         dic_capacity = {
             "roads": 1000000,
             "railways": 20000,
@@ -58,7 +61,7 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
             "maritime": 1e12,
             "multimodal": 1e12
         }
-        edges['capacity'] = dic_capacity[transport_mode]
+        edges['capacity'] = dic_capacity[transport_mode] / periods[time_resolution]
         if (transport_mode == "roads"):
             edges.loc[edges['surface']=="unpaved", "capacity"] = 100000
 

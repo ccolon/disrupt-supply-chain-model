@@ -332,8 +332,8 @@ class TransportNetwork(nx.Graph):
         '''
         capacity_burden = 1e5
         all_edges = [item for item in route if len(item) == 2]
-        if 'railways' in self.give_route_mode(route):
-            print("self[2586][2579]['current_load']", self[2586][2579]['current_load'])
+        # if 'railways' in self.give_route_mode(route):
+        #     print("self[2586][2579]['current_load']", self[2586][2579]['current_load'])
         for edge in all_edges:
             # Add the load
             self[edge[0]][edge[1]]['current_load'] += load
