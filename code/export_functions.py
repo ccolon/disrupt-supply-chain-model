@@ -109,12 +109,21 @@ def exportTransportFlowsLayer(observer, export_folder, time_step, transport_edge
     #extract flows of the desired time step
     flow_table = pd.DataFrame(observer.flows_snapshot[time_step]).transpose()
     flow_table['id'] = flow_table.index.astype(int)
-    transport_edges = transport_edges.merge(flow_table, on='id', how='left')
-    transport_edges.to_file(
+    # print(flow_table)
+    transport_edges_with_flows = transport_edges.merge(flow_table, on='id', how='left')
+    transport_edges_with_flows.to_file(
         os.path.join(export_folder, 'flow_table_'+str(time_step)+'.geojson'), 
         driver='GeoJSON'
     )
     
+def exportShipmentsLayer(observer, export_folder, time_step, transport_edges):
+    #extract flows of the desired time step
+    output_layer = transport_edges.copy()
+    output_layer['shipments'] = output_layer['id'].map(observer.shipments_snapshot[time_step])
+    output_layer.to_file(
+        os.path.join(export_folder, 'shipments_'+str(time_step)+'.geojson'), 
+        driver='GeoJSON'
+    )
 
 def exportAgentData(observer, export_folder):
     agent_data = {

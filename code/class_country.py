@@ -245,6 +245,8 @@ class Country(object):
         self.qty_sold = 0
         for edge in graph.out_edges(self):
             graph[self][edge[1]]['object'].delivery = graph[self][edge[1]]['object'].order
+            graph[self][edge[1]]['object'].delivery_in_tons = \
+                transformUSDtoTons(graph[self][edge[1]]['object'].order, monetary_unit_flow, self.usd_per_ton)
 
             explicit_service_firm = True
             if explicit_service_firm:
@@ -296,12 +298,13 @@ class Country(object):
             # If the normal route is available, we can send the shipment as usual and pay the usual price
             commercial_link.current_route = 'main'
             commercial_link.price = commercial_link.eq_price
-            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
+            transport_network.transport_shipment(commercial_link)
             
-            self.generalized_transport_cost += commercial_link.route_time_cost + commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.route_cost_per_ton
+            self.generalized_transport_cost += commercial_link.route_time_cost \
+                + commercial_link.delivery_in_tons * commercial_link.route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) *commercial_link.route_length
+            self.tons_transported += commercial_link.delivery_in_tons
+            self.tonkm_transported += commercial_link.delivery_in_tons *commercial_link.route_length
             self.qty_sold += commercial_link.delivery
             return 0
 
@@ -332,20 +335,17 @@ class Country(object):
         if route is not None:
             commercial_link.current_route = 'alternative'
             # Calculate contribution to generalized transport cost, to usd/tons/tonkms transported
-            self.generalized_transport_cost += commercial_link.alternative_route_time_cost + commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_cost_per_ton
+            self.generalized_transport_cost += commercial_link.alternative_route_time_cost \
+                + commercial_link.delivery_in_tons * commercial_link.alternative_route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += commercial_link.delivery / (self.usd_per_ton/factor)
-            self.tonkm_transported += commercial_link.delivery / (self.usd_per_ton/factor) * commercial_link.alternative_route_length
+            self.tons_transported += commercial_link.delivery_in_tons
+            self.tonkm_transported += commercial_link.delivery_in_tons * commercial_link.alternative_route_length
             self.qty_sold += commercial_link.delivery
 
             if cost_repercussion_mode == "type1": #relative cost change with actual bill
                 # Calculate relative increase in routing cost
-                new_transport_bill = commercial_link.delivery \
-                    / (self.usd_per_ton/factor) \
-                    * commercial_link.alternative_route_cost_per_ton
-                normal_transport_bill = commercial_link.delivery \
-                    / (self.usd_per_ton/factor) \
-                    * commercial_link.route_cost_per_ton
+                new_transport_bill = commercial_link.delivery_in_tons * commercial_link.alternative_route_cost_per_ton
+                normal_transport_bill = commercial_link.delivery_in_tons * commercial_link.route_cost_per_ton
                 relative_cost_change = max(new_transport_bill - normal_transport_bill, 0)/normal_transport_bill
                 # Translate that into an increase in transport costs in the balance sheet
                 relative_price_change_transport = 0.2 * relative_cost_change
@@ -367,7 +367,7 @@ class Country(object):
                 total_relative_price_change = relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
-            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
+            transport_network.transport_shipment(commercial_link)
             # Print information
             logging.debug("Country "+str(self.pid)+": found an alternative route to client "+
                 str(commercial_link.buyer_id)+", it is costlier by "+

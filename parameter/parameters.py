@@ -23,12 +23,12 @@ disruption_analysis = {
 }
 # disruption_analysis = None
 congestion = True
-district_sector_cutoff = 0.03
+district_sector_cutoff = 0.003*30
 cutoff_sector_output = {
     'type': 'percentage',
-    'value': 0.01
+    'value': 0.01*2
 }
-io_cutoff = 0.02
+io_cutoff = 0.02*2
 transport_modes = ['roads', 'railways', 'waterways', 'maritime']
 
 route_optimization_weight = "cost_per_ton" #cost_per_ton time_cost

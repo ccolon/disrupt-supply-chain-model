@@ -36,6 +36,7 @@ class Observer(object):
                                    columns=["firm_"+str(firm.pid) for firm in firm_list]+['average'], 
                                    data=0)
         self.flows_snapshot = {}
+        self.shipments_snapshot = {}
         self.disrupted_nodes = {}
         self.disrupted_edges = {}
         self.households_extra_spending = 0
@@ -87,7 +88,8 @@ class Observer(object):
         }
         
         
-    def collect_transport_flows(self, transport_network, time_step, flow_types=None):
+    def collect_transport_flows(self, transport_network, time_step, flow_types=None,
+        collect_shipments=False):
         """
         Store the transport flow at that time step.
 
@@ -101,6 +103,8 @@ class Observer(object):
             The time step to index these data
         flow_types : list of string
             See TransportNetwork.compute_flow_per_segment() for details
+        collect_shipments : Boolean
+            Whether or not to store all indivual shipments
 
         Returns
         -------
@@ -130,8 +134,16 @@ class Observer(object):
             if transport_network[edge[0]][edge[1]]['type'] != 'virtual' #deprecated, no virtual edges anymore
         }
         for edge in transport_network.edges:
-            self.flows_snapshot[time_step][str(transport_network[edge[0]][edge[1]]['id'])]['total_tons'] = \
+            edge_id = transport_network[edge[0]][edge[1]]['id']
+            self.flows_snapshot[time_step][str(edge_id)]['total_tons'] = \
                 transport_network[edge[0]][edge[1]]["current_load"]
+
+        # Store shipments
+        if collect_shipments:
+            self.shipments_snapshot[time_step] = {
+                transport_network[edge[0]][edge[1]]['id']: transport_network[edge[0]][edge[1]]["shipments"]
+                for edge in transport_network.edges
+            }
         
         
     def compute_sectoral_IO_table(self, graph):

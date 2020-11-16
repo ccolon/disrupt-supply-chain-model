@@ -594,6 +594,8 @@ class Firm(object):
         # For each client, we define the quantity to deliver then send the shipment 
         for edge in graph.out_edges(self):
             graph[self][edge[1]]['object'].delivery = quantity_to_deliver[edge[1].pid]
+            graph[self][edge[1]]['object'].delivery_in_tons = \
+                transformUSDtoTons(quantity_to_deliver[edge[1].pid], monetary_unit_flow, self.usd_per_ton)
             
             if explicit_service_firm:
                 # If the client is B2C
@@ -669,16 +671,13 @@ class Firm(object):
             # and pay the usual price
             commercial_link.price = commercial_link.eq_price * (1 + self.delta_price_input)
             commercial_link.current_route = 'main'
-            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
+            transport_network.transport_shipment(commercial_link)
             self.product_stock -= commercial_link.delivery
-            self.generalized_transport_cost += \
-                commercial_link.route_time_cost \
-                + transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
-                * commercial_link.route_cost_per_ton
+            self.generalized_transport_cost += commercial_link.route_time_cost \
+                + commercial_link.delivery_in_tons * commercial_link.route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton)
-            self.tonkm_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
-                                    * commercial_link.route_length
+            self.tons_transported += commercial_link.delivery_in_tons
+            self.tonkm_transported += commercial_link.delivery_in_tons * commercial_link.route_length
             self.finance['costs']['transport'] += \
                 self.clients[commercial_link.buyer_id]['share'] \
                 * self.eq_finance['costs']['transport']
@@ -717,17 +716,14 @@ class Firm(object):
                 + transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
                 * commercial_link.alternative_route_cost_per_ton
             self.usd_transported += commercial_link.delivery
-            self.tons_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton)
-            self.tonkm_transported += transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
-                * commercial_link.alternative_route_length
+            self.tons_transported += commercial_link.delivery_in_tons
+            self.tonkm_transported += commercial_link.delivery_in_tons * commercial_link.alternative_route_length
         
             # We translate this real cost into transport cost
             if cost_repercussion_mode == "type1": #relative cost change with actual bill
                 # Calculate relative increase in routing cost
-                new_transport_bill = transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
-                    * commercial_link.alternative_route_cost_per_ton
-                normal_transport_bill = transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton) \
-                    * commercial_link.route_cost_per_ton
+                new_transport_bill = commercial_link.delivery_in_tons * commercial_link.alternative_route_cost_per_ton
+                normal_transport_bill = commercial_link.delivery_in_tons * commercial_link.route_cost_per_ton
                 relative_cost_change = max(new_transport_bill - normal_transport_bill, 0)/normal_transport_bill
                 # Translate that into an increase in transport costs in the balance sheet
                 self.finance['costs']['transport'] += \
@@ -759,7 +755,7 @@ class Firm(object):
                     raise ValueError("Price should be a float, it is "+str(commercial_link.price))
                 
                 logging.debug('Firm '+str(self.pid)+
-                    ": qty "+transformUSDtoTons(commercial_link.delivery, monetary_unit_flow, self.usd_per_ton)+'tons'+
+                    ": qty "+commercial_link.delivery_in_tons+'tons'+
                     " increase in route cost per ton "+ str((commercial_link.alternative_route_cost_per_ton-commercial_link.route_cost_per_ton)/commercial_link.route_cost_per_ton)+
                     " increased bill mUSD "+str(added_costmUSD_per_mUSD*commercial_link.delivery)
                 )
@@ -782,7 +778,7 @@ class Firm(object):
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
             # With that, we deliver the shipment
-            transport_network.transport_shipment(commercial_link, monetary_unit_flow, self.usd_per_ton)
+            transport_network.transport_shipment(commercial_link)
             self.product_stock -= commercial_link.delivery
             # Print information
             logging.debug("Firm "+str(self.pid)+": found an alternative route to "+
@@ -860,7 +856,7 @@ class Firm(object):
                     graph[self][edge[1]]['object'].price = new_price
                         
                     # Retransfer shipment
-                    transport_network.transport_shipment(graph[self][edge[1]]['object'], monetary_unit_flow, self.usd_per_ton)
+                    transport_network.transport_shipment(graph[self][edge[1]]['object'])
 
 
     def check_route_avaibility(self, commercial_link, transport_network, which_route='main'):

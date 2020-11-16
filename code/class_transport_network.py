@@ -284,7 +284,7 @@ class TransportNetwork(nx.Graph):
         #return subset of self
             
             
-    def transport_shipment(self, commercial_link, monetary_unit, usd_per_ton):
+    def transport_shipment(self, commercial_link):
         # Select the route to transport the shimpment: main or alternative
         if commercial_link.current_route == 'main':
             route_to_take = commercial_link.route
@@ -300,6 +300,7 @@ class TransportNetwork(nx.Graph):
                     "from": commercial_link.supplier_id,
                     "to": commercial_link.buyer_id,
                     "quantity": commercial_link.delivery,
+                    "tons": commercial_link.delivery_in_tons,
                     "product_type": commercial_link.product,
                     "flow_category": commercial_link.category,
                     "price": commercial_link.price
@@ -309,14 +310,14 @@ class TransportNetwork(nx.Graph):
                     "from": commercial_link.supplier_id,
                     "to": commercial_link.buyer_id,
                     "quantity": commercial_link.delivery,
+                    "tons": commercial_link.delivery_in_tons,
                     "product_type": commercial_link.product,
                     "flow_category": commercial_link.category,
                     "price": commercial_link.price
                 }
 
         # Propagate the load
-        quantity_in_tons = transformUSDtoTons(commercial_link.delivery, monetary_unit, usd_per_ton)
-        self.update_load_on_route(route_to_take, quantity_in_tons)
+        self.update_load_on_route(route_to_take, commercial_link.delivery_in_tons)
 
 
     def update_load_on_route(self, route, load):

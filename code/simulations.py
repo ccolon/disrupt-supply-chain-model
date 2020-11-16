@@ -123,12 +123,17 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
             country.add_congestion_malus2(sc_network, transport_network)
 
     if (time_step in [0,1,2]) and (export_flows): #should be done at this stage, while the goods are on their way
+        collect_shipments = True
         transport_network.compute_flow_per_segment(flow_types_to_export)
         observer.collect_transport_flows(transport_network, 
-            time_step=time_step, flow_types=flow_types_to_export)
+            time_step=time_step, flow_types=flow_types_to_export,
+            collect_shipments=collect_shipments)
         exportTransportFlows(observer, export_folder)
         exportTransportFlowsLayer(observer, export_folder, time_step=time_step, 
             transport_edges=transport_edges)
+        if collect_shipments:
+            exportShipmentsLayer(observer, export_folder, time_step=time_step, 
+                transport_edges=transport_edges)
     
     if (time_step == 0) and (export_sc_flow_analysis): #should be done at this stage, while the goods are on their way
         analyzeSupplyChainFlows(sc_network, firm_list, export_folder)
