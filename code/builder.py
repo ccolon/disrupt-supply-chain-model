@@ -56,20 +56,24 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
         # Compute how much it costs to transport one USD worth of good on each edge
         edges = computeCostTravelTimeEdges(edges, transport_params, edge_type=transport_mode)
 
-        # Define capacity (to be defined in the input data directly, in tons per week)
+        # Adapt capacity (given in year) to time resolution
         periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
         time_resolution = "week"
+        edges['capacity'] = edges['capacity'] / periods[time_resolution]
 
-        dic_capacity = {
-            "roads": 1000000*52,
-            "railways": 20000*52,
-            "waterways": 40000*52,
-            "maritime": 1e12*52,
-            "multimodal": 1e12*52
-        }
-        edges['capacity'] = dic_capacity[transport_mode] / periods[time_resolution]
-        if (transport_mode == "roads"):
-            edges.loc[edges['surface']=="unpaved", "capacity"] = 100000*52 / periods[time_resolution]
+        # When there is no capacity, it means that there is no limitation
+        unlimited_capacity = 1e9 #tons per year
+        edges.loc[edges['capacity'].isnull(), 'capacity'] = unlimited_capacity
+        # dic_capacity = {
+        #     "roads": 1000000*52,
+        #     "railways": 20000*52,
+        #     "waterways": 40000*52,
+        #     "maritime": 1e12*52,
+        #     "multimodal": 1e12*52
+        # }
+        # edges['capacity'] = dic_capacity[transport_mode] / periods[time_resolution]
+        # if (transport_mode == "roads"):
+        #     edges.loc[edges['surface']=="unpaved", "capacity"] = 100000*52 / periods[time_resolution]
 
     # Return nodes, edges, or both
     if any_node and any_edge:
@@ -99,8 +103,8 @@ def computeCostTravelTimeEdges(edges, transport_params, edge_type):
         raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
 
     # A2. Forwarding charges at borders
-    edges.loc[edges['special']=="custom", "cost_per_ton"] = \
-        edges.loc[edges['special']=="custom", "type"] \
+    edges.loc[edges['special'].str.contains("custom", na=False), "cost_per_ton"] = \
+        edges.loc[edges['special'].str.contains("custom", na=False), "type"] \
         .map(transport_params['custom_cost'])
 
 
@@ -122,8 +126,8 @@ def computeCostTravelTimeEdges(edges, transport_params, edge_type):
         raise ValueError("'edge_type' should be 'roads', 'railways', 'waterways', or 'multimodal'")
 
     # B.1b. Add crossing border time
-    edges.loc[edges['special']=="custom", "travel_time"] = \
-        edges.loc[edges['special']=="custom", "type"] \
+    edges.loc[edges['special'].str.contains("custom", na=False), "travel_time"] = \
+        edges.loc[edges['special'].str.contains("custom", na=False), "type"] \
         .map(transport_params['custom_time'])
 
 
@@ -156,6 +160,10 @@ def computeCostTravelTimeEdges(edges, transport_params, edge_type):
     # B.4. Finally, add up both cost to get the cost of time of each road edges
     edges['time_cost'] = edges['cost_travel_time'] + edges['cost_variability']
 
+
+    # C. Compute an aggregate cost
+    # It is "cost_per_ton" + "time_cost"
+    edges['agg_cost'] = edges['time_cost'] / 2 + edges['cost_per_ton']
     return edges
 
 

@@ -145,6 +145,58 @@ class Observer(object):
                 for edge in transport_network.edges
             }
         
+
+    def collect_specific_flows(self, transport_network):
+        self.specific_flows = {}
+        multimodal_flows_to_collect = [
+            'roads-maritime-shv',
+            'roads-maritime-vnm',
+            'railways-maritime',
+            'waterways-maritime',
+        ]
+        special_flows_to_collect = [
+            'poipet',
+            'bavet'
+        ]
+        flow_types = ['import', 'export', 'transit']
+        for edge in transport_network.edges:
+            if transport_network[edge[0]][edge[1]]['multimodes'] in multimodal_flows_to_collect:
+                self.specific_flows[transport_network[edge[0]][edge[1]]['multimodes']] = {
+                    flow_type:  transport_network[edge[0]][edge[1]]["flow_"+str(flow_type)] 
+                    for flow_type in flow_types
+                }
+            if transport_network[edge[0]][edge[1]]['special']:
+                for special in special_flows_to_collect:
+                    if special in transport_network[edge[0]][edge[1]]['special']:
+                        self.specific_flows[special] = {
+                            flow_type:  transport_network[edge[0]][edge[1]]["flow_"+str(flow_type)] 
+                            for flow_type in flow_types
+                        }
+
+        # code to display key metric on multimodal internatinonal flow
+        df = pd.DataFrame(self.specific_flows).transpose()
+        # print(df)
+        total_import = df.loc[multimodal_flows_to_collect, 'import'].sum()
+        # print(total_import)
+        total_export = df.loc[multimodal_flows_to_collect, 'export'].sum()
+        total = total_import + total_export
+        # print(total)
+        res = {}
+        for flow in multimodal_flows_to_collect:
+            # print(df.loc[flow, "import"])
+            # print(df.loc[flow, "import"] / total_import)
+            res[flow] = {
+                "import": df.loc[flow, "import"] / total_import,
+                "export": df.loc[flow, "export"] / total_export,
+                "total": df.loc[flow, ["import", "export"]].sum() / total
+            }
+        res["total"] = {
+            "import": total_import,
+            "export": total_export,
+            "total": total
+        }
+        print(pd.DataFrame(res).transpose())
+
         
     def compute_sectoral_IO_table(self, graph):
         for edge in graph.edges:

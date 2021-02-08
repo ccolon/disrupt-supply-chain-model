@@ -105,6 +105,11 @@ def exportTransportFlows(observer, export_folder):
         json.dump(observer.flows_snapshot, jsonfile)
 
 
+def exportSpecificFlows(observer, export_folder):
+    export_filename = os.path.join(export_folder, 'specific_flows.csv')
+    pd.DataFrame(observer.specific_flows).transpose().to_csv(export_filename)
+
+
 def exportTransportFlowsLayer(observer, export_folder, time_step, transport_edges):
     #extract flows of the desired time step
     flow_table = pd.DataFrame(observer.flows_snapshot[time_step]).transpose()

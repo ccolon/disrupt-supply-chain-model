@@ -280,7 +280,7 @@ class Firm(object):
         capacity_burden = 1e5
         if possible_transport_modes == "intl_multimodes":
             # pick routes for each modes
-            modes = ['intl_road', 'intl_rail', 'intl_river']
+            modes = ['intl_road_shv', 'intl_road_vnm', 'intl_rail', 'intl_river']
             routes = { 
                 mode: transport_network.provide_shortest_route(origin_node,
                     destination_node, route_weight=mode+"_weight")
@@ -296,6 +296,10 @@ class Firm(object):
                 for mode, route in routes.items()
             }
             # remove any mode which is over capacity (where capacity_weight > capacity_burden)
+            for mode, route in routes.items():
+                if mode != "intl_rail":
+                    if transport_network.check_edge_in_route(route, (2610, 2589)):
+                        print("(2610, 2589) in", mode)
             modes_weight = { 
                 mode: weight_dic['weight']
                 for mode, weight_dic in modes_weight.items()
@@ -305,9 +309,11 @@ class Firm(object):
                 logging.warning("All transport modes are over capacity, no route selected!")
                 return None
             # and select one route choosing random weighted choice
+            selection_weights = rescale_values(list(modes_weight.values()), minimum=0, maximum=0.5)
+            selection_weights = [1-w for w in selection_weights]
             selected_mode = random.choices(
                 list(modes_weight.keys()), 
-                weights=list(modes_weight.values()), 
+                weights=selection_weights, 
                 k=1
             )[0]
             # print("Firm "+str(self.pid)+" chooses "+selected_mode+

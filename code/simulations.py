@@ -131,12 +131,17 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         exportTransportFlows(observer, export_folder)
         exportTransportFlowsLayer(observer, export_folder, time_step=time_step, 
             transport_edges=transport_edges)
+        collect_specific_flows = True
+        if collect_specific_flows:
+            observer.collect_specific_flows(transport_network)
+            exportSpecificFlows(observer, export_folder)
         if collect_shipments:
             exportShipmentsLayer(observer, export_folder, time_step=time_step, 
                 transport_edges=transport_edges)
     
     if (time_step == 0) and (export_sc_flow_analysis): #should be done at this stage, while the goods are on their way
         analyzeSupplyChainFlows(sc_network, firm_list, export_folder)
+
     
     allAgentsReceiveProducts(sc_network, firm_list, households, 
         country_list, transport_network)

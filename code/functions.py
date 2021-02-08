@@ -355,13 +355,13 @@ def allFirmsProduce(firm_list):
 
 def allAgentsDeliver(G, firm_list, country_list, T, rationing_mode, explicit_service_firm,
     monetary_unit_transport_cost="USD", monetary_unit_flow="mUSD", cost_repercussion_mode="type1"):
-    for firm in firm_list:
-        firm.deliver_products(G, T, rationing_mode,
+    for country in country_list:
+        country.deliver_products(G, T,
             monetary_unit_transport_cost="USD", monetary_unit_flow="mUSD", 
             cost_repercussion_mode=cost_repercussion_mode, 
             explicit_service_firm=explicit_service_firm)
-    for country in country_list:
-        country.deliver_products(G, T,
+    for firm in firm_list:
+        firm.deliver_products(G, T, rationing_mode,
             monetary_unit_transport_cost="USD", monetary_unit_flow="mUSD", 
             cost_repercussion_mode=cost_repercussion_mode, 
             explicit_service_firm=explicit_service_firm)

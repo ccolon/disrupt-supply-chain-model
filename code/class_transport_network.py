@@ -1,5 +1,6 @@
 
 import networkx as nx
+import pandas as pd
 import geopandas as gpd
 import logging
 
@@ -22,7 +23,7 @@ class TransportNetwork(nx.Graph):
         # Selecting data
         edge_attributes = ['id', "type", 'surface', "geometry", "class", "km", 'special', "name",
             "multimodes", "capacity",
-            "cost_per_ton", "travel_time", "time_cost", 'cost_travel_time', 'cost_variability']
+            "cost_per_ton", "travel_time", "time_cost", 'cost_travel_time', 'cost_variability', 'agg_cost']
         edge_data = all_edges_data.loc[edge_id, edge_attributes].to_dict()
         end_ids = all_edges_data.loc[edge_id, ["end1", "end2"]].tolist()
         # Creating the start and end nodes
@@ -134,7 +135,8 @@ class TransportNetwork(nx.Graph):
             - mode_weight: we generate different weights for different mode of transportation 
             defined in the commercial links. So far, we defined:
                 - dom_road_weight: domestic roads (used between national firms)
-                - intl_road_weight: internatinal route using primarily roads (maritime + roads)
+                - intl_road_shv_weight: internatinal route using primarily roads via shv (maritime + roads)
+                - intl_road_vnm_weight: internatinal route using primarily roads via vnm (maritime + roads)
                 - intl_rail_weight: internatinal route using primarily ails (maritime + rails + roads)
                 - intl_river_weight: internatinal route using primarily waterways (maritime + river + roads)
 
@@ -148,42 +150,53 @@ class TransportNetwork(nx.Graph):
         '''
         road_burden = 1e6
         other_mode_burden = 1e10
-        self.mode_weights = ['road_weight', 'intl_road_weight', 
-            'intl_rail_weight', 'intl_river_weight']
+        self.mode_weights = ['road_weight', 'intl_road_shv_weight', 
+            'intl_road_vnm_weight', 'intl_rail_weight', 'intl_river_weight']
         for edge in self.edges:
             self[edge[0]][edge[1]]['weight'] = self[edge[0]][edge[1]][route_optimization_weight]
             self[edge[0]][edge[1]]['capacity_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
             self[edge[0]][edge[1]]['road_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
-            self[edge[0]][edge[1]]['intl_road_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
+            self[edge[0]][edge[1]]['intl_road_shv_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
+            self[edge[0]][edge[1]]['intl_road_vnm_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
             self[edge[0]][edge[1]]['intl_rail_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
             self[edge[0]][edge[1]]['intl_river_weight'] = self[edge[0]][edge[1]][route_optimization_weight]
-            # # road_weight => other_mode_burden on everything else but roads
-            # if self[edge[0]][edge[1]]['type'] != "roads":
-            #     self[edge[0]][edge[1]]['road_weight'] += other_mode_burden
-            # # intl_road_weight => other_mode_burden on rails and waterways
-            # if self[edge[0]][edge[1]]['type'] in ['railways', 'waterways']:
-            #     self[edge[0]][edge[1]]['intl_road_weight'] += other_mode_burden
-            # # intl_rail_weight => road_burden for roads, other_mode_burden for waterways
-            # if self[edge[0]][edge[1]]['type'] == 'roads':
-            #     self[edge[0]][edge[1]]['intl_rail_weight'] += road_burden
-            # if self[edge[0]][edge[1]]['type'] == 'waterways':
-            #     self[edge[0]][edge[1]]['intl_rail_weight'] += other_mode_burden
-            # # intl_river_weight => road_burden for roads, other_mode_burden for railways
-            # if self[edge[0]][edge[1]]['type'] == 'roads':
-            #     self[edge[0]][edge[1]]['intl_river_weight'] += road_burden
-            # if self[edge[0]][edge[1]]['type'] == 'railways':
-            #     self[edge[0]][edge[1]]['intl_river_weight'] += other_mode_burden
 
             # road_weight => burden any multimodal links
             multimodal_links_to_exclude_dic = {
-                "road_weight": ['railways-maritime', 'waterways-maritime', 
-                'roads-railways', 'roads-waterways', 'roads-maritime'],
-                "intl_road_weight": ['railways-maritime', 'waterways-maritime', 
-                'roads-railways', 'roads-waterways'],
-                "intl_rail_weight": ['waterways-maritime', 'roads-maritime',
-                'roads-waterways'],
-                "intl_river_weight": ['railways-maritime', 'roads-maritime',
-                'roads-railways'],                
+                "road_weight": [
+                    'railways-maritime', 
+                    'waterways-maritime', 
+                    'roads-railways', 
+                    'roads-waterways',
+                    'roads-maritime-shv',
+                    'roads-maritime-vnm'
+                ],
+                "intl_road_shv_weight": [
+                    'railways-maritime', 
+                    'waterways-maritime', 
+                    'roads-railways', 
+                    'roads-waterways',
+                    'roads-maritime-vnm'
+                ],
+                "intl_road_vnm_weight": [
+                    'railways-maritime', 
+                    'waterways-maritime', 
+                    'roads-railways', 
+                    'roads-waterways',
+                    'roads-maritime-shv'
+                ],
+                "intl_rail_weight": [
+                    'waterways-maritime',
+                    'roads-maritime-shv',
+                    'roads-maritime-vnm',
+                    'roads-waterways'
+                ],
+                "intl_river_weight": [
+                    'railways-maritime',
+                    'roads-maritime-shv',
+                    'roads-maritime-vnm',
+                    'roads-railways'
+                ],                
             }
             for mode, multimodal_links_to_exclude in multimodal_links_to_exclude_dic.items():
                 if self[edge[0]][edge[1]]['multimodes'] in multimodal_links_to_exclude:
@@ -227,7 +240,7 @@ class TransportNetwork(nx.Graph):
             return None
 
 
-    def sum_indicator_on_route(self, route, indicator):
+    def sum_indicator_on_route(self, route, indicator, detail_type=False):
         total_indicator = 0
         all_edges = [item for item in route if len(item) == 2]
         # if indicator == "intl_rail_weight":
@@ -236,7 +249,24 @@ class TransportNetwork(nx.Graph):
             # if indicator == "intl_rail_weight":
             #     print(edge, self[edge[0]][edge[1]][indicator])
             total_indicator += self[edge[0]][edge[1]][indicator]
+
+        # If detail_type == True, we print the indicator per edge categories
+        details = []
+        if detail_type:
+            for edge in all_edges:
+                new_edge = {}
+                new_edge['id'] = self[edge[0]][edge[1]]['id']
+                new_edge['type'] = self[edge[0]][edge[1]]['type']
+                new_edge['multimodes'] = self[edge[0]][edge[1]]['multimodes']
+                new_edge['special'] = self[edge[0]][edge[1]]['special']
+                new_edge[indicator] = self[edge[0]][edge[1]][indicator]
+                details += [new_edge]
+            details = pd.DataFrame(details).fillna('N/A')
+            # print(details)
+            detail_per_cat = details.groupby(['type', 'multimodes', 'special'])[indicator].sum()
+            print(detail_per_cat)
         return total_indicator
+
 
 
     def get_undisrupted_network(self):
@@ -321,6 +351,7 @@ class TransportNetwork(nx.Graph):
 
 
     def update_load_on_route(self, route, load):
+
         '''Affect a load to a route
 
         The current_load attribute of each edge in the route will be incread by the new load.
@@ -330,16 +361,24 @@ class TransportNetwork(nx.Graph):
         mode_weight and the capacity_weight.
         This will prevent firms from choosing this route
         '''
+        # logging.info("Edge (2610, 2589): current_load "+str(self[2610][2589]['current_load']))
         capacity_burden = 1e5
         all_edges = [item for item in route if len(item) == 2]
         # if 'railways' in self.give_route_mode(route):
         #     print("self[2586][2579]['current_load']", self[2586][2579]['current_load'])
         for edge in all_edges:
+            # if (edge[0] == 2610) & (edge[1] == 2589):
+            #     logging.info('Edge '+str(edge)+": current_load "+str(self[edge[0]][edge[1]]['current_load']))
+            # check that the edge to be loaded is not already over capacity
+            # if (self[edge[0]][edge[1]]['current_load'] > self[edge[0]][edge[1]]['capacity']):
+            #     logging.info('Edge '+str(edge)+" ("+self[edge[0]][edge[1]]['type']\
+            #         +") is already over capacity and will be loaded more!")
             # Add the load
             self[edge[0]][edge[1]]['current_load'] += load
             # If it exceeds capacity, add the capacity_burden to both the mode_weight and the capacity_weight
             if (self[edge[0]][edge[1]]['current_load'] > self[edge[0]][edge[1]]['capacity']):
-                logging.info('Edge '+str(edge)+" has exceeded its capacity")
+                logging.info('Edge '+str(edge)+" ("+self[edge[0]][edge[1]]['type']\
+                    +") has exceeded its capacity")
                 self[edge[0]][edge[1]]["capacity_weight"] += capacity_burden
                 for mode_weight in self.mode_weights:
                     self[edge[0]][edge[1]][mode_weight] += capacity_burden
@@ -367,6 +406,14 @@ class TransportNetwork(nx.Graph):
         for edge in all_edges:
             modes += [self[edge[0]][edge[1]]['type']]
         return list(dict.fromkeys(modes))
+
+
+    def check_edge_in_route(self, route, searched_edge):
+        all_edges = [item for item in route if len(item) == 2]
+        for edge in all_edges:
+            if (searched_edge[0] == edge[0]) and (searched_edge[1] == edge[1]):
+                return True
+        return False
 
 
     def remove_shipment(self, commercial_link):
