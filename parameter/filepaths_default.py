@@ -38,6 +38,8 @@ filepaths = {
     "sector_table": os.path.join('input', input_folder, 'Supply', "sector_table.csv"),
     "tech_coef": os.path.join('input', input_folder, 'Supply', "tech_coef_matrix.csv"),
     "inventory_duration_targets": os.path.join('input', input_folder, 'Supply', "inventory_duration_targets.csv"),
+    "sector_cutoffs": os.path.join('input', input_folder, 'Supply', "sector_firm_cutoffs.csv"),
+    "adminunit_economic_data": os.path.join('input', input_folder, 'Supply', "commune_economic_data.geojson"),
     ## Trade
     # "entry_points": os.path.join('input', input_folder, 'Trade', "entry_points.csv"),
     "imports": os.path.join('input', input_folder, 'Trade', "import_table.csv"),

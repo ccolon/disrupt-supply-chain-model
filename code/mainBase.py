@@ -118,20 +118,31 @@ logging.info('Filtering the sectors based on their output. '+
 sector_table = pd.read_csv(filepaths['sector_table'])
 filtered_sectors = filterSector(sector_table, cutoff=cutoff_sector_output['value'],
     cutoff_type=cutoff_sector_output['type'],
-    sectors_to_include=sectors_to_include)
+    sectors_to_include=sectors_to_include,
+    sectors_to_exclude=sectors_to_exclude)
 logging.info('The filtered sectors are: '+str(filtered_sectors))
 
 ### Create firms
-# Filter district sector combination
-logging.info('Generating the firm table. '+
-    'Districts included: '+str(districts_to_include)+
-    ', district sector cutoff: '+str(district_sector_cutoff))
-firm_table, odpoint_table, filtered_district_sector_table = \
-    rescaleNbFirms(filepaths['district_sector_importance'], sector_table, 
-        transport_nodes, district_sector_cutoff, nb_top_district_per_sector,
-        explicit_service_firm=explicit_service_firm,
-        sectors_to_include=filtered_sectors, districts_to_include=districts_to_include)
-#firm_table.to_csv(os.path.join("output", "Test", 'firm_table.csv'))
+if firm_sampling_mode == "district_sector_importance":
+    # Filter district sector combination
+    logging.info('Generating the firm table. '+
+        'Districts included: '+str(districts_to_include)+
+        ', district sector cutoff: '+str(district_sector_cutoff))
+    firm_table, odpoint_table, filtered_district_sector_table = \
+        rescaleNbFirms(filepaths['district_sector_importance'], sector_table, 
+            transport_nodes, district_sector_cutoff, nb_top_district_per_sector,
+            explicit_service_firm=explicit_service_firm,
+            sectors_to_include=filtered_sectors, districts_to_include=districts_to_include)
+    # Use directely the economic data at administrative unit level
+elif firm_sampling_mode == "economic_adminunit_data":
+    firm_table = defineFirmsFromGranularEcoData(
+        filepath_adminunit_economic_data=filepaths['adminunit_economic_data'], 
+        filepath_sector_cutoffs=filepaths['sector_cutoffs'],
+        sectors_to_include=filtered_sectors,
+        transport_nodes=transport_nodes,
+        filepath_sector_table=filepaths['sector_table']
+    )
+    print(firm_table.head())
 logging.info('Firm and OD tables generated')
 
 # Creating the firms
@@ -200,6 +211,7 @@ logging.info('Country_list created: '+str([country.pid for country in country_li
 firm_list, country_list, sector_to_usdPerTon = loadTonUsdEquivalence(sector_table, firm_list, country_list)
 
 ### Create agents: Households
+### WORKS UNTIL THERE!
 logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
 firm_table = defineFinalDemand(firm_table, odpoint_table, 
     filepath_population=filepaths['population'], filepath_final_demand=filepaths['final_demand'],

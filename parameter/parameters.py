@@ -26,6 +26,8 @@ disruption_analysis = {
 disruption_analysis = None
 congestion = True
 
+# cutoffs
+sectors_to_exclude = ['ADM']
 district_sector_cutoff = 0.003
 cutoff_sector_output = {
     'type': 'percentage',

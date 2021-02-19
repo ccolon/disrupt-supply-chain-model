@@ -329,7 +329,7 @@ def createTransportNetwork(transport_modes, filepaths, transport_params, extra_r
 
     
 def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage", 
-    sectors_to_include="all"):
+    sectors_to_include="all", sectors_to_exclude=None):
     """Filter the sector table to sector whose output is largen than the cutoff value
 
     Parameters
@@ -347,6 +347,7 @@ def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage",
     -------
     list of filtered sectors
     """
+    # Filter out sectors
     if cutoff_type == "percentage":
         rel_output = sector_table['output'] / sector_table['output'].sum()
         filtered_sectors = sector_table.loc[rel_output > cutoff, "sector"].tolist()
@@ -360,16 +361,21 @@ def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage",
     if len(filtered_sectors) == 0:
         raise ValueError("The cutoff value is so high that it filtered out all sectors")
 
+    # Force to include some sector
     if isinstance(sectors_to_include, list):
         if (len(set(sectors_to_include) - set(filtered_sectors)) > 0):
             selected_but_filteredout_sectors = list(set(sectors_to_include) - set(filtered_sectors))
             logging.info("The following sectors were specifically selected but were filtered out"+
                 str(selected_but_filteredout_sectors))
+        filtered_sectors = list(set(sectors_to_include) & set(filtered_sectors))
 
-        return list(set(sectors_to_include) & set(filtered_sectors))
+    # Force to exclude some sectors
+    if sectors_to_exclude:
+        filtered_sectors = [sector for sector in filtered_sectors if sector not in sectors_to_exclude]
+    if len(filtered_sectors) == 0:
+        raise ValueError("We excluded all sectors")
 
-    else:
-        return filtered_sectors
+    return filtered_sectors
 
 
 def extractOdpointTableFromTransportNodes(transport_nodes):
@@ -380,6 +386,164 @@ def extractOdpointTableFromTransportNodes(transport_nodes):
     table_odpoints = table_odpoints[["id", "district", "long", "lat"]].rename(columns={'id': 'odpoint'})
     table_odpoints['nb_points_same_district'] = table_odpoints['district'].map(table_odpoints['district'].value_counts())
     return table_odpoints
+
+
+
+def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data, 
+    filepath_sector_cutoffs, sectors_to_include, transport_nodes,
+    filepath_sector_table):
+    '''Define firms
+
+    Parameters
+    ----------
+    filepath_adminunit_economic_data: string
+        Path to the district_data table
+    filepath_sector_cutoffs: string
+        Path to the sector_cutoffs table
+    sectors_to_include: list or 'all'
+        if 'all', include all sectors, otherwise define the list of sector to include
+    transport_nodes: geopandas.GeoDataFrame
+        transport nodes resulting from createTransportNetwork
+    filepath_sector_table: string
+        Path the the sector table
+    '''
+
+    # A. Create firm table
+    # A.1. load files
+    adminunit_eco_data = gpd.read_file(filepath_adminunit_economic_data)
+    sector_cutoffs = pd.read_csv(filepath_sector_cutoffs).set_index('sector')
+
+    # A.2. for each sector, select adminunit where supply_data is over threshold
+    # and populate firm table
+    firm_table = pd.DataFrame()
+    for sector, row in sector_cutoffs.iterrows():
+        if (sectors_to_include == "all") or (sector in sectors_to_include):
+            # check that the supply metric is in the data
+            if row["supply_data"] not in adminunit_eco_data.columns:
+                raise KeyError(row["supply_data"]+ " for sector "+sector+
+                    " is missing from the economic data")
+            # create one firm where economic metric is over threshold
+            where_create_firm = adminunit_eco_data[row["supply_data"]] > row["cutoff"]
+            # populate firm table
+            new_firm_table = pd.DataFrame({
+                "sector": sector,
+                "adminunit": adminunit_eco_data.loc[where_create_firm, "commune_code"].tolist(),
+                "population": adminunit_eco_data.loc[where_create_firm, "population"].tolist(),
+                "absolute_size": adminunit_eco_data.loc[where_create_firm, row["supply_data"]]
+            })
+            new_firm_table['relative_size'] = new_firm_table['absolute_size'] / new_firm_table['absolute_size'].sum()
+            firm_table = firm_table.append(new_firm_table)
+
+
+    # B. Assign firms to closest road nodes
+    # B.1. Create a dictionary that link a adminunit to id of the closest road node
+    # Create dic that links adminunit to points
+    selected_adminunits = list(firm_table['adminunit'].unique())
+    logging.info('Select '+str(firm_table.shape[0])+
+        " in "+str(len(selected_adminunits))+' admin units')
+    cond = adminunit_eco_data['commune_code'].isin(selected_adminunits)
+    dic_selectAdminunit_to_points = adminunit_eco_data[cond].set_index('commune_code')['geometry'].to_dict()
+    # Select road node points
+    road_nodes = transport_nodes[transport_nodes['type'] == "roads"]
+    # Create dic
+    dic_adminunit_to_roadNodeId = {
+        adminunit: road_nodes.loc[getIndexClosestPoint(point, road_nodes), 'id']
+        for adminunit, point in dic_selectAdminunit_to_points.items()
+    }
+
+    # B.2. Map firm to closest road nodes
+    firm_table['odpoint'] = firm_table['adminunit'].map(dic_adminunit_to_roadNodeId)
+
+
+    # C. Combine firms that are in the same odpoint and in the same sector
+    # remove adminunit column
+    firm_table = firm_table.drop(columns='adminunit')
+    # groupby odpoint and sector
+    firm_table = firm_table.groupby(['odpoint', 'sector'], as_index=False).sum()
+
+
+    # D. Add information required by the createFirms function
+    # add sector type
+    sector_table = pd.read_csv(filepath_sector_table)
+    sector_to_sectorType = sector_table.set_index('sector')['type']
+    firm_table['sector_type'] = firm_table['sector'].map(sector_to_sectorType)
+    # add long lat
+    odpoint_table = road_nodes[road_nodes['id'].isin(firm_table['odpoint'])].copy()
+    odpoint_table['long'] = odpoint_table.geometry.x
+    odpoint_table['lat'] = odpoint_table.geometry.y
+    roadNodeID_to_longlat = odpoint_table.set_index('id')[['long', 'lat']]
+    firm_table['long'] = firm_table['odpoint'].map(roadNodeID_to_longlat['long'])
+    firm_table['lat'] = firm_table['odpoint'].map(roadNodeID_to_longlat['lat'])
+    # add id
+    firm_table['id'] = list(range(firm_table.shape[0]))
+    # add importance
+    firm_table['importance'] = firm_table['relative_size']
+
+
+    # # E. Add final demand per firm
+    # # evalute share of population represented
+    # cond = adminunit_eco_data['commune_code'].isin(selected_adminunits)
+    # represented_pop = adminunit_eco_data.loc[cond, 'population'].sum()
+    # total_population = adminunit_eco_data['population'].sum()
+    # # evalute final demand
+    # rel_pop = firm_table['population'] / total_population
+    # tot_demand_of_sector = firm_table['sector'].map(sector_table.set_index('sector')['final_demand'])
+    # firm_table['final_demand'] = rel_pop * tot_demand_of_sector
+    # # print info
+    # logging.info("{:.0f}%".format(represented_pop / total_population * 100)+
+    #     " of population represented")
+    # logging.info("{:.0f}%".format(firm_table['final_demand'].sum() / sector_table['final_demand'].sum() * 100)+
+    #     " of final demand is captured")
+    # logging.info("{:.0f}%".format(firm_table['final_demand'].sum() / \
+    #     sector_table.set_index('sector').loc[sectors_to_include, 'final_demand'].sum() * 100)+
+    #     " of final demand of selected sector is captured")
+
+    # F. Log information
+    logging.info('Create '+str(firm_table.shape[0])+" firms in "+
+        str(firm_table['odpoint'].nunique())+' od points')
+    for sector, row in sector_cutoffs.iterrows():
+        if (sectors_to_include == "all") or (sector in sectors_to_include):
+            cond = firm_table['sector'] == sector
+            logging.info('Sector '+sector+": create "+
+                str(cond.sum())+" firms that covers "+
+                "{:.0f}%".format(
+                    firm_table.loc[cond, 'absolute_size'].sum()\
+                    / adminunit_eco_data[row["supply_data"]].sum() * 100
+                )+" of total "+row["supply_data"]
+                # "{:.0f}%".format(
+                #     firm_table.loc[cond, 'final_demand'].sum()\
+                #     / sector_table.set_index('sector').loc[sector, "final_demand"] * 100
+                # )+" of final demand"+" and "+
+                # "{:.0f}%".format(
+                #     firm_table.loc[cond, 'population'].sum() / total_population * 100
+                # )+" of population"
+            )
+    exit()
+    return firm_table
+    
+
+
+
+def getIndexClosestPoint(point, df_with_points):
+    """Given a point it finds the index of the closests points in a Point GeoDataFrame.
+
+    Parameters
+    ----------
+    point: shapely.Point
+        Point object of which we want to find the closest point
+    df_with_points: geopandas.GeoDataFrame
+        GeoDataFrame containing the points amoung which we want to find the 
+        one that is the closest to point
+
+    Returns
+    -------
+    type depends on the index dtype of df_with_points
+        index object of the closest point in df_with_points
+    """
+    distList = [point.distance(item) for item in df_with_points['geometry'].tolist()]
+    return df_with_points.index[distList.index(min(distList))]
+
+
 
 
 def rescaleNbFirms(filepath_district_sector_importance,
@@ -555,13 +719,10 @@ def createFirms(firm_table, keep_top_n_firms=None, reactivity_rate=0.1, utilizat
     ----------
     firm_table: pandas.DataFrame
         firm_table from rescaleNbFirms
-
     keep_top_n_firms: None (default) or integer
         (optional) can be specified if we want to keep only the first n firms, for testing purposes
-
     reactivity_rate: float
         Determines the speed at which firms try to reach their inventory duration target. Default to 0.1.
-
     utilization_rate: float
         Set the utilization rate, which determines the production capacity at the input-output equilibrium.
 

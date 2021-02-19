@@ -99,6 +99,11 @@ propagate_input_price_change = True
 # - list of sectors
 sectors_to_include = "all"
 
+# Which sectors to specifically exclude.
+# - None
+# - list of sectors
+sectors_to_exclude = None
+
 # Filter out sectors whose output is below that cutoff value
 # - if 'type' is 'percentage', test cutoff againt the sector's relative output
 # - if 'type' is 'absolute', test cutoff againt the sector's absolute output
@@ -271,3 +276,16 @@ cost_repercussion_mode = "type1"
 # If True, then each shipment adds a "load" on transport edges 
 # it the load exceed the capacity, then the edges cannot be used anymore
 account_capacity = True
+
+# How to create firms from economic data
+# - "economic_adminunit_data" is a new method developped for Cambodia
+#   We have econmic data for each sector at the commune level
+#   We use a cutoff value per sector, over which we create a firm
+#   That way we select the commune, hence the od points
+# - "district_sector_importance" is the method used for Tanzania
+#   We have preselected OD points, hence district in which we want to have firms
+#   There may be multiple OD points per district
+#   We have precalculated the relative importance of each district for each sector
+#   We use a single cutoff values (in fact one for agriculture, and another for the other sectors)
+#   that is applied to these relative importance
+firm_sampling_mode = "economic_adminunit_data"
