@@ -415,7 +415,7 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
 
     # A.2. for each sector, select adminunit where supply_data is over threshold
     # and populate firm table
-    firm_table = pd.DataFrame()
+    firm_table_per_adminunit = pd.DataFrame()
     for sector, row in sector_cutoffs.iterrows():
         if (sectors_to_include == "all") or (sector in sectors_to_include):
             # check that the supply metric is in the data
@@ -432,14 +432,14 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
                 "absolute_size": adminunit_eco_data.loc[where_create_firm, row["supply_data"]]
             })
             new_firm_table['relative_size'] = new_firm_table['absolute_size'] / new_firm_table['absolute_size'].sum()
-            firm_table = firm_table.append(new_firm_table)
+            firm_table_per_adminunit = firm_table_per_adminunit.append(new_firm_table)
 
 
     # B. Assign firms to closest road nodes
     # B.1. Create a dictionary that link a adminunit to id of the closest road node
     # Create dic that links adminunit to points
-    selected_adminunits = list(firm_table['adminunit'].unique())
-    logging.info('Select '+str(firm_table.shape[0])+
+    selected_adminunits = list(firm_table_per_adminunit['adminunit'].unique())
+    logging.info('Select '+str(firm_table_per_adminunit.shape[0])+
         " in "+str(len(selected_adminunits))+' admin units')
     cond = adminunit_eco_data['commune_code'].isin(selected_adminunits)
     dic_selectAdminunit_to_points = adminunit_eco_data[cond].set_index('commune_code')['geometry'].to_dict()
@@ -452,32 +452,30 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
     }
 
     # B.2. Map firm to closest road nodes
-    firm_table['odpoint'] = firm_table['adminunit'].map(dic_adminunit_to_roadNodeId)
+    firm_table_per_adminunit['odpoint'] = firm_table_per_adminunit['adminunit'].map(dic_adminunit_to_roadNodeId)
 
 
     # C. Combine firms that are in the same odpoint and in the same sector
-    # remove adminunit column
-    firm_table = firm_table.drop(columns='adminunit')
     # groupby odpoint and sector
-    firm_table = firm_table.groupby(['odpoint', 'sector'], as_index=False).sum()
+    firm_table_per_odpoint = firm_table_per_adminunit.drop(columns='adminunit').groupby(['odpoint', 'sector'], as_index=False).sum()
 
 
     # D. Add information required by the createFirms function
     # add sector type
     sector_table = pd.read_csv(filepath_sector_table)
     sector_to_sectorType = sector_table.set_index('sector')['type']
-    firm_table['sector_type'] = firm_table['sector'].map(sector_to_sectorType)
+    firm_table_per_odpoint['sector_type'] = firm_table_per_odpoint['sector'].map(sector_to_sectorType)
     # add long lat
-    odpoint_table = road_nodes[road_nodes['id'].isin(firm_table['odpoint'])].copy()
+    odpoint_table = road_nodes[road_nodes['id'].isin(firm_table_per_odpoint['odpoint'])].copy()
     odpoint_table['long'] = odpoint_table.geometry.x
     odpoint_table['lat'] = odpoint_table.geometry.y
     roadNodeID_to_longlat = odpoint_table.set_index('id')[['long', 'lat']]
-    firm_table['long'] = firm_table['odpoint'].map(roadNodeID_to_longlat['long'])
-    firm_table['lat'] = firm_table['odpoint'].map(roadNodeID_to_longlat['lat'])
+    firm_table_per_odpoint['long'] = firm_table_per_odpoint['odpoint'].map(roadNodeID_to_longlat['long'])
+    firm_table_per_odpoint['lat'] = firm_table_per_odpoint['odpoint'].map(roadNodeID_to_longlat['lat'])
     # add id
-    firm_table['id'] = list(range(firm_table.shape[0]))
+    firm_table_per_odpoint['id'] = list(range(firm_table_per_odpoint.shape[0]))
     # add importance
-    firm_table['importance'] = firm_table['relative_size']
+    firm_table_per_odpoint['importance'] = firm_table_per_odpoint['relative_size']
 
 
     # # E. Add final demand per firm
@@ -499,15 +497,15 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
     #     " of final demand of selected sector is captured")
 
     # F. Log information
-    logging.info('Create '+str(firm_table.shape[0])+" firms in "+
-        str(firm_table['odpoint'].nunique())+' od points')
+    logging.info('Create '+str(firm_table_per_odpoint.shape[0])+" firms in "+
+        str(firm_table_per_odpoint['odpoint'].nunique())+' od points')
     for sector, row in sector_cutoffs.iterrows():
         if (sectors_to_include == "all") or (sector in sectors_to_include):
-            cond = firm_table['sector'] == sector
+            cond = firm_table_per_odpoint['sector'] == sector
             logging.info('Sector '+sector+": create "+
                 str(cond.sum())+" firms that covers "+
                 "{:.0f}%".format(
-                    firm_table.loc[cond, 'absolute_size'].sum()\
+                    firm_table_per_odpoint.loc[cond, 'absolute_size'].sum()\
                     / adminunit_eco_data[row["supply_data"]].sum() * 100
                 )+" of total "+row["supply_data"]
                 # "{:.0f}%".format(
@@ -518,8 +516,27 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
                 #     firm_table.loc[cond, 'population'].sum() / total_population * 100
                 # )+" of population"
             )
+
+    # Create households
+    # Compute population per odpoint
+    cond = adminunit_eco_data['commune_code'].isin(selected_adminunits)
+    household_table = adminunit_eco_data.loc[cond, ['adminunit', 'population']].copy()
+    household_table['odpoint'] = household_table['adminunit'].map(retail_table)
+    household_table = household_table.groupby('odpoint', as_index=False)['population'].sum()
+    total_population = adminunit_eco_data['population'].sum()
+    household_table['rel_pop'] = household_table['population'] / total_population
+    
+    # Evaluate final demand per sector per retail firm
+    final_demand = {
+        odpoint: sector_table.set_index('sector').loc[sectors_to_include, 'final_demand']
+        for odpoint in household_table['odpoint'].tolist()
+    }
+    final_demand = pd.DataFrame(final_demand)
+    print(final_demand)
     exit()
-    return firm_table
+
+
+    return firm_table_per_odpoint
     
 
 
