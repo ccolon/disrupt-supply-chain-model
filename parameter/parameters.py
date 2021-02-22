@@ -29,16 +29,17 @@ congestion = True
 # cutoffs
 sectors_to_exclude = ['ADM']
 district_sector_cutoff = 0.003
-cutoff_sector_output = {
-    'type': 'percentage',
-    'value': 0.01
-}
+# cutoff_sector_output = {
+#     'type': 'percentage',
+#     'value': 0.02
+# }
 io_cutoff = 0.02
 transport_modes = ['roads', 'railways', 'waterways', 'maritime']
 
 route_optimization_weight = "agg_cost" #cost_per_ton time_cost agg_cost
 
-export = {key: True for key in export.keys()}
+export = {key: False for key in export.keys()}
+# export = {'log': False}
 
 cost_repercussion_mode = "type1"
 

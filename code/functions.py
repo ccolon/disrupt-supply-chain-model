@@ -6,6 +6,7 @@ import math
 import json
 import os
 import random
+import logging
 
 def identify_special_transport_nodes(transport_nodes, special):
     res = transport_nodes.dropna(subset=['special'])
@@ -64,10 +65,12 @@ def evaluate_inventory_duration(estimated_need, inventory):
         return inventory / estimated_need - 1
 
 
-def set_initial_conditions(graph, firm_list, households, country_list, mode="equilibrium"):
-    households.reset_variables()
-    for edge in graph.in_edges(households):
-        graph[edge[0]][households]['object'].reset_variables()
+def set_initial_conditions(graph, firm_list, household_list, country_list, mode="equilibrium"):
+    # Reset the variables of all agents, and those of their input commercial links
+    for household in firm_list:
+        household.reset_variables()
+        for edge in graph.in_edges(household):
+            graph[edge[0]][household]['object'].reset_variables()
     for firm in firm_list:
         firm.reset_variables()
         for edge in graph.in_edges(firm):
@@ -78,15 +81,41 @@ def set_initial_conditions(graph, firm_list, households, country_list, mode="equ
             graph[edge[0]][country]['object'].reset_variables()
             
     if mode=="equilibrium":
-        initilize_at_equilibrium(graph, firm_list, households, country_list)
-    elif mode =="dynamic":
-        initializeFirmsHouseholds(G, firm_list, households)
+        initilize_at_equilibrium(graph, firm_list, household_list, country_list)
+    # elif mode =="dynamic": #deprecated
+    #     initializeFirmsHouseholds(G, firm_list, household_list)
     else:
         print("Wrong mode chosen")
 
 
 
-def buildFinalDemandVector(households, country_list, firm_list):
+def build_final_demand_vector(household_list, country_list, firm_list):
+    '''Create a numpy.Array of the final demand per firm, including exports
+
+    Households and countries should already have set their purchase plan
+
+    Returns
+    -------
+    numpy.Array of dimension (len(firm_list), 1)
+    '''
+    final_demand_vector = np.zeros((len(firm_list), 1))
+
+    # Collect households final demand. They buy only from firms.
+    for household in household_list:
+        for retailer_id, quantity in household.purchase_plan.items():
+            final_demand_vector[(retailer_id,0)] += quantity
+
+    # Collect country final demand. They buy from firms and countries.
+    # We need to filter the demand directed to firms only.
+    for country in country_list:
+        for supplier_id, quantity in country.purchase_plan.items():
+            if isinstance(supplier_id, int): # we only consider purchase from firms, not from other countries
+                final_demand_vector[(supplier_id,0)] += quantity
+
+    return final_demand_vector
+
+
+"""def buildFinalDemandVector(household, country_list, firm_list):
     '''Create a numpy.Array of the final demand per firm, including exports
 
     Households and countries should already have set their purchase plan
@@ -114,9 +143,9 @@ def buildFinalDemandVector(households, country_list, firm_list):
                 final_demand_vector[(supplier_id,0)] += quantity
 
     return final_demand_vector
+"""
 
-
-def initilize_at_equilibrium(graph, firm_list, households, country_list):
+def initilize_at_equilibrium(graph, firm_list, household_list, country_list):
     """Initialize the supply chain network at the input--output equilibrium
 
     We will use the matrix forms to solve the following equation for X (production):
@@ -172,7 +201,7 @@ def initilize_at_equilibrium(graph, firm_list, households, country_list):
 
     # Build final demand vector per firm, of length n
     # Exports are considered as final demand
-    final_demand_vector = buildFinalDemandVector(households, country_list, firm_list)
+    final_demand_vector = build_final_demand_vector(household_list, country_list, firm_list)
 
     # Solve the input--output equation
     eq_production_vector = np.linalg.solve(
@@ -181,7 +210,8 @@ def initilize_at_equilibrium(graph, firm_list, households, country_list):
     )
 
     # Initialize households variables
-    households.initialize_var_on_purchase_plan()
+    for household in household_list:
+        household.initialize_var_on_purchase_plan()
 
     # Compute costs
     ## Input costs
@@ -195,7 +225,7 @@ def initilize_at_equilibrium(graph, firm_list, households, country_list):
     )
     input_cost_vector = domestic_input_cost_vector + import_input_cost_vector
     ## Transport costs
-    proportion_of_transport_cost_vector = 0.2*np.ones((n,1))
+    proportion_of_transport_cost_vector = 0.2*np.ones((n,1)) #XXX
     transport_cost_vector = np.multiply(eq_production_vector, proportion_of_transport_cost_vector)
     ## Compute other costs based on margin
     margin = np.array([firm.target_margin for firm in firm_list]).reshape((n,1))
@@ -217,7 +247,8 @@ def initilize_at_equilibrium(graph, firm_list, households, country_list):
             eq_other_cost=other_cost_vector[(firm.pid,0)]
         )
     ## Commercial links: agents set their order
-    households.send_purchase_orders(graph)
+    for household in household_list:
+        household.send_purchase_orders(graph)
     for country in country_list:
         country.send_purchase_orders(graph)
     for firm in firm_list:
@@ -239,9 +270,21 @@ def reset_prices(graph):
         graph[edge[0]][edge[1]]['object'].price = 1
             
             
-def generate_weights(nb_values):
-    rdm_values = np.random.uniform(0,1, size=nb_values)
-    return list(rdm_values / sum(rdm_values))
+def generate_weights(nb_suppliers, importance_of_each=None):
+    # if there is only one supplier, retunr 1
+    if nb_suppliers == 1:
+        return [1]
+
+    # if there are several and importance are provided, choose according to importance
+    if importance_of_each:
+        return [x/sum(importance_of_each) for x in importance_of_each]
+
+    # otherwise choose random values
+    else:
+        rdm_values = np.random.uniform(0,1, size=nb_suppliers)
+        return list(rdm_values / sum(rdm_values))
+
+
 
 def generate_weights_from_list(list_nb):
     sum_list = sum(list_nb)
@@ -383,13 +426,19 @@ def allAgentsPrintInfo(firm_list, households):
     households.print_info()
 
     
-def rescale_values(input_list, minimum=0.1, maximum=1, max_val=None, alpha=1):
+def rescale_values(input_list, minimum=0.1, maximum=1, max_val=None, alpha=1, normalize=False):
     max_val = max_val or max(input_list)
     min_val = min(input_list)
     if max_val == min_val:
-        return [0.5 * maximum] * len(input_list)
+        res = [0.5 * maximum] * len(input_list)
     else:
-        return [minimum + (((val - min_val) / (max_val - min_val))**alpha) * (maximum - minimum) for val in input_list]
+        res = [
+            minimum + (((val - min_val) / (max_val - min_val))**alpha) * (maximum - minimum) 
+            for val in input_list
+        ]
+    if normalize:
+        res = [x / sum(res) for x in res]
+    return res
 
 
 def compute_distance(x0, y0, x1, y1):
@@ -397,6 +446,7 @@ def compute_distance(x0, y0, x1, y1):
 
 
 def compute_distance_from_arcmin(x0, y0, x1, y1):
+    # This is a very approximate way to convert arc distance into km
     EW_dist = (x1-x0)*112.5
     NS_dist = (y1-y0)*111
     return math.sqrt(EW_dist**2+NS_dist**2)
@@ -432,3 +482,80 @@ def transformUSDtoTons(monetary_flow, monetary_unit, usd_per_ton):
     #sector_to_usdPerTon = sector_table.set_index('sector')['usd_per_ton']
 
     return monetary_flow / (usd_per_ton/factor)
+
+
+def calculate_distance_between_agents(agentA, agentB):
+    if (agentA.odpoint == -1) or (agentB.odpoint == -1):
+        logging.warning("Try to calculate distance between agents, but one of them does not have real odpoint")
+        return 1
+    else:
+        return compute_distance_from_arcmin(agentA.long, agentA.lat, agentB.long, agentB.lat)
+
+
+def determine_nb_suppliers(nb_suppliers_per_input, max_nb_of_suppliers=None):
+    '''Draw 1 or 2 depending on the 'nb_suppliers_per_input' parameters
+
+    nb_suppliers_per_input is a float number between 1 and 2
+
+    max_nb_of_suppliers: maximum value not to exceed
+    '''
+    if (nb_suppliers_per_input < 1) or (nb_suppliers_per_input > 2):
+        raise ValueError("'nb_suppliers_per_input' should be between 1 and 2")
+
+    if nb_suppliers_per_input == 1:
+        nb_suppliers = 1
+
+    elif nb_suppliers_per_input == 2:
+        nb_suppliers = 2
+
+    else:
+        if random.uniform(0,1) < nb_suppliers_per_input-1:
+            nb_suppliers = 2
+        else:
+            nb_suppliers = 1
+
+    if max_nb_of_suppliers:
+        nb_suppliers = min(nb_suppliers, max_nb_of_suppliers)
+
+    return nb_suppliers
+
+
+def select_supplier_from_list(agent, firm_list, 
+    nb_suppliers_to_choose, potential_firm_ids, 
+    distance, importance, weight_localization):
+    # distance weight
+    if distance:
+        distance_to_each = rescale_values([
+            calculate_distance_between_agents(agent, firm_list[firm_id]) 
+            for firm_id in potential_firm_ids
+        ])
+        distance_weight = 1 / (np.array(distance_to_each)**weight_localization)
+
+    # importance weight
+    if importance:
+        importance_of_each = rescale_values([firm_list[firm_id].importance for firm_id in potential_firm_ids])
+        importance_weight = np.array(importance_of_each)
+
+    # create weight vector based on choice
+    if importance and distance:
+        prob_to_be_selected = importance_weight * distance_weight
+    elif importance and not distance:
+        prob_to_be_selected = importance_weight
+    elif not importance and distance:
+        prob_to_be_selected = distance_weight
+    else:
+        prob_to_be_selected = np.ones((1,len(potential_firm_ids)))
+    prob_to_be_selected /= prob_to_be_selected.sum()
+
+    # perform the random choice
+    selected_supplier_id = np.random.choice(
+        potential_firm_ids, 
+        p=prob_to_be_selected, 
+        size=nb_suppliers_to_choose, 
+        replace=False
+    ).tolist()
+    # Choose weight if there are multiple suppliers
+    supplier_weights = generate_weights(nb_suppliers_to_choose, importance_of_each)
+
+    # return
+    return selected_supplier_id, supplier_weights

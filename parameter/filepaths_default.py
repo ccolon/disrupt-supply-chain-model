@@ -47,5 +47,6 @@ filepaths = {
     "transit_matrix": os.path.join('input', input_folder, 'Trade', "transit_matrix.csv"),
     ## Demand
     "population": os.path.join('input', input_folder, 'Demand', "population.csv"),
-    "final_demand": os.path.join('input', input_folder, 'Demand', "final_demand.csv")
+    "final_demand": os.path.join('input', input_folder, 'Demand', "final_demand.csv"),
+    "adminunit_demographic_data": os.path.join('input', input_folder, 'Demand', "commune_demographic_data.geojson")
 }

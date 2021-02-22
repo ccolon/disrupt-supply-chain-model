@@ -10,6 +10,7 @@ from shapely.geometry import Point, LineString
 
 from class_firm import Firm
 from class_households import Households
+from class_household import Household
 from class_transport_network import TransportNetwork
 from class_country import Country
 
@@ -328,38 +329,75 @@ def createTransportNetwork(transport_modes, filepaths, transport_params, extra_r
     return T, nodes, edges
 
     
-def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage", 
-    sectors_to_include="all", sectors_to_exclude=None):
+def filterSector(sector_table, cutoff_sector_output, cutoff_sector_demand, 
+    combine_sector_cutoff='and', sectors_to_include="all", sectors_to_exclude=None):
     """Filter the sector table to sector whose output is largen than the cutoff value
 
     Parameters
     ----------
     sector_table : pandas.DataFrame
         Sector table
-    cutoff : float
-        Cutoff value for selecting the sectors
-        If cutoff_type="percentage", the sector's output divided by all sectors' output is used
-        If cutoff_type="absolute", the sector's absolute output, in USD, is used
+    cutoff_sector_output : dictionary
+        Cutoff paramters for selecting the sectors based on output
+        If type="percentage", the sector's output divided by all sectors' output is used
+        If type="absolute", the sector's absolute output, in USD, is used
+    cutoff_sector_demand : dictionary
+        Cutoff value for selecting the sectors based on final demand
+        If type="percentage", the sector's final demand divided by all sectors' output is used
+        If type="absolute", the sector's absolute output, in USD, is used
+    combine_sector_cutoff: "and", "or"
+        If 'and', select sectors that pass both the output and demand cutoff
+        If 'or', select sectors that pass either the output or demand cutoff
     sectors_to_include : list of string or 'all'
         list of the sectors preselected by the user. Default to "all"
+    sectors_to_exclude : list of string or None
+        list of the sectors preeliminated by the user. Default to None
 
     Returns
     -------
     list of filtered sectors
     """
-    # Filter out sectors
-    if cutoff_type == "percentage":
+    # Select sectors based on output
+    if cutoff_sector_output['type'] == "percentage":
         rel_output = sector_table['output'] / sector_table['output'].sum()
-        filtered_sectors = sector_table.loc[rel_output > cutoff, "sector"].tolist()
-
-    elif cutoff_type == "absolute":
-        filtered_sectors = sector_table.loc[sector_table['output'] > cutoff, "sector"].tolist()
-
+        filtered_sectors_output = sector_table.loc[
+            rel_output > cutoff_sector_output['value'], 
+            "sector"
+        ].tolist()
+    elif cutoff_sector_output['type'] == "absolute":
+        filtered_sectors_output = sector_table.loc[
+            sector_table['output'] > cutoff_sector_output['value'], 
+            "sector"
+        ].tolist()
     else:
-        raise ValueError("cutoff type should be 'percentage' or 'absolute'")    
+        raise ValueError("cutoff type should be 'percentage' or 'absolute'")
+    if len(filtered_sectors_output) == 0:
+        raise ValueError("The output cutoff value is so high that it filtered out all sectors")
 
-    if len(filtered_sectors) == 0:
-        raise ValueError("The cutoff value is so high that it filtered out all sectors")
+    # Select sectors based on demand
+    if cutoff_sector_demand['type'] == "percentage":
+        rel_output = sector_table['final_demand'] / sector_table['final_demand'].sum()
+        filtered_sectors_demand = sector_table.loc[
+            rel_output > cutoff_sector_demand['value'], 
+            "sector"
+        ].tolist()
+    elif cutoff_sector_demand['type'] == "absolute":
+        filtered_sectors_demand = sector_table.loc[
+            sector_table['final_demand'] > cutoff_sector_demand['value'], 
+            "sector"
+        ].tolist()
+    else:
+        raise ValueError("cutoff type should be 'percentage' or 'absolute'")  
+    if len(filtered_sectors_demand) == 0:
+        raise ValueError("The output cutoff value is so high that it filtered out all sectors") 
+
+    # Merge both list
+    if combine_sector_cutoff == 'and':
+        filtered_sectors = list(set(filtered_sectors_output) & set(filtered_sectors_demand))
+    elif combine_sector_cutoff == 'or':
+        filtered_sectors = list(set(filtered_sectors_output+filtered_sectors_demand))
+    else:
+        raise ValueError("'combine_sector_cutoff' should be 'and' or 'or'") 
 
     # Force to include some sector
     if isinstance(sectors_to_include, list):
@@ -375,6 +413,8 @@ def filterSector(sector_table, cutoff=0.1, cutoff_type="percentage",
     if len(filtered_sectors) == 0:
         raise ValueError("We excluded all sectors")
 
+    # Sort list
+    filtered_sectors.sort()
     return filtered_sectors
 
 
@@ -442,6 +482,7 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
     logging.info('Select '+str(firm_table_per_adminunit.shape[0])+
         " in "+str(len(selected_adminunits))+' admin units')
     cond = adminunit_eco_data['commune_code'].isin(selected_adminunits)
+    logging.info('Assinging firms to odpoints')
     dic_selectAdminunit_to_points = adminunit_eco_data[cond].set_index('commune_code')['geometry'].to_dict()
     # Select road node points
     road_nodes = transport_nodes[transport_nodes['type'] == "roads"]
@@ -450,6 +491,7 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
         adminunit: road_nodes.loc[getIndexClosestPoint(point, road_nodes), 'id']
         for adminunit, point in dic_selectAdminunit_to_points.items()
     }
+
 
     # B.2. Map firm to closest road nodes
     firm_table_per_adminunit['odpoint'] = firm_table_per_adminunit['adminunit'].map(dic_adminunit_to_roadNodeId)
@@ -517,23 +559,7 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
                 # )+" of population"
             )
 
-    # Create households
-    # Compute population per odpoint
-    cond = adminunit_eco_data['commune_code'].isin(selected_adminunits)
-    household_table = adminunit_eco_data.loc[cond, ['adminunit', 'population']].copy()
-    household_table['odpoint'] = household_table['adminunit'].map(retail_table)
-    household_table = household_table.groupby('odpoint', as_index=False)['population'].sum()
-    total_population = adminunit_eco_data['population'].sum()
-    household_table['rel_pop'] = household_table['population'] / total_population
-    
-    # Evaluate final demand per sector per retail firm
-    final_demand = {
-        odpoint: sector_table.set_index('sector').loc[sectors_to_include, 'final_demand']
-        for odpoint in household_table['odpoint'].tolist()
-    }
-    final_demand = pd.DataFrame(final_demand)
-    print(final_demand)
-    exit()
+
 
 
     return firm_table_per_odpoint
@@ -1116,6 +1142,153 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     return country_list
 
 
+def defineHouseholds(sector_table, filepath_adminunit_demographic_data,
+    filtered_sectors, pop_density_cutoff, transport_nodes, time_resolution):
+    '''Define the nomber of households to model and their purchase plan based on input demographic data
+    and filtering options
+
+    Paramters
+    ---------
+    sector_table
+
+    Returns
+    -------
+    household_table
+    household_purchase_plan
+
+    '''
+    # A. Filter admunit unit based on density
+    # load file
+    adminunit_demo_data = gpd.read_file(filepath_adminunit_demographic_data)
+    # filter
+    cond_density = adminunit_demo_data['pop_density'] >= pop_density_cutoff
+    cond_pop = adminunit_demo_data['population'] >= 8000
+    cond = cond_pop
+    # create household_table
+    household_table = adminunit_demo_data.loc[cond, ['population', 'geometry', 'commune_code']].copy()
+    logging.info(
+        str(cond.sum())+ ' adminunit selected over '+str(adminunit_demo_data.shape[0])+' representing '+
+        "{:.0f}%".format(household_table['population'].sum() / adminunit_demo_data['population'].sum() * 100)+
+        ' of population'
+    )
+
+    # B. Add final demand
+    # get final demand only for selected sector
+    final_demand = sector_table.loc[sector_table['sector'].isin(filtered_sectors), ['sector', 'final_demand']]
+    # put as single row
+    final_demand_as_row = final_demand.set_index('sector').transpose()
+    # duplicates rows
+    final_demand_each_household = pd.concat([final_demand_as_row for i in range(household_table.shape[0])])
+    # align index and concat
+    final_demand_each_household.index = household_table.index
+    # compute final demand per commune
+    rel_pop = household_table['population'] / adminunit_demo_data['population'].sum()
+    final_demand_each_household = final_demand_each_household.multiply(rel_pop, axis='index')
+    # add to household table
+    household_table = pd.concat([household_table, final_demand_each_household], axis=1)
+
+    # C. Creat one household per OD point
+    logging.info('Assinging households to odpoints')
+    dic_selectAdminunit_to_points = household_table.set_index('commune_code')['geometry'].to_dict()
+    # Select road node points
+    road_nodes = transport_nodes[transport_nodes['type'] == "roads"]
+    # Create dic
+    dic_adminunit_to_roadNodeId = {
+        adminunit: road_nodes.loc[getIndexClosestPoint(point, road_nodes), 'id']
+        for adminunit, point in dic_selectAdminunit_to_points.items()
+    }
+    # Map firm to closest road nodes
+    household_table['odpoint'] = household_table['commune_code'].map(dic_adminunit_to_roadNodeId)
+    # Combine households that are in the same odpoint
+    household_table = household_table.drop(columns=['geometry', 'commune_code']).groupby('odpoint', as_index=False).sum()
+    logging.info(str(household_table.shape[0])+ ' odpoint selected for demand')
+
+
+    # D. Filter out small demand
+    demand_cutoff = 5e5
+    household_table[filtered_sectors] = household_table[filtered_sectors].mask(household_table[filtered_sectors] < demand_cutoff)
+    # info
+    logging.info('Create '+str(household_table.shape[0])+" households in "+
+        str(household_table['odpoint'].nunique())+' od points')
+    for sector in filtered_sectors:
+        logging.info('Sector '+sector+": create "+
+            str((~household_table[sector].isnull()).sum())+
+            " buying households that covers "+
+            "{:.0f}%".format(
+                household_table[sector].sum()\
+                / sector_table.set_index('sector').loc[sector, 'final_demand'] * 100
+            )+" of total final demand"
+        )
+    if (household_table[filtered_sectors].sum(axis=1) == 0).any():
+        logging.warning('Some households have no purchase plan!')
+
+    # E. Add information required by the createHouseholds function
+    # add long lat
+    odpoint_table = road_nodes[road_nodes['id'].isin(household_table['odpoint'])].copy()
+    odpoint_table['long'] = odpoint_table.geometry.x
+    odpoint_table['lat'] = odpoint_table.geometry.y
+    roadNodeID_to_longlat = odpoint_table.set_index('id')[['long', 'lat']]
+    household_table['long'] = household_table['odpoint'].map(roadNodeID_to_longlat['long'])
+    household_table['lat'] = household_table['odpoint'].map(roadNodeID_to_longlat['lat'])
+    # add id
+    household_table['id'] = list(range(household_table.shape[0]))
+
+
+    # F. Create purchase plan per household
+    # rescale according to time resolution
+    household_table[filtered_sectors] = rescaleMonetaryValues(
+        household_table[filtered_sectors], 
+        time_resolution="week", 
+        target_units="mUSD", 
+        input_units="USD"
+    )
+    # to dict
+    household_sector_consumption = household_table.set_index('id')[filtered_sectors].to_dict(orient='index')
+    # remove nan values
+    household_sector_consumption = {
+        i: {
+            sector: amount
+            for sector, amount in purchase_plan.items()
+            if ~np.isnan(amount)
+        }
+        for i, purchase_plan in household_sector_consumption.items()
+    }
+
+    return household_table, household_sector_consumption
+
+
+def createHouseholds(household_table, household_sector_consumption):
+    """Create the households
+
+    It uses household_table & household_sector_consumption from defineHouseholds
+
+    Parameters
+    ----------
+    household_table: pandas.DataFrame
+        household_table
+    household_sector_consumption: dic
+        {<household_id>: {<sector>: <amount>}}
+
+    Returns
+    -------
+    list of Household
+    """
+
+    logging.debug('Creating household_list')
+    household_table = household_table.set_index('id')
+    household_list = [
+        Household('hh_'+str(i), 
+             odpoint=household_table.loc[i, "odpoint"],
+             long=float(household_table.loc[i, 'long']),
+             lat=float(household_table.loc[i, 'lat']),
+             sector_consumption=household_sector_consumption[i]
+        )
+        for i in household_table.index.tolist()
+    ]
+        
+    return household_list
+
+
 def defineFinalDemand(firm_table, od_table, 
     filepath_population, filepath_final_demand,
     time_resolution='week', target_units="mUSD", input_units="USD"):
@@ -1187,8 +1360,8 @@ def defineFinalDemand(firm_table, od_table,
     return firm_table
     
 
-def createHouseholds(firm_table):
-    """Create Households objecvt
+def createSingleHouseholds(firm_table):
+    """Create Households object
 
     :param firm_table: firm_table from rescaleNbFirms and defineFinalDemand functions
     :type firm_table: pandas.DataFrame

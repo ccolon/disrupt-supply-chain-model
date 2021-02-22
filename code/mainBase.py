@@ -1,6 +1,6 @@
 # Check that the module is used correctly
 import sys
-if (len(sys.argv)<=1):
+if (len(sys.argv)<=2):
     raise ValueError('Syntax: python36 code/main.py (reuse_data 1 0)')
 
 # Import modules
@@ -67,6 +67,7 @@ else:
 
 logging.info('Simulation '+timestamp+' starting using '+input_folder+' input data.')
 
+
 # Create transport network
 with open(filepaths['transport_parameters'], "r") as yamlfile:
     transport_params = yaml.load(yamlfile, Loader=yaml.FullLoader)
@@ -108,33 +109,36 @@ for mode, km in km_per_mode.items():
     logging.info(mode+": {:.0f} km".format(km))
 logging.info('Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
 # Export transport network
-transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.geojson"), driver='GeoJSON')
-transport_edges.to_file(os.path.join(exp_folder, "transport_edges.geojson"), driver='GeoJSON')
+if export['transport']:
+    transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.geojson"), driver='GeoJSON')
+    transport_edges.to_file(os.path.join(exp_folder, "transport_edges.geojson"), driver='GeoJSON')
 
-### Filter sectors
-logging.info('Filtering the sectors based on their output. '+
-    "Cutoff type is "+cutoff_sector_output['type']+
-    ", cutoff value is "+str(cutoff_sector_output['value']))
-sector_table = pd.read_csv(filepaths['sector_table'])
-filtered_sectors = filterSector(sector_table, cutoff=cutoff_sector_output['value'],
-    cutoff_type=cutoff_sector_output['type'],
-    sectors_to_include=sectors_to_include,
-    sectors_to_exclude=sectors_to_exclude)
-logging.info('The filtered sectors are: '+str(filtered_sectors))
 
-### Create firms
-if firm_sampling_mode == "district_sector_importance":
-    # Filter district sector combination
-    logging.info('Generating the firm table. '+
-        'Districts included: '+str(districts_to_include)+
-        ', district sector cutoff: '+str(district_sector_cutoff))
-    firm_table, odpoint_table, filtered_district_sector_table = \
-        rescaleNbFirms(filepaths['district_sector_importance'], sector_table, 
-            transport_nodes, district_sector_cutoff, nb_top_district_per_sector,
-            explicit_service_firm=explicit_service_firm,
-            sectors_to_include=filtered_sectors, districts_to_include=districts_to_include)
-    # Use directely the economic data at administrative unit level
-elif firm_sampling_mode == "economic_adminunit_data":
+### Create firms, households, and countries
+if sys.argv[2] == "0":
+    tmp_data = {}
+
+    ### Filter sectors
+    logging.info('Filtering the sectors based on their output. '+
+        "Cutoff type is "+cutoff_sector_output['type']+
+        ", cutoff value is "+str(cutoff_sector_output['value']))
+    sector_table = pd.read_csv(filepaths['sector_table'])
+    filtered_sectors = filterSector(sector_table, 
+        cutoff_sector_output=cutoff_sector_output,
+        cutoff_sector_demand=cutoff_sector_demand,
+        combine_sector_cutoff=combine_sector_cutoff,
+        sectors_to_include=sectors_to_include,
+        sectors_to_exclude=sectors_to_exclude)
+    output_selected = sector_table.loc[sector_table['sector'].isin(filtered_sectors), 'output'].sum()
+    final_demand_selected = sector_table.loc[sector_table['sector'].isin(filtered_sectors), 'final_demand'].sum()
+    logging.info(
+        str(len(filtered_sectors))+ ' sectors selected over '+str(sector_table.shape[0])+' representing '+
+        "{:.0f}%".format(output_selected / sector_table['output'].sum() * 100)+' of total output and '+
+        "{:.0f}%".format(final_demand_selected / sector_table['final_demand'].sum() * 100)+' of final demand'
+    )
+    logging.info('The filtered sectors are: '+str(filtered_sectors))
+
+    logging.info('Generating the firms')
     firm_table = defineFirmsFromGranularEcoData(
         filepath_adminunit_economic_data=filepaths['adminunit_economic_data'], 
         filepath_sector_cutoffs=filepaths['sector_cutoffs'],
@@ -142,110 +146,163 @@ elif firm_sampling_mode == "economic_adminunit_data":
         transport_nodes=transport_nodes,
         filepath_sector_table=filepaths['sector_table']
     )
-    print(firm_table.head())
-logging.info('Firm and OD tables generated')
+    nb_firms = 'all'
+    logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+
+        ' reactivity_rate: '+str(reactivity_rate)+
+        ' utilization_rate: '+str(utilization_rate))
+    firm_list = createFirms(firm_table, nb_firms, reactivity_rate, utilization_rate)
+    n = len(firm_list)
+    present_sectors = list(set([firm.sector for firm in firm_list]))
+    present_sectors.sort()
+    flow_types_to_export = present_sectors+['domestic_B2B', 'transit', 'import', 'export', 'total']
+    logging.info('Firm_list created, size is: '+str(n))
+    logging.info('Sectors present are: '+str(present_sectors))
 
-# Creating the firms
-nb_firms = 'all'
-logging.info('Creating firm_list. nb_firms: '+str(nb_firms)+
-    ' reactivity_rate: '+str(reactivity_rate)+
-    ' utilization_rate: '+str(utilization_rate))
-firm_list = createFirms(firm_table, nb_firms, reactivity_rate, utilization_rate)
-n = len(firm_list)
-present_sectors = list(set([firm.sector for firm in firm_list]))
-present_sectors.sort()
-flow_types_to_export = present_sectors+['domestic_B2B', 'transit', 'import', 'export', 'total']
-logging.info('Firm_list created, size is: '+str(n))
-logging.info('Sectors present are: '+str(present_sectors))
+    ### Create households
+    logging.info('Defining the number of housesholds to generate and their purchase plan')
+    household_table, household_sector_consumption = defineHouseholds(sector_table, filepaths['adminunit_demographic_data'], 
+        present_sectors, pop_density_cutoff, transport_nodes, time_resolution)
+    household_list = createHouseholds(household_table, household_sector_consumption)
+    logging.info('Households generated')
 
-# Loading the technical coefficients
-import_code = sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]
-firm_list = loadTechnicalCoefficients(firm_list, filepaths['tech_coef'], io_cutoff, import_code)
-logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 
-# Loading the inventories
-firm_list = loadInventories(firm_list, inventory_duration_target=inventory_duration_target, 
-    filepath_inventory_duration_targets=filepaths['inventory_duration_targets'], 
-    extra_inventory_target=extra_inventory_target, 
-    inputs_with_extra_inventories=inputs_with_extra_inventories, 
-    buying_sectors_with_extra_inventories=buying_sectors_with_extra_inventories,
-    min_inventory=1)
-logging.info('Inventory duration targets loaded, inventory_duration_target: '+str(inventory_duration_target))
-if extra_inventory_target:
-    logging.info("Extra inventory duration: "+str(extra_inventory_target)+\
-        " for inputs "+str(inputs_with_extra_inventories)+\
-        " for buying sectors "+str(buying_sectors_with_extra_inventories))
+    # Loading the technical coefficients
+    import_code = sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]
+    firm_list = loadTechnicalCoefficients(firm_list, filepaths['tech_coef'], io_cutoff, import_code)
+    logging.info('Technical coefficient loaded. io_cutoff: '+str(io_cutoff))
 
-# inventories = {sec:{} for sec in present_sectors}
-# for firm in firm_list:
-#     for input_id, inventory in firm.inventory_duration_target.items():
-#         if input_id not in inventories[firm.sector].keys():
-#             inventories[firm.sector][input_id] = inventory
-#         else:
-#             inventories[firm.sector][input_id] = inventory
-# with open(os.path.join("output", "Test", "inventories.json"), 'w') as f:
-#     json.dump(inventories, f)
 
-# Adding the firms onto the nodes of the transport network
+    # Loading the inventories
+    firm_list = loadInventories(firm_list, inventory_duration_target=inventory_duration_target, 
+        filepath_inventory_duration_targets=filepaths['inventory_duration_targets'], 
+        extra_inventory_target=extra_inventory_target, 
+        inputs_with_extra_inventories=inputs_with_extra_inventories, 
+        buying_sectors_with_extra_inventories=buying_sectors_with_extra_inventories,
+        min_inventory=1)
+    logging.info('Inventory duration targets loaded, inventory_duration_target: '+str(inventory_duration_target))
+    if extra_inventory_target:
+        logging.info("Extra inventory duration: "+str(extra_inventory_target)+\
+            " for inputs "+str(inputs_with_extra_inventories)+\
+            " for buying sectors "+str(buying_sectors_with_extra_inventories))
+
+
+    # inventories = {sec:{} for sec in present_sectors}
+    # for firm in firm_list:
+    #     for input_id, inventory in firm.inventory_duration_target.items():
+    #         if input_id not in inventories[firm.sector].keys():
+    #             inventories[firm.sector][input_id] = inventory
+    #         else:
+    #             inventories[firm.sector][input_id] = inventory
+    # with open(os.path.join("output", "Test", "inventories.json"), 'w') as f:
+    #     json.dump(inventories, f)
+
+    # Adding the firms and household onto the nodes of the transport network
+
+    ### Create agents: Countries
+    logging.info('Creating country_list. Countries included: '+str(countries_to_include))
+    country_list = createCountries(filepaths['imports'], filepaths['exports'], 
+        filepaths['transit_matrix'], transport_nodes, 
+        present_sectors, countries_to_include=countries_to_include, 
+        time_resolution=time_resolution,
+        target_units=monetary_units_in_model, input_units=monetary_units_inputed)
+    logging.info('Country_list created: '+str([country.pid for country in country_list]))
+
+
+    ### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
+    # Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
+    # In this case, we use an average.
+    firm_list, country_list, sector_to_usdPerTon = loadTonUsdEquivalence(sector_table, firm_list, country_list)
+
+    # Save to tmp folder
+    tmp_data['sector_table'] = sector_table
+    tmp_data['firm_table'] = firm_table
+    tmp_data['present_sectors'] = present_sectors
+    tmp_data['flow_types_to_export'] = flow_types_to_export
+    tmp_data['firm_list'] = firm_list
+    tmp_data['household_table'] = household_table
+    tmp_data['household_list'] = household_list
+    tmp_data['country_list'] = country_list
+    pickle_filename = os.path.join('tmp', 'firms_households_countries_pickle')
+    pickle.dump(tmp_data, open(pickle_filename, 'wb'))
+    logging.info('Firms, households, and countries saved in tmp folder: '+pickle_filename)
+
+else:
+    pickle_filename = os.path.join('tmp', 'firms_households_countries_pickle')
+    tmp_data = pickle.load(open(pickle_filename, 'rb'))
+    sector_table = tmp_data['sector_table']
+    present_sectors = tmp_data['present_sectors']
+    flow_types_to_export = tmp_data['flow_types_to_export']
+    firm_table = tmp_data['firm_table']
+    household_table = tmp_data['household_table']
+    firm_list = tmp_data['firm_list']
+    household_list = tmp_data['household_list']
+    country_list = tmp_data['country_list']
+    logging.info('Firms, households, and countries generated from temp file.')
+
+
+# Loacte firms and households on transport network
 T.locate_firms_on_nodes(firm_list)
-logging.info('Firms located on the transport network')
+T.locate_households_on_nodes(firm_list)
+logging.info('Firms and household located on the transport network')
 
 
-### Create agents: Countries
-logging.info('Creating country_list. Countries included: '+str(countries_to_include))
-country_list = createCountries(filepaths['imports'], filepaths['exports'], 
-    filepaths['transit_matrix'], transport_nodes, 
-    present_sectors, countries_to_include=countries_to_include, 
-    time_resolution=time_resolution,
-    target_units=monetary_units_in_model, input_units=monetary_units_inputed)
-logging.info('Country_list created: '+str([country.pid for country in country_list]))
-# [Deprecated] Linking the countries to the the transport network via their transit point.
-# This creates "virtual nodes" in the transport network that corresponds to the countries.
-# We create a copy of the transport network without such nodes, it will be used for plotting purposes
-# for country in country_list:
-#     T.connect_country(country)
-
-### Specify the weight of a unit worth of good, which may differ according to sector, or even to each firm/countries
-# Note that for imports, i.e. for the goods delivered by a country, and for transit flows, we do not disentangle sectors
-# In this case, we use an average.
-firm_list, country_list, sector_to_usdPerTon = loadTonUsdEquivalence(sector_table, firm_list, country_list)
-
-### Create agents: Households
-### WORKS UNTIL THERE!
-logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
+'''logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
 firm_table = defineFinalDemand(firm_table, odpoint_table, 
     filepath_population=filepaths['population'], filepath_final_demand=filepaths['final_demand'],
     time_resolution=time_resolution, 
     target_units=monetary_units_in_model, input_units=monetary_units_inputed)
 logging.info('Creating households and loaded their purchase plan')
-households = createHouseholds(firm_table)
-logging.info('Households created')
-
+households = createSingleHouseholds(firm_table)
+logging.info('Households created')'''
 
 ### Create supply chain network
-logging.info('The supply chain graph is being created. nb_suppliers_per_input: '+str(nb_suppliers_per_input))
-G = nx.DiGraph()
+if sys.argv[3] == "0":
+    logging.info('The supply chain graph is being created. nb_suppliers_per_input: '+str(nb_suppliers_per_input))
+    G = nx.DiGraph()
 
-logging.info('Tanzanian households are selecting their Tanzanian retailers (domestic B2C flows)')
-households.select_suppliers(G, firm_list, mode='inputed')
+    logging.info('Households are selecting their retailers (domestic B2C flows)')
+    for household in household_list:
+        household.select_suppliers(G, firm_list, firm_table, nb_suppliers_per_input, weight_localization)
 
-logging.info('Tanzanian exporters are being selected by purchasing countries (export B2B flows)')
-logging.info('and trading countries are being connected (transit flows)')
-for country in country_list:
-    country.select_suppliers(G, firm_list, country_list, sector_table, transport_nodes)
+    logging.info('Exporters are being selected by purchasing countries (export B2B flows)')
+    logging.info('and trading countries are being connected (transit flows)')
+    for country in country_list:
+        country.select_suppliers(G, firm_list, country_list, sector_table, transport_nodes)
 
-logging.info('Tanzanian firms are selecting their Tanzanian and international suppliers (import B2B flows) (domestric B2B flows). Weight localisation is '+str(weight_localization))
-for firm in firm_list:
-    firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_input, weight_localization, 
-        import_code=import_code)
+    logging.info('Firms are selecting their domestic and international suppliers (import B2B flows) (domestic B2B flows).'+
+     ' Weight localisation is '+str(weight_localization))
+    import_code = sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]
+    for firm in firm_list:
+        firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_input, weight_localization, 
+            import_code=import_code)
+    logging.info('The nodes and edges of the supplier--buyer have been created')
+    if export['sc_network_summary']:
+        exportSupplyChainNetworkSummary(G, firm_list, exp_folder)
 
-logging.info('The nodes and edges of the supplier--buyer have been created')
-if export['sc_network_summary']:
-    exportSupplyChainNetworkSummary(G, firm_list, exp_folder)
+    # Save to tmp folder
+    tmp_data['supply_chain_network'] = G
+    tmp_data['firm_list'] = firm_list
+    tmp_data['household_list'] = household_list
+    tmp_data['country_list'] = country_list
+    pickle_filename = os.path.join('tmp', 'supply_chain_pickle')
+    pickle.dump(tmp_data, open(pickle_filename, 'wb'))
+    logging.info('Supply chain saved in tmp folder: '+pickle_filename)
+
+else:
+    pickle_filename = os.path.join('tmp', 'supply_chain_pickle')
+    tmp_data = pickle.load(open(pickle_filename, 'rb'))
+    G = tmp_data['supply_chain_network']
+    firm_list = tmp_data['firm_list']
+    household_list = tmp_data['household_list']
+    country_list = tmp_data['country_list']
+    logging.info('Supply chain generated from temp file.')
+
 
 logging.info('Compute the orders on each supplier--buyer link')
 setInitialSCConditions(T, G, firm_list, 
-    country_list, households, initialization_mode="equilibrium")
+    country_list, household_list, initialization_mode="equilibrium")
+
+exit()
 
 ### Coupling transportation network T and production network G
 logging.info('The supplier--buyer graph is being connected to the transport network')

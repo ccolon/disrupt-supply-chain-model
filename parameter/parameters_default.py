@@ -7,6 +7,9 @@ export = {
     # Save a log file in the output folder, called "exp.log"
     "log": True,
 
+    # Transport nodes and edges as geojson
+    "transport": False,
+
     # Save the main result in a "criticality.csv" file in the output folder
     # Each line is a simulation, it saves what is disrupted and for how long, and aggregate observables
     "criticality": True,
@@ -109,13 +112,29 @@ sectors_to_exclude = None
 # - if 'type' is 'absolute', test cutoff againt the sector's absolute output
 cutoff_sector_output = {
     'type': 'percentage',
-    'value': 0.01
+    'value': 0.02
 }
+
+# Filter out sectors whose final demand is below that cutoff value
+# - if 'type' is 'percentage', test cutoff againt the sector's relative output
+# - if 'type' is 'absolute', test cutoff againt the sector's absolute output
+cutoff_sector_demand = {
+    'type': 'percentage',
+    'value': 0.02
+}
+
+# How to combine the output and demand sector cutoffs
+combine_sector_cutoff = "and"
 
 # Which districts to include. Possible values:
 # - 'all': all the districts are kept
 # - list of districts
 districts_to_include = "all"
+
+# Population density cutoff, in capita / km2
+# Adminunit below this cutoff are eliminated for demand odpoint
+pop_density_cutoff = 150
+
 
 # Which countries to include. Possible values:
 # - 'all': all the districts are kept

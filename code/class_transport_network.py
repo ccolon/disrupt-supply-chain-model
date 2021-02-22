@@ -214,6 +214,11 @@ class TransportNetwork(nx.Graph):
                 except KeyError:
                     logging.error('Transport network has no node numbered: '+str(firm.odpoint))
     
+
+    def locate_households_on_nodes(self, household_list):
+        for household in household_list:
+            self.node[household.odpoint]['household_id'] = household.pid
+
     
     def provide_shortest_route(self, origin_node, destination_node, route_weight):
         '''

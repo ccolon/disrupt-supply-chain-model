@@ -6,7 +6,7 @@ from export_functions import *
 from check_functions import *
 
 def setInitialSCConditions(transport_network, sc_network, firm_list, 
-    country_list, households, initialization_mode="equilibrium"):
+    country_list, household_list, initialization_mode="equilibrium"):
     """
     Set the initial supply chain conditions and reinitialize the transport network at 0.
 
@@ -29,7 +29,7 @@ def setInitialSCConditions(transport_network, sc_network, firm_list,
     """
     logging.info("Setting initial supply-chain conditions")
     transport_network.reinitialize_flows_and_disruptions()
-    set_initial_conditions(sc_network, firm_list, households, country_list,
+    set_initial_conditions(sc_network, firm_list, household_list, country_list,
         initialization_mode)
     logging.info("Initial supply-chain conditions set")
 
