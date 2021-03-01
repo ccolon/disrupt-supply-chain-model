@@ -3,14 +3,15 @@ import pandas as pd
 import math
 import logging
 
-from class_firm import Firm
-from class_commerciallink import CommercialLink
+import class_commerciallink
 from functions import rescale_values, \
     generate_weights_from_list, \
     determine_suppliers_and_weights,\
     identify_firms_in_each_sector,\
     identify_special_transport_nodes,\
-    transformUSDtoTons
+    transformUSDtoTons, agent_decide_initial_routes,\
+    agent_receive_products_and_pay
+
 
 class Country(object):
 
@@ -18,6 +19,7 @@ class Country(object):
         purchase_plan=None, transit_from=None, transit_to=None, supply_importance=None, 
         usd_per_ton=None):
         # Instrinsic parameters
+        self.agent_type = "country"
         self.pid = pid
         self.usd_per_ton = usd_per_ton
         self.odpoint = odpoint
@@ -56,8 +58,8 @@ class Country(object):
         for selling_country_pid, quantity in self.transit_from.items():
             selling_country_object = [country for country in country_list if country.pid==selling_country_pid][0]
             graph.add_edge(selling_country_object, self,
-                       object=CommercialLink(
-                           pid=str(selling_country_pid)+'to'+str(self.pid),
+                       object=class_commerciallink.CommercialLink(
+                           pid=str(selling_country_pid)+'->'+str(self.pid),
                            product='transit',
                            product_type="transit", #suppose that transit type are non service, material stuff
                            category="transit",
@@ -106,8 +108,8 @@ class Country(object):
             for supplier_id in selected_supplier_ids:
                 # For each supplier, create an edge in the economic network
                 graph.add_edge(firm_list[supplier_id], self,
-                           object=CommercialLink(
-                               pid=str(supplier_id)+'to'+str(self.pid),
+                           object=class_commerciallink.CommercialLink(
+                               pid=str(supplier_id)+'->'+str(self.pid),
                                product=sector,
                                product_type=firm_list[supplier_id].sector_type,
                                category="export",
@@ -208,7 +210,10 @@ class Country(object):
 
     def decide_initial_routes(self, graph, transport_network, transport_modes,
         account_capacity, monetary_unit_flow):
-        for edge in graph.out_edges(self):
+
+        agent_decide_initial_routes(self, graph, transport_network, transport_modes,
+        account_capacity, monetary_unit_flow)
+        '''for edge in graph.out_edges(self):
             if edge[1].pid == -1: # we do not create route for households
                 continue
             elif edge[1].odpoint == -1: # we do not create route for service firms if explicit_service_firms = False
@@ -245,7 +250,7 @@ class Country(object):
                     new_load_in_usd = graph[self][edge[1]]['object'].order
                     new_load_in_tons = transformUSDtoTons(new_load_in_usd, monetary_unit_flow, self.usd_per_ton)
                     transport_network.update_load_on_route(route, new_load_in_tons)
-
+'''
             
     def deliver_products(self, graph, transport_network,
                         monetary_unit_transport_cost, monetary_unit_flow, 
@@ -258,6 +263,10 @@ class Country(object):
         self.tonkm_transported = 0
         self.qty_sold = 0
         for edge in graph.out_edges(self):
+            if graph[self][edge[1]]['object'].order == 0:
+                logging.debug("Agent "+str(self.pid)+": "+
+                    str(graph[self][edge[1]]['object'].buyer_id)+" is my client but did not order")
+                continue
             graph[self][edge[1]]['object'].delivery = graph[self][edge[1]]['object'].order
             graph[self][edge[1]]['object'].delivery_in_tons = \
                 transformUSDtoTons(graph[self][edge[1]]['object'].order, monetary_unit_flow, self.usd_per_ton)
@@ -294,6 +303,11 @@ class Country(object):
     def send_shipment(self, commercial_link, transport_network,
         monetary_unit_transport_cost, monetary_unit_flow, cost_repercussion_mode):
 
+        if commercial_link.delivery_in_tons == 0:
+            print("delivery", commercial_link.delivery)
+            print("supplier_id", commercial_link.supplier_id)
+            print("buyer_id", commercial_link.buyer_id)
+
         monetary_unit_factor = {
             "mUSD": 1e6,
             "kUSD": 1e3,
@@ -323,7 +337,8 @@ class Country(object):
             return 0
 
         # If there is a disruption, we try the alternative route, if there is any
-        if (len(commercial_link.alternative_route)>0) & (self.check_route_avaibility(commercial_link, transport_network, 'alternative') == 'available'):
+        if (len(commercial_link.alternative_route)>0) & \
+           (self.check_route_avaibility(commercial_link, transport_network, 'alternative') == 'available'):
             commercial_link.current_route = 'alternative'
             route = commercial_link.alternative_route
         # Otherwise we have to find a new one
@@ -421,46 +436,46 @@ class Country(object):
 
                     
     def receive_products_and_pay(self, graph, transport_network):
-        self.extra_spending = 0
-        self.consumption_loss = 0
-        for edge in graph.in_edges(self):
-            if (edge[0].odpoint == -1): # if buys service, get directly from commercial link
-                self.receive_service_and_pay(graph[edge[0]][self]['object'])
-            else: # else collect through transport network
-                self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
+        agent_receive_products_and_pay(self, graph, transport_network)
+
+    #     self.extra_spending = 0
+    #     self.consumption_loss = 0
+    #     for edge in graph.in_edges(self):
+    #         if (edge[0].odpoint == -1): # if buys service, get directly from commercial link
+    #             self.receive_service_and_pay(graph[edge[0]][self]['object'])
+    #         else: # else collect through transport network
+    #             self.receive_shipment_and_pay(graph[edge[0]][self]['object'], transport_network)
 
 
-    def receive_service_and_pay(self, commercial_link):
-        quantity_delivered = commercial_link.delivery
-        commercial_link.payment = quantity_delivered * commercial_link.price
-        self.extra_spending += quantity_delivered * (commercial_link.price - commercial_link.eq_price)
+    # def receive_service_and_pay(self, commercial_link):
+    #     quantity_delivered = commercial_link.delivery
+    #     commercial_link.payment = quantity_delivered * commercial_link.price
+    #     self.extra_spending += quantity_delivered * (commercial_link.price - commercial_link.eq_price)
         
-
-    def receive_shipment_and_pay(self, commercial_link, transport_network):
-        """Firm look for shipments in the transport nodes it is locatedd
-        It takes those which correspond to the commercial link 
-        It receives them, thereby removing them from the transport network
-        Then it pays the corresponding supplier along the commecial link
-        """
-        #quantity_intransit = commercial_link.delivery
-        quantity_delivered = 0
-        price = 1
-        if commercial_link.pid in transport_network.node[self.odpoint]['shipments'].keys():
-            quantity_delivered += transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['quantity']
-            price = transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['price']
-            transport_network.remove_shipment(commercial_link)
-        # Increment extra spending
-        self.extra_spending += quantity_delivered * (price - commercial_link.eq_price)
-        # Increment consumption loss
-        self.consumption_loss += commercial_link.delivery - quantity_delivered
-        # Log if quantity received does not match order
-        if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
-            logging.debug("Agent "+str(self.pid)+": quantity delivered by "+
-                str(commercial_link.supplier_id)+" is "+str(quantity_delivered)+
-                ". It was supposed to be "+str(commercial_link.delivery)+".")
-        # Make payment
-        commercial_link.payment = quantity_delivered * price
-        
+    # def receive_shipment_and_pay(self, commercial_link, transport_network):
+    #     """Firm look for shipments in the transport nodes it is locatedd
+    #     It takes those which correspond to the commercial link 
+    #     It receives them, thereby removing them from the transport network
+    #     Then it pays the corresponding supplier along the commecial link
+    #     """
+    #     #quantity_intransit = commercial_link.delivery
+    #     quantity_delivered = 0
+    #     price = 1
+    #     if commercial_link.pid in transport_network.node[self.odpoint]['shipments'].keys():
+    #         quantity_delivered += transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['quantity']
+    #         price = transport_network.node[self.odpoint]['shipments'][commercial_link.pid]['price']
+    #         transport_network.remove_shipment(commercial_link)
+    #     # Increment extra spending
+    #     self.extra_spending += quantity_delivered * (price - commercial_link.eq_price)
+    #     # Increment consumption loss
+    #     self.consumption_loss += commercial_link.delivery - quantity_delivered
+    #     # Log if quantity received does not match order
+    #     if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
+    #         logging.debug("Agent "+str(self.pid)+": quantity delivered by "+
+    #             str(commercial_link.supplier_id)+" is "+str(quantity_delivered)+
+    #             ". It was supposed to be "+str(commercial_link.delivery)+".")
+    #     # Make payment
+    #     commercial_link.payment = quantity_delivered * price      
         
         
 

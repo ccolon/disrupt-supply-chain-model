@@ -6,19 +6,40 @@ import geopandas as gpd
 from builder import extractEdgeList
 
 
-def exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepath_road_nodes,
+def exportFirmODPointTable(firm_list, firm_table, household_table, filepath_road_nodes,
     export_firm_table, export_odpoint_table, export_folder):
 
-    imports = pd.Series({firm.pid: sum([val for key, val in firm.purchase_plan.items() if str(key)[0]=="C"]) for firm in firm_list}, name='imports')
-    production_table = pd.Series({firm.pid: firm.production_target for firm in firm_list}, name='total_production')
-    b2c_share = pd.Series({firm.pid: firm.clients[-1]['share'] if -1 in firm.clients.keys() else 0 for firm in firm_list}, name='b2c_share')
-    export_share = pd.Series({firm.pid: sum([firm.clients[x]['share'] for x in firm.clients.keys() if isinstance(x, str)]) for firm in firm_list}, name='export_share')
+    # Get info per firm
+    imports = pd.Series({
+        firm.pid: sum([val for key, val in firm.purchase_plan.items() if str(key)[0]=="C"]) 
+        for firm in firm_list
+    }, name='imports')
+    production_table = pd.Series({
+        firm.pid: firm.production_target 
+        for firm in firm_list
+    }, name='total_production')
+    b2c_share = pd.Series({
+        firm.pid: sum([val['share'] for key, val in firm.clients.items() if str(key)[0]=="h"])
+        for firm in firm_list
+    }, name='b2c_share')
+    export_share = pd.Series({
+        firm.pid: sum([val['share'] for key, val in firm.clients.items() if str(key)[0]=="C"])
+        for firm in firm_list
+    }, name='export_share')
     production_table = pd.concat([production_table, b2c_share, export_share, imports], axis=1)
     production_table['production_toC'] = production_table['total_production']*production_table['b2c_share']
     production_table['production_toB'] = production_table['total_production']-production_table['production_toC']
     production_table['production_exported'] = production_table['total_production']*production_table['export_share']
     production_table.index.name = 'id'
     firm_table = firm_table.merge(production_table.reset_index(), on="id", how="left")
+
+    # Get info per od point
+    odpoint_table_firm = firm_table.groupby('odpoint', as_index=False)['id'].count()
+    odpoint_table_household = household_table.groupby('odpoint', as_index=False)['population'].sum()
+    odpoint_table = pd.concat([
+        odpoint_table_firm.rename(columns={'id': 'nb_firms'}),
+        odpoint_table_household.rename(columns={'id': 'pop_in_households'}),
+    ], sort=True)
     prod_per_sector_ODpoint_table = firm_table.groupby(['odpoint', 'sector'])['total_production'].sum().unstack().fillna(0).reset_index()
     odpoint_table = odpoint_table.merge(prod_per_sector_ODpoint_table, on='odpoint', how="left")
     odpoint_table = odpoint_table.merge(

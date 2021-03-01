@@ -1,4 +1,5 @@
-from functions import determine_nb_suppliers, select_supplier_from_list
+from functions import determine_nb_suppliers, select_supplier_from_list,\
+                agent_receive_products_and_pay
 
 import random
 import pandas as pd
@@ -11,6 +12,7 @@ class Household(object):
 
     def __init__(self, pid, odpoint, long, lat, sector_consumption):
         # Intrinsic parameters
+        self.agent_type = "household"
         self.pid = pid
         self.odpoint = odpoint
         self.long = long
@@ -21,10 +23,10 @@ class Household(object):
         self.purchase_plan = {}
         self.retailers = {}
         # Variables reset and updated at each time step
-        self.consumption = {}
+        self.consumption_per_retailer = {}
         self.tot_consumption = 0
         self.consumption_per_sector = {}
-        self.spending = {}
+        self.spending_per_retailer = {}
         self.tot_spending = 0
         self.spending_per_sector = {}
         # Cumulated variables reset at beginning and updated at each time step
@@ -33,9 +35,9 @@ class Household(object):
         
     
     def reset_variables(self):
-        self.consumption = {}
+        self.consumption_per_retailer = {}
         self.tot_consumption = 0
-        self.spending = {}
+        self.spending_per_retailer = {}
         self.tot_spending = 0
         self.extra_spending = 0
         self.consumption_loss = 0
@@ -48,10 +50,10 @@ class Household(object):
             logging.warn("Households initialize variables based on purchase plan, "
                 +"but it is empty.")
 
-        self.consumption = self.purchase_plan
+        self.consumption_per_retailer = self.purchase_plan
         self.tot_consumption = sum(list(self.purchase_plan.values()))
         self.consumption_loss_per_sector = {sector: 0 for sector in self.purchase_plan.keys()}
-        self.spending = self.consumption
+        self.spending_per_retailer = self.consumption_per_retailer
         self.tot_spending = self.tot_consumption
         self.extra_spending_per_sector = {sector: 0 for sector in self.purchase_plan.keys()}
 
@@ -73,7 +75,8 @@ class Household(object):
             retailers, retailer_weights = select_supplier_from_list(
                 self, firm_list, 
                 nb_suppliers_to_choose, potential_firms, 
-                distance=True, importance=True, weight_localization=weight_localization
+                distance=True, importance=False, 
+                weight_localization=weight_localization, force_same_odpoint=True
             )
 
             # For each of them, create commercial link
@@ -81,7 +84,7 @@ class Household(object):
                 # For each retailer, create an edge in the economic network
                 graph.add_edge(firm_list[retailer_id], self,
                             object=CommercialLink(
-                                pid=str(retailer_id)+'to'+str(self.pid),
+                                pid=str(retailer_id)+'->'+str(self.pid),
                                 product=sector,
                                 product_type=firm_list[retailer_id].sector_type,
                                 category="domestic_B2C",
@@ -106,14 +109,16 @@ class Household(object):
             graph[edge[0]][self]['object'].order = quantity_to_buy
 
 
-    def receive_products_and_pay(self, graph):
+    def receive_products_and_pay(self, graph, transport_network):
+        agent_receive_products_and_pay(self, graph, transport_network)
         # Re-initialize values that reset at each time step 
-        self.reset_variables()
+        #self.reset_variables()
         # self.consumption = {}
         # self.tot_consumption = 0 #quantity
         # self.spending = {}
         # self.tot_spending = 0 #money
 
+        '''
         for edge in graph.in_edges(self):
             # For each retailer, get the products
             quantity_delivered = graph[edge[0]][self]['object'].delivery
@@ -137,5 +142,5 @@ class Household(object):
                 logging.debug("Household: Firm "+str(edge[0].pid)+" supposed to deliver "+
                     str(self.purchase_plan[edge[0].pid])+ " but delivered "+
                     str(quantity_delivered))
-
+        '''
         

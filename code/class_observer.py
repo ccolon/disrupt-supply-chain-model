@@ -12,9 +12,9 @@ from functions import rescale_values
 class Observer(object):
     
     def __init__(self, firm_list, Tfinal=0):
-        self.firms = {}
-        self.households = {}
-        self.countries = {}
+        self.firms = []
+        self.households = []
+        self.countries = []
         sector_list = list(set([firm.sector for firm in firm_list]))
         self.disruption_time = 1
         self.production = pd.DataFrame(index=range(0,Tfinal+1), 
@@ -60,31 +60,93 @@ class Observer(object):
         self.tonkm_transported_disruption = 0
     
 
-    def collect_agent_data(self, firm_list, households, country_list, time_step):
-        self.firms[time_step] = {firm.pid: {
-            'production': firm.production,
-            'profit': firm.profit,
-            'transport_cost': firm.finance['costs']['transport'],
-            'input_cost': firm.finance['costs']['input'],
-            'other_cost': firm.finance['costs']['other'],
-            'inventory_duration': firm.current_inventory_duration,
-            'generalized_transport_cost': firm.generalized_transport_cost,
-            'usd_transported': firm.usd_transported,
-            'tons_transported': firm.tons_transported,
-            'tonkm_transported': firm.tonkm_transported
-        } for firm in firm_list}
-        self.countries[time_step] = {country.pid: {
-            'generalized_transport_cost': country.generalized_transport_cost,
-            'usd_transported': country.usd_transported,
-            'tons_transported': country.tons_transported,
-            'tonkm_transported': country.tonkm_transported,
-            'extra_spending': country.extra_spending,
-            'consumption_loss': country.consumption_loss,
-            'spending': sum(list(country.qty_purchased.values()))
-        } for country in country_list}
+
+    def collect_agent_data(self, firm_list, household_list, country_list, time_step):
+        self.firms += [
+            {
+                'time_step': time_step,
+                'firm': firm.pid,
+                'production': firm.production,
+                'profit': firm.profit,
+                'transport_cost': firm.finance['costs']['transport'],
+                'input_cost': firm.finance['costs']['input'],
+                'other_cost': firm.finance['costs']['other'],
+                'inventory_duration': firm.current_inventory_duration,
+                'generalized_transport_cost': firm.generalized_transport_cost,
+                'usd_transported': firm.usd_transported,
+                'tons_transported': firm.tons_transported,
+                'tonkm_transported': firm.tonkm_transported
+            } 
+            for firm in firm_list
+        ]
+
+        self.countries += [
+            {
+                'time_step': time_step,
+                'country': country.pid,
+                'generalized_transport_cost': country.generalized_transport_cost,
+                'usd_transported': country.usd_transported,
+                'tons_transported': country.tons_transported,
+                'tonkm_transported': country.tonkm_transported,
+                'extra_spending': country.extra_spending,
+                'consumption_loss': country.consumption_loss,
+                'spending': sum(list(country.qty_purchased.values()))
+            } 
+            for country in country_list
+        ]
+
+        self.households += [
+            {
+                'time_step': time_step,
+                'household': household.pid,
+                'spending_per_retailer': household.spending_per_retailer,
+                'consumption_per_retailer': household.consumption_per_retailer,
+                'extra_spending': household.extra_spending,
+                'consumption_loss': household.consumption_loss
+            }
+            for household in household_list
+        ]
+        
+
+
+    def collect_agent_dataOLD(self, firm_list, household_list, country_list, time_step):
+        self.firms[time_step] = {
+            firm.pid: {
+                'production': firm.production,
+                'profit': firm.profit,
+                'transport_cost': firm.finance['costs']['transport'],
+                'input_cost': firm.finance['costs']['input'],
+                'other_cost': firm.finance['costs']['other'],
+                'inventory_duration': firm.current_inventory_duration,
+                'generalized_transport_cost': firm.generalized_transport_cost,
+                'usd_transported': firm.usd_transported,
+                'tons_transported': firm.tons_transported,
+                'tonkm_transported': firm.tonkm_transported
+            } 
+            for firm in firm_list
+        }
+
+        self.countries[time_step] = {
+            country.pid: {
+                'generalized_transport_cost': country.generalized_transport_cost,
+                'usd_transported': country.usd_transported,
+                'tons_transported': country.tons_transported,
+                'tonkm_transported': country.tonkm_transported,
+                'extra_spending': country.extra_spending,
+                'consumption_loss': country.consumption_loss,
+                'spending': sum(list(country.qty_purchased.values()))
+            } 
+            for country in country_list
+        }
+
         self.households[time_step] = {
-            'spending': households.spending,
-            'consumption': households.consumption
+            household.pid: {
+                'spending_per_retailer': household.spending_per_retailer,
+                'consumption_per_retailer': household.consumption_per_retailer,
+                'extra_spending': household.extra_spending,
+                'consumption_loss': household.consumption_loss
+            }
+            for household in household_list
         }
         
         
@@ -203,95 +265,141 @@ class Observer(object):
             graph[edge[0]][edge[1]]['object'].delivery
         
     
-    def get_ts_feature_agg_all_agents(self, feature, agent_type):
-        if agent_type=='firm':
-            return pd.Series(index=list(self.firms.keys()), data=[sum([val[feature] for firm_id, val in self.firms[t].items()]) for t in self.firms.keys()])
-        elif agent_type=='country':
-            return pd.Series(index=list(self.countries.keys()), data=[sum([val[feature] for country_id, val in self.countries[t].items()]) for t in self.countries.keys()])
-        elif agent_type=='firm+country':
-            tot_firm = pd.Series(index=list(self.firms.keys()), data=[sum([val[feature] for firm_id, val in self.firms[t].items()]) for t in self.firms.keys()])
-            tot_country = pd.Series(index=list(self.countries.keys()), data=[sum([val[feature] for country_id, val in self.countries[t].items()]) for t in self.countries.keys()])
-            return tot_firm+tot_country
-        else:
-            raise ValueError("'agent_type' should be 'firm', 'country', or 'firm+country'")
+    # def get_ts_feature_agg_all_agents(self, feature, agent_type):
+    #     if agent_type=='firm':
+    #         return pd.Series(index=list(self.firms.keys()), data=[sum([val[feature] for firm_id, val in self.firms[t].items()]) for t in self.firms.keys()])
+    #     elif agent_type=='country':
+    #         return pd.Series(index=list(self.countries.keys()), data=[sum([val[feature] for country_id, val in self.countries[t].items()]) for t in self.countries.keys()])
+    #     elif agent_type=='firm+country':
+    #         tot_firm = pd.Series(index=list(self.firms.keys()), data=[sum([val[feature] for firm_id, val in self.firms[t].items()]) for t in self.firms.keys()])
+    #         tot_country = pd.Series(index=list(self.countries.keys()), data=[sum([val[feature] for country_id, val in self.countries[t].items()]) for t in self.countries.keys()])
+    #         return tot_firm+tot_country
+    #     else:
+    #         raise ValueError("'agent_type' should be 'firm', 'country', or 'firm+country'")
     
         
-    def evaluate_results(self, transport_network, households, 
-        disruption, disruption_duration, per_firm=False):
+    def evaluate_results(self, transport_network, household_list, 
+        disruption, disruption_duration, epsilon_stop_condition, per_firm=False):
 
+        # parameter (should be in input)
         initial_time_step = 0
 
-        # Compute indirect cost
-        self.households_extra_spending = households.extra_spending
-        logging.info("Impact of price change on households: "+'{:.4f}'.format(self.households_extra_spending))
-        tot_spending_ts = pd.Series({t: sum(val['spending'].values()) for t, val in self.households.items()})
-        self.spending_recovered = (tot_spending_ts.iloc[-1] - tot_spending_ts.loc[initial_time_step]) < 1e-6
-        if self.spending_recovered:
-            logging.info("Households spending has recovered")
-        else:
-            logging.info("Households spending has not recovered")
-            
-        self.households_consumption_loss = households.consumption_loss
-        logging.info("Impact of shortages on households: "+'{:.4f}'.format(self.households_consumption_loss))
-        tot_consumption_ts = pd.Series({t: sum(val['consumption'].values()) for t, val in self.households.items()})
-        self.consumption_recovered = (tot_consumption_ts.iloc[-1] - tot_consumption_ts.loc[initial_time_step]) < 1e-6
-        if self.consumption_recovered:
-            logging.info("Households consumption has recovered")
-        else:
-            logging.info("Households consumption has not recovered")
-        
-        # Compute other indicators
-        tot_ts = self.get_ts_feature_agg_all_agents('generalized_transport_cost', 'firm+country')
-        self.generalized_cost_normal = tot_ts.loc[initial_time_step]
-        self.generalized_cost_disruption = tot_ts.loc[self.disruption_time]
-        
-        tot_ts = self.get_ts_feature_agg_all_agents('generalized_transport_cost', 'country')
-        self.generalized_cost_country_normal = tot_ts.loc[initial_time_step]
-        self.generalized_cost_country_disruption = tot_ts.loc[self.disruption_time]
-        
-        tot_ts = self.get_ts_feature_agg_all_agents('usd_transported', 'firm+country')
-        self.usd_transported_normal = tot_ts.loc[initial_time_step]
-        self.usd_transported_disruption = tot_ts.loc[self.disruption_time]
+        # Turn into dataframe
+        household_df = pd.DataFrame(self.households)
+        firm_df = pd.DataFrame(self.firms)
+        country_df = pd.DataFrame(self.countries)
 
-        tot_ts = self.get_ts_feature_agg_all_agents('tons_transported', 'firm+country')
-        self.tons_transported_normal = tot_ts.loc[initial_time_step]
-        self.tons_transported_disruption = tot_ts.loc[self.disruption_time]
+        # Evaluate household total extra spending
+        ts = household_df.groupby('time_step')['extra_spending'].sum()
+        self.households_extra_spending = ts.sum()
+        msg = "Price impact on households: "+'{:.4f}'.format(self.households_extra_spending)
+        self.spending_recovered = abs(ts.iloc[-1] - ts.loc[initial_time_step]) < epsilon_stop_condition
+        if self.spending_recovered:
+            msg += " (recoved)"
+        else:
+            msg += " (not recoved)"
+        logging.info(msg)
+
+        # Evaluate country total consumption loss
+        ts = household_df.groupby('time_step')['consumption_loss'].sum()
+        self.households_consumption_loss = household_df['consumption_loss'].sum()
+        msg = "Shortage impact on households: "+'{:.4f}'.format(self.households_consumption_loss)
+        self.consumption_recovered = abs(ts.iloc[-1] - ts.loc[initial_time_step]) < epsilon_stop_condition
+        if self.consumption_recovered:
+            msg += " (recoved)"
+        else:
+            msg += " (not recoved)"
+        logging.info(msg)
+
+        # Country extra spending
+        ts = country_df.groupby('time_step')['extra_spending'].sum()
+        self.countries_extra_spending = ts.sum()
+        msg = "Price impact on countries: "+'{:.4f}'.format(self.countries_extra_spending)
+        if abs(ts.iloc[-1] - ts.loc[initial_time_step]) < epsilon_stop_condition:
+            msg += " (recoved)"
+        else:
+            msg += " (not recoved)"
+        logging.info(msg)
+
+        # Country extra spending
+        ts = country_df.groupby('time_step')['consumption_loss'].sum()
+        self.countries_consumption_loss = ts.sum()
+        msg = "Shortage impact on countries: "+'{:.4f}'.format(self.countries_consumption_loss)
+        if abs(ts.iloc[-1] - ts.loc[initial_time_step]) < epsilon_stop_condition:
+            msg += " (recoved)"
+        else:
+            msg += " (not recoved)"
+        logging.info(msg)
+
+
+        # Compute other indicators
+        ts = firm_df.groupby('time_step')['generalized_transport_cost'].sum() +\
+             country_df.groupby('time_step')['generalized_transport_cost'].sum()
+        self.generalized_cost_normal = ts.loc[initial_time_step]
+        self.generalized_cost_disruption = ts.loc[self.disruption_time]
         
-        tot_ts = self.get_ts_feature_agg_all_agents('tonkm_transported', 'firm+country')
-        self.tonkm_transported_normal = tot_ts.loc[initial_time_step]
-        self.tonkm_transported_disruption = tot_ts.loc[self.disruption_time]
+        ts = country_df.groupby('time_step')['generalized_transport_cost'].sum()
+        self.generalized_cost_country_normal = ts.loc[initial_time_step]
+        self.generalized_cost_country_disruption = ts.loc[self.disruption_time]
         
-        tot_ts = self.get_ts_feature_agg_all_agents('extra_spending', 'country')
-        self.countries_extra_spending = tot_ts.sum()
+        ts = firm_df.groupby('time_step')['usd_transported'].sum() +\
+             country_df.groupby('time_step')['usd_transported'].sum()
+        self.usd_transported_normal = ts.loc[initial_time_step]
+        self.usd_transported_disruption = ts.loc[self.disruption_time]
+
+        ts = firm_df.groupby('time_step')['tons_transported'].sum() +\
+             country_df.groupby('time_step')['tons_transported'].sum()
+        self.tons_transported_normal = ts.loc[initial_time_step]
+        self.tons_transported_disruption = ts.loc[self.disruption_time]
         
-        tot_ts = self.get_ts_feature_agg_all_agents('consumption_loss', 'country')
-        self.countries_consumption_loss = tot_ts.sum()
+        ts = firm_df.groupby('time_step')['tonkm_transported'].sum() +\
+             country_df.groupby('time_step')['tonkm_transported'].sum()
+        self.tonkm_transported_normal = ts.loc[initial_time_step]
+        self.tonkm_transported_disruption = ts.loc[self.disruption_time]
+
+        
         
         # Measure impact per firm
-        firm_id_in_disrupted_nodes = [
-            firm_id for disrupted_node in disruption['node'] 
-            for firm_id in transport_network.node[disrupted_node]['firms_there']
-        ]
-
-        extra_spending_per_firm = pd.DataFrame({t: val['spending'] for t, val in self.households.items()}).transpose()
-        extra_spending_per_firm = extra_spending_per_firm.sum() - extra_spending_per_firm.shape[0]*extra_spending_per_firm.iloc[0,:]
-        self.households_extra_spending_local = extra_spending_per_firm[firm_id_in_disrupted_nodes].sum()
-        
-        consumption_loss_per_firm = pd.DataFrame({t: val['consumption'] for t, val in self.households.items()}).transpose()
-        consumption_loss_per_firm = -(consumption_loss_per_firm.sum() - consumption_loss_per_firm.shape[0]*consumption_loss_per_firm.iloc[0,:])
-        self.households_consumption_loss_local = consumption_loss_per_firm[firm_id_in_disrupted_nodes].sum()
-        
         if per_firm:
-            self.households_extra_spending_per_firm = extra_spending_per_firm
-            self.households_extra_spending_per_firm[self.households_extra_spending_per_firm<1e-6] = 0
-            self.households_consumption_loss_per_firm = consumption_loss_per_firm
-            self.households_consumption_loss_per_firm[self.households_consumption_loss_per_firm<1e-6] = 0
+            epsilon = 1e-6
+            firm_id_in_disrupted_nodes = [
+                firm_id for disrupted_node in disruption['node'] 
+                for firm_id in transport_network.node[disrupted_node]['firms_there']
+            ]
+            # spending
+            spending_per_firm_per_t = pd.DataFrame([
+                {
+                    'time_step': record['time_step'],
+                    'household': record['household'],
+                    'firm_id': key,
+                    'spending': value
+                }
+                for record in self.households
+                for key, value in record['spending_per_retailer'].items()
+            ])
+            extra_spending_per_firm = spending_per_firm_per_t.groupby(['time_step', 'firm_id'])['spending'].sum().unstack('firm_id')
+            extra_spending_per_firm = extra_spending_per_firm.sum() - extra_spending_per_firm.shape[0]*extra_spending_per_firm.iloc[0,:]
+            self.households_extra_spending_local = extra_spending_per_firm[firm_id_in_disrupted_nodes].sum()
+            
+            # consumption
+            consumption_per_firm_per_t = pd.DataFrame([
+                {
+                    'time_step': record['time_step'],
+                    'household': record['household'],
+                    'firm_id': key,
+                    'consumption': value
+                }
+                for record in self.households
+                for key, value in record['consumption_per_retailer'].items()
+            ])
+            consumption_loss_per_firm = consumption_per_firm_per_t.groupby(['time_step', 'firm_id'])['consumption'].sum().unstack('firm_id')
+            consumption_loss_per_firm = -(consumption_loss_per_firm.sum() - consumption_loss_per_firm.shape[0]*consumption_loss_per_firm.iloc[0,:])
+            self.households_consumption_loss_local = consumption_loss_per_firm[firm_id_in_disrupted_nodes].sum()
 
-        # if export_folder is not None:
-        #     pd.DataFrame(index=["value", "recovered"], data={
-        #         "agg_spending":[self.households_extra_spending, self.spending_recovered], 
-        #         "agg_consumption":[self.households_consumption_loss, self.consumption_recovered]
-        #     }).to_csv(os.path.join(export_folder, "results.csv"))
+            self.households_extra_spending_per_firm = extra_spending_per_firm
+            self.households_extra_spending_per_firm[self.households_extra_spending_per_firm<epsilon] = 0
+            self.households_consumption_loss_per_firm = consumption_loss_per_firm
+            self.households_consumption_loss_per_firm[self.households_consumption_loss_per_firm<epsilon] = 0
 
 
  

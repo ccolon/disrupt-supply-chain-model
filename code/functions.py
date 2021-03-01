@@ -8,6 +8,7 @@ import os
 import random
 import logging
 
+
 def identify_special_transport_nodes(transport_nodes, special):
     res = transport_nodes.dropna(subset=['special'])
     res = res.loc[res['special'].str.contains(special), "id"].tolist()
@@ -256,7 +257,7 @@ def initilize_at_equilibrium(graph, firm_list, household_list, country_list):
     ##the following is just to set once for all the share of sales of each client
     for firm in firm_list:
         firm.retrieve_orders(graph)
-        firm.aggregate_orders()
+        firm.aggregate_orders(print_info=True)
         firm.eq_total_order = firm.total_order
         firm.calculate_client_share_in_sales()
         
@@ -339,8 +340,9 @@ def allFirmsSendPurchaseOrders(G, firm_list):
         firm.send_purchase_orders(G)
         
         
-def allAgentsSendPurchaseOrders(G, firm_list, households, country_list):
-    households.send_purchase_orders(G)
+def allAgentsSendPurchaseOrders(G, firm_list, household_list, country_list):
+    for household in household_list:
+        household.send_purchase_orders(G)
     for firm in firm_list:
         firm.send_purchase_orders(G)
     for country in country_list:
@@ -410,10 +412,11 @@ def allAgentsDeliver(G, firm_list, country_list, T, rationing_mode, explicit_ser
             explicit_service_firm=explicit_service_firm)
         
         
-def allAgentsReceiveProducts(G, firm_list, households, country_list, T):
+def allAgentsReceiveProducts(G, firm_list, household_list, country_list, T):
+    for household in household_list:
+        household.receive_products_and_pay(G, T)
     for firm in firm_list:
         firm.receive_products_and_pay(G, T)
-    households.receive_products_and_pay(G)
     for country in country_list:
         country.receive_products_and_pay(G, T)
     for firm in firm_list:
@@ -522,7 +525,23 @@ def determine_nb_suppliers(nb_suppliers_per_input, max_nb_of_suppliers=None):
 
 def select_supplier_from_list(agent, firm_list, 
     nb_suppliers_to_choose, potential_firm_ids, 
-    distance, importance, weight_localization):
+    distance, importance, weight_localization,
+    force_same_odpoint=False):
+    # reduce firm to choose to local ones
+    if force_same_odpoint:
+        same_odpoint_firms = [
+            firm_id 
+            for firm_id in potential_firm_ids 
+            if firm_list[firm_id].odpoint == agent.odpoint
+        ]
+        if len(same_odpoint_firms) > 0:
+            potential_firm_ids = same_odpoint_firms
+        #     logging.info('retailer available locally at odpoint '+str(agent.odpoint)+
+        #         " for "+firm_list[potential_firm_ids[0]].sector)
+        # else:
+        #     logging.warning('force_same_odpoint but no retailer available at odpoint '+str(agent.odpoint)+
+        #         " for "+firm_list[potential_firm_ids[0]].sector)
+
     # distance weight
     if distance:
         distance_to_each = rescale_values([
@@ -555,7 +574,206 @@ def select_supplier_from_list(agent, firm_list,
         replace=False
     ).tolist()
     # Choose weight if there are multiple suppliers
-    supplier_weights = generate_weights(nb_suppliers_to_choose, importance_of_each)
+    if importance:
+        supplier_weights = generate_weights(nb_suppliers_to_choose, importance_of_each)
+    else:
+        supplier_weights = generate_weights(nb_suppliers_to_choose)
+
 
     # return
     return selected_supplier_id, supplier_weights
+
+
+def agent_decide_initial_routes(agent, graph, transport_network, transport_modes,
+        account_capacity, monetary_unit_flow):
+    for edge in graph.out_edges(agent):
+        if edge[1].pid == -1: # we do not create route for households
+            continue
+        elif edge[1].odpoint == -1: # we do not create route for service firms if explicit_service_firms = False
+            continue
+        else:
+            # Get the id of the orign and destination node
+            origin_node = agent.odpoint
+            destination_node = edge[1].odpoint
+            # Define the type of transport mode to use by looking in the transport_mode table
+            if agent.agent_type == 'firm':
+                cond_from = (transport_modes['from'] == "domestic")
+            elif agent.agent_type == 'country':
+                cond_from = (transport_modes['from'] == agent.pid)
+            else:
+                raise ValueError("'agent' must be a Firm or a Country")
+            if edge[1].agent_type in['firm', 'household']: #see what is the other end
+                cond_to = (transport_modes['to'] == "domestic")
+            elif edge[1].agent_type == 'country':
+                cond_to = (transport_modes['to'] == edge[1].pid)
+            else:
+                raise ValueError("'edge[1]' must be a Firm or a Country")
+                # we have not implemented the "sector" condition
+            transport_mode = transport_modes.loc[cond_from & cond_to, "transport_mode"].iloc[0]
+            graph[agent][edge[1]]['object'].transport_mode = transport_mode
+            # Choose the route and the corresponding mode
+            route, selected_mode = agent.choose_route(
+                transport_network=transport_network, 
+                origin_node=origin_node, 
+                destination_node=destination_node, 
+                possible_transport_modes=transport_mode
+            )
+            # Store it into commercial link object
+            graph[agent][edge[1]]['object'].storeRouteInformation(
+                route=route,
+                transport_mode=selected_mode,
+                main_or_alternative="main",
+                transport_network=transport_network
+            )
+            # Update the "current load" on the transport network
+            # if current_load exceed burden, then add burden to the weight
+            if account_capacity:
+                new_load_in_usd = graph[agent][edge[1]]['object'].order
+                new_load_in_tons = transformUSDtoTons(new_load_in_usd, monetary_unit_flow, agent.usd_per_ton)
+                transport_network.update_load_on_route(route, new_load_in_tons)
+
+
+        
+def agent_receive_products_and_pay(agent, graph, transport_network):
+    # reset variable
+    if agent.agent_type == 'country':
+        agent.extra_spending = 0
+        agent.consumption_loss = 0
+    elif agent.agent_type == 'household':
+        agent.reset_variables()
+
+    # for each incoming link, receive product and pay
+    # the way differs between service and shipment
+    for edge in graph.in_edges(agent): 
+        if graph[edge[0]][agent]['object'].product_type in ['services', 'utility', 'transport']:
+            agent_receive_service_and_pay(agent, graph[edge[0]][agent]['object'])
+        else:
+            agent_receive_shipment_and_pay(agent, graph[edge[0]][agent]['object'], transport_network)
+
+
+def agent_receive_service_and_pay(agent, commercial_link):
+    # Always available, same price
+    quantity_delivered = commercial_link.delivery
+    commercial_link.payment = quantity_delivered * commercial_link.price
+    if agent.agent_type == 'firm':
+        agent.inventory[commercial_link.product] += quantity_delivered
+    # Update indicator
+    agent_update_indicator(agent, quantity_delivered, commercial_link.price, commercial_link)
+
+
+def agent_update_indicator(agent, quantity_delivered, price, commercial_link):
+    """When receiving product, agents update some internal variables
+
+    Parameters
+    ----------
+    """
+    if agent.agent_type == "country":
+        agent.extra_spending += quantity_delivered * (price - commercial_link.eq_price)
+        agent.consumption_loss += commercial_link.delivery - quantity_delivered
+
+    elif agent.agent_type == 'household':
+        agent.consumption_per_retailer[commercial_link.supplier_id] = quantity_delivered
+        agent.tot_consumption += quantity_delivered
+        agent.spending_per_retailer[commercial_link.supplier_id] = quantity_delivered * price
+        agent.tot_spending += quantity_delivered * price
+        agent.extra_spending += quantity_delivered * (price - commercial_link.eq_price)
+        agent.consumption_loss = (agent.purchase_plan[commercial_link.supplier_id] - quantity_delivered) * \
+                    commercial_link.eq_price
+        # if consum_loss >= 1e-6:
+        #     logging.debug("Household "+agent.pid+" Firm "+
+        #         str(commercial_link.supplier_id)+" supposed to deliver "+
+        #         str(agent.purchase_plan[commercial_link.supplier_id])+
+        #         " but delivered "+str(quantity_delivered)
+        #     )
+    # Log if quantity received differs from what it was supposed to be
+    if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
+        logging.debug("Agent "+str(agent.pid)+": quantity delivered by "+
+            str(commercial_link.supplier_id)+" is "+str(quantity_delivered)+
+            ". It was supposed to be "+str(commercial_link.delivery)+".")
+
+
+
+def agent_receive_shipment_and_pay(agent, commercial_link, transport_network):
+    """Firm look for shipments in the transport nodes it is located
+    It takes those which correspond to the commercial link 
+    It receives them, thereby removing them from the transport network
+    Then it pays the corresponding supplier along the commecial link
+    """
+    # Look at available shipment
+    available_shipments = transport_network.node[agent.odpoint]['shipments']
+    if commercial_link.pid in available_shipments.keys():
+        # Identify shipment
+        shipment = available_shipments[commercial_link.pid]
+        # Get quantity and price
+        quantity_delivered = shipment['quantity']
+        price = shipment['price']
+        # Remove shipment from transport
+        transport_network.remove_shipment(commercial_link)
+        # Make payment
+        commercial_link.payment = quantity_delivered * price
+        # If firm, add to inventory
+        if agent.agent_type == 'firm':
+            agent.inventory[commercial_link.product] += quantity_delivered
+
+    # If none is available, log it
+    else:
+        logging.debug("Agent "+str(agent.pid)+
+            ": no shipment available for commercial link "+
+            str(commercial_link.pid)+' ('+commercial_link.product+')'
+        )
+        quantity_delivered = 0
+        price = 1
+
+    agent_update_indicator(agent, quantity_delivered, price, commercial_link)
+
+
+
+def agent_receive_shipment_and_payOLD(agent, commercial_link, transport_network):
+    """Firm look for shipments in the transport nodes it is located
+    It takes those which correspond to the commercial link 
+    It receives them, thereby removing them from the transport network
+    Then it pays the corresponding supplier along the commecial link
+    """
+    # quantity_intransit = commercial_link.delivery
+    # Get delivery and update price
+    quantity_delivered = 0
+    price = 1
+    if commercial_link.pid in transport_network.node[agent.odpoint]['shipments'].keys():
+        quantity_delivered += transport_network.node[agent.odpoint]['shipments'][commercial_link.pid]['quantity']
+        price = transport_network.node[agent.odpoint]['shipments'][commercial_link.pid]['price']
+        transport_network.remove_shipment(commercial_link)
+
+    if agent.agent_type == 'firm':
+        # Add to inventory
+        agent.inventory[commercial_link.product] += quantity_delivered
+
+    elif agent.agent_type == "country":
+        # Increment extra spending
+        agent.extra_spending += quantity_delivered * (price - commercial_link.eq_price)
+        # Increment consumption loss
+        agent.consumption_loss += commercial_link.delivery - quantity_delivered
+
+    elif agent.agent_type == 'household':
+        agent.consumption[commercial_link.supplier_id] = quantity_delivered
+        agent.tot_consumption += quantity_delivered
+        agent.spending[commercial_link.supplier_id] = quantity_delivered * commercial_link.price
+        agent.tot_spending += quantity_delivered * commercial_link.price
+        agent.extra_spending += quantity_delivered * (commercial_link.price - commercial_link.eq_price)
+        consum_loss = (agent.purchase_plan[commercial_link.supplier_id] - quantity_delivered) * \
+                    commercial_link.eq_price
+        agent.consumption_loss += consum_loss
+        if consum_loss >= 1e-6:
+            logging.debug("Household "+agent.pid+" Firm "+
+                str(commercial_link.supplier_id)+" supposed to deliver "+
+                str(agent.purchase_plan[commercial_link.supplier_id])+
+                " but delivered "+str(quantity_delivered)
+            )
+
+    # Log if quantity received differs from what it was supposed to be
+    if abs(commercial_link.delivery - quantity_delivered) > 1e-6:
+        logging.debug("Agent "+str(agent.pid)+": quantity delivered by "+
+            str(commercial_link.supplier_id)+" is "+str(quantity_delivered)+
+            ". It was supposed to be "+str(commercial_link.delivery)+".")
+
+    # Make payment
+    commercial_link.payment = quantity_delivered * price

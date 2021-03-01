@@ -224,7 +224,12 @@ nb_suppliers_per_input = 1
 # Determines how important it is for firms to choose suppliers close to them
 # The chance of choosing a firm as a supplier for an input, depends on its importance score and on its distance
 # It is (importance) / (distance)^w where w is the weight_localization parameter
-weight_localization = 1
+weight_localization_firm = 1
+
+# Determines how important it is for households to choose suppliers close to them
+# The chance of choosing a firm as a supplier for an input, depends on its distance
+# It is 1 / (distance)^w where w is the weight_localization parameter
+weight_localization_household = 4
 
 # Determines the type of disruption analysis to be done
 # Possible values are:

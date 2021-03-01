@@ -482,7 +482,7 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
     logging.info('Select '+str(firm_table_per_adminunit.shape[0])+
         " in "+str(len(selected_adminunits))+' admin units')
     cond = adminunit_eco_data['commune_code'].isin(selected_adminunits)
-    logging.info('Assinging firms to odpoints')
+    logging.info('Assigning firms to odpoints')
     dic_selectAdminunit_to_points = adminunit_eco_data[cond].set_index('commune_code')['geometry'].to_dict()
     # Select road node points
     road_nodes = transport_nodes[transport_nodes['type'] == "roads"]
@@ -562,8 +562,8 @@ def defineFirmsFromGranularEcoData(filepath_adminunit_economic_data,
 
 
 
-    return firm_table_per_odpoint
-    
+    return firm_table_per_odpoint, firm_table_per_adminunit
+
 
 
 
@@ -1142,8 +1142,94 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
     return country_list
 
 
+
+def addHouseholdsForFirms(firm_table, household_table, 
+    filepath_adminunit_demographic_data, sector_table, filtered_sectors):
+
+    # A. Examine where we need new households
+    cond_no_household = ~firm_table['odpoint'].isin(household_table['odpoint'])
+    print(cond_no_household.sum(), 'firms without households')
+    print(firm_table.loc[cond_no_household, 'odpoint'].nunique(), 'od points with firms without households')
+
+    # B. Create new household table
+    added_household_table = firm_table[cond_no_household].groupby('odpoint', as_index=False)['population'].max()
+    odpoint_long_lat = firm_table.loc[cond_no_household, ["odpoint", 'long', "lat"]].drop_duplicates()
+    added_household_table = added_household_table.merge(odpoint_long_lat, how='left', on='odpoint')
+
+    # B1. Load admin data to get tot population
+    adminunit_demo_data = gpd.read_file(filepath_adminunit_demographic_data)
+    tot_pop = adminunit_demo_data['population'].sum()
+
+    # B2. Load sector table to get final demand
+    final_demand = sector_table.loc[sector_table['sector'].isin(filtered_sectors), ['sector', 'final_demand']]
+
+    # B3. Add final demand per sector per new household
+    # put as single row
+    final_demand_as_row = final_demand.set_index('sector').transpose()
+    # duplicates rows
+    final_demand_each_household = pd.concat([final_demand_as_row for i in range(added_household_table.shape[0])])
+    # align index and concat
+    final_demand_each_household.index = added_household_table.index
+    # compute final demand per commune
+    rel_pop = added_household_table['population'] / tot_pop
+    final_demand_each_household = final_demand_each_household.multiply(rel_pop, axis='index')
+    # keep demand only for firm that are there
+    cond_to_reject = (firm_table[cond_no_household].groupby(['odpoint', 'sector'])['population'].sum().isnull()).unstack('sector')
+    cond_to_reject = cond_to_reject.fillna(True)
+    cond_to_reject.index = final_demand_each_household.index
+    final_demand_each_household = final_demand_each_household.mask(cond_to_reject)
+    # add to household table
+    added_household_table = pd.concat([added_household_table, final_demand_each_household], axis=1)
+    # rescale according to time resolution
+    added_household_table[filtered_sectors] = rescaleMonetaryValues(
+        added_household_table[filtered_sectors], 
+        time_resolution="week", 
+        target_units="mUSD", 
+        input_units="USD"
+    )
+    # C. Merge
+    added_household_table['id'] = [household_table['id'].max() + 1 + i for i in range(added_household_table.shape[0])]
+    added_household_table.index = added_household_table['id']
+    household_table = household_table.append(added_household_table, sort=True)
+    # household_table.to_csv('tt.csv')
+
+    # D. Log info
+    logging.info('Create '+str(household_table.shape[0])+" households in "+
+        str(household_table['odpoint'].nunique())+' od points')
+    for sector in filtered_sectors:
+        tot_demand = rescaleMonetaryValues(sector_table.set_index('sector').loc[sector, 'final_demand'], 
+        time_resolution="week", target_units="mUSD", input_units="USD")
+        logging.info('Sector '+sector+": create "+
+            str((~household_table[sector].isnull()).sum())+
+            " buying households that covers "+
+            "{:.0f}%".format(
+                household_table[sector].sum()\
+                / tot_demand * 100
+            )+" of total final demand"
+        )
+    if (household_table[filtered_sectors].sum(axis=1) == 0).any():
+        logging.warning('Some households have no purchase plan!')
+
+    # E. Create household_sector_consumption dic
+    # create dic
+    household_sector_consumption = household_table.set_index('id')[filtered_sectors].to_dict(orient='index')
+    # remove nan values
+    household_sector_consumption = {
+        i: {
+            sector: amount
+            for sector, amount in purchase_plan.items()
+            if ~np.isnan(amount)
+        }
+        for i, purchase_plan in household_sector_consumption.items()
+    }
+
+
+    return household_table, household_sector_consumption
+
+
+
 def defineHouseholds(sector_table, filepath_adminunit_demographic_data,
-    filtered_sectors, pop_density_cutoff, transport_nodes, time_resolution):
+    firm_table, filtered_sectors, pop_density_cutoff, transport_nodes, time_resolution):
     '''Define the nomber of households to model and their purchase plan based on input demographic data
     and filtering options
 
@@ -1160,7 +1246,7 @@ def defineHouseholds(sector_table, filepath_adminunit_demographic_data,
     # A. Filter admunit unit based on density
     # load file
     adminunit_demo_data = gpd.read_file(filepath_adminunit_demographic_data)
-    # filter
+    # filter & keep household were firms are
     cond_density = adminunit_demo_data['pop_density'] >= pop_density_cutoff
     cond_pop = adminunit_demo_data['population'] >= 8000
     cond = cond_pop
@@ -1187,8 +1273,8 @@ def defineHouseholds(sector_table, filepath_adminunit_demographic_data,
     # add to household table
     household_table = pd.concat([household_table, final_demand_each_household], axis=1)
 
-    # C. Creat one household per OD point
-    logging.info('Assinging households to odpoints')
+    # C. Create one household per OD point
+    logging.info('Assigning households to odpoints')
     dic_selectAdminunit_to_points = household_table.set_index('commune_code')['geometry'].to_dict()
     # Select road node points
     road_nodes = transport_nodes[transport_nodes['type'] == "roads"]

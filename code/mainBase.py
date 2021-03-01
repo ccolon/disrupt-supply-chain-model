@@ -139,7 +139,7 @@ if sys.argv[2] == "0":
     logging.info('The filtered sectors are: '+str(filtered_sectors))
 
     logging.info('Generating the firms')
-    firm_table = defineFirmsFromGranularEcoData(
+    firm_table, firm_table_per_adminunit = defineFirmsFromGranularEcoData(
         filepath_adminunit_economic_data=filepaths['adminunit_economic_data'], 
         filepath_sector_cutoffs=filepaths['sector_cutoffs'],
         sectors_to_include=filtered_sectors,
@@ -161,7 +161,9 @@ if sys.argv[2] == "0":
     ### Create households
     logging.info('Defining the number of housesholds to generate and their purchase plan')
     household_table, household_sector_consumption = defineHouseholds(sector_table, filepaths['adminunit_demographic_data'], 
-        present_sectors, pop_density_cutoff, transport_nodes, time_resolution)
+        firm_table_per_adminunit, present_sectors, pop_density_cutoff, transport_nodes, time_resolution)
+    household_table, household_sector_consumption = addHouseholdsForFirms(firm_table, household_table, 
+        filepaths['adminunit_demographic_data'], sector_table, present_sectors)
     household_list = createHouseholds(household_table, household_sector_consumption)
     logging.info('Households generated')
 
@@ -238,6 +240,9 @@ else:
     household_list = tmp_data['household_list']
     country_list = tmp_data['country_list']
     logging.info('Firms, households, and countries generated from temp file.')
+    logging.info("Nb firms: "+str(len(firm_list)))
+    logging.info("Nb households: "+str(len(household_list)))
+    logging.info("Nb countries: "+str(len(country_list)))
 
 
 # Loacte firms and households on transport network
@@ -262,7 +267,7 @@ if sys.argv[3] == "0":
 
     logging.info('Households are selecting their retailers (domestic B2C flows)')
     for household in household_list:
-        household.select_suppliers(G, firm_list, firm_table, nb_suppliers_per_input, weight_localization)
+        household.select_suppliers(G, firm_list, firm_table, nb_suppliers_per_input, weight_localization_household)
 
     logging.info('Exporters are being selected by purchasing countries (export B2B flows)')
     logging.info('and trading countries are being connected (transit flows)')
@@ -270,10 +275,10 @@ if sys.argv[3] == "0":
         country.select_suppliers(G, firm_list, country_list, sector_table, transport_nodes)
 
     logging.info('Firms are selecting their domestic and international suppliers (import B2B flows) (domestic B2B flows).'+
-     ' Weight localisation is '+str(weight_localization))
+     ' Weight localisation is '+str(weight_localization_firm))
     import_code = sector_table.loc[sector_table['type']=='imports', 'sector'].iloc[0]
     for firm in firm_list:
-        firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_input, weight_localization, 
+        firm.select_suppliers(G, firm_list, country_list, nb_suppliers_per_input, weight_localization_firm, 
             import_code=import_code)
     logging.info('The nodes and edges of the supplier--buyer have been created')
     if export['sc_network_summary']:
@@ -302,19 +307,39 @@ logging.info('Compute the orders on each supplier--buyer link')
 setInitialSCConditions(T, G, firm_list, 
     country_list, household_list, initialization_mode="equilibrium")
 
-exit()
 
 ### Coupling transportation network T and production network G
+
 logging.info('The supplier--buyer graph is being connected to the transport network')
-logging.info('Each B2B and transit edge is being linked to a route of the transport network')
-transport_modes = pd.read_csv(filepaths['transport_modes'])
-logging.info('Routes for transit flows and import flows are being selected by trading countries finding routes to their clients')
-for country in country_list:
-    country.decide_initial_routes(G, T, transport_modes, account_capacity, monetary_units_in_model)
-logging.info('Routes for export flows and B2B domestic flows are being selected by Tanzanian firms finding routes to their clients')
-for firm in firm_list:
-    if firm.sector_type not in ['services', 'utility', 'transport']:
-        firm.decide_initial_routes(G, T, transport_modes, account_capacity, monetary_units_in_model)
+if sys.argv[4] == "0":
+    logging.info('Each B2B and transit edge is being linked to a route of the transport network')
+    transport_modes = pd.read_csv(filepaths['transport_modes'])
+    logging.info('Routes for transit flows and import flows are being selected by trading countries finding routes to their clients')
+    for country in country_list:
+        country.decide_initial_routes(G, T, transport_modes, account_capacity, monetary_units_in_model)
+    logging.info('Routes for export flows and B2B domestic flows are being selected by Tanzanian firms finding routes to their clients')
+    for firm in firm_list:
+        if firm.sector_type not in ['services', 'utility', 'transport']:
+            firm.decide_initial_routes(G, T, transport_modes, account_capacity, monetary_units_in_model)
+    # Save to tmp folder
+    tmp_data['transport_network'] = T
+    tmp_data['supply_chain_network'] = G
+    tmp_data['firm_list'] = firm_list
+    tmp_data['household_list'] = household_list
+    tmp_data['country_list'] = country_list
+    pickle_filename = os.path.join('tmp', 'embedded_supply_chain_pickle')
+    pickle.dump(tmp_data, open(pickle_filename, 'wb'))
+    logging.info('Embedded supply chains saved in tmp folder: '+pickle_filename)
+
+else:
+    pickle_filename = os.path.join('tmp', 'embedded_supply_chain_pickle')
+    tmp_data = pickle.load(open(pickle_filename, 'rb'))
+    G = tmp_data['supply_chain_network']
+    T = tmp_data['transport_network']
+    firm_list = tmp_data['firm_list']
+    household_list = tmp_data['household_list']
+    country_list = tmp_data['country_list']
+    logging.info('Embdded supply chain generated from temp file.')
 logging.info('The supplier--buyer graph is now connected to the transport network')
 
 logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
@@ -327,15 +352,15 @@ if disruption_analysis is None:
     # comments: not sure if the other initialization mode is (i) working and (ii) useful
     logging.info("Calculating the equilibrium")
     setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
-        country_list=country_list, households=households, initialization_mode="equilibrium")
+        country_list=country_list, household_list=household_list, initialization_mode="equilibrium")
 
     obs = Observer(firm_list, 0)
 
-    if export['district_sector_table']:
-        exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
+    # if export['district_sector_table']:
+    #     exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
 
     if export['firm_table'] or export['odpoint_table']:
-        exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepaths['roads_nodes'],
+        exportFirmODPointTable(firm_list, firm_table, household_table, filepaths['roads_nodes'],
     export_firm_table=export['firm_table'], export_odpoint_table=export['odpoint_table'], 
     export_folder=exp_folder)
 
@@ -351,7 +376,7 @@ if disruption_analysis is None:
     ### Run the simulation at the initial state
     logging.info("Simulating the initial state")
     runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
-        country_list=country_list, households=households,
+        country_list=country_list, household_list=household_list,
         disruption=None,
         congestion=congestion,
         route_optimization_weight=route_optimization_weight,
@@ -397,7 +422,7 @@ else:
         ### Set initial conditions and create observer
         logging.info("Calculating the equilibrium")
         setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
-            country_list=country_list, households=households, initialization_mode="equilibrium")
+            country_list=country_list, household_list=household_list, initialization_mode="equilibrium")
 
         Tfinal = duration_dic[disruption['duration']]
         obs = Observer(firm_list, Tfinal)
@@ -409,7 +434,7 @@ else:
             
         logging.info("Simulating the initial state")
         runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
-            country_list=country_list, households=households,
+            country_list=country_list, household_list=household_list,
             disruption=None,
             congestion=congestion,
             route_optimization_weight=route_optimization_weight,
@@ -428,11 +453,11 @@ else:
             cost_repercussion_mode=cost_repercussion_mode)
 
         if disruption == disruption_list[0]:
-            if export['district_sector_table']:
-                exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
+            # if export['district_sector_table']:
+            #     exportDistrictSectorTable(filtered_district_sector_table, export_folder=exp_folder)
 
             if export['firm_table'] or export['odpoint_table']:
-                exportFirmODPointTable(firm_list, firm_table, odpoint_table, filepaths['roads_nodes'],
+                exportFirmODPointTable(firm_list, firm_table, household_table, filepaths['roads_nodes'],
             export_firm_table=export['firm_table'], export_odpoint_table=export['odpoint_table'], 
             export_folder=exp_folder)
 
@@ -456,7 +481,7 @@ else:
         for t in range(1, Tfinal+1):
             logging.info('Time t='+str(t))
             runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
-                country_list=country_list, households=households,
+                country_list=country_list, household_list=household_list,
                 disruption=disruption,
                 congestion=congestion,
                 route_optimization_weight=route_optimization_weight,
@@ -476,9 +501,15 @@ else:
             logging.debug('End of t='+str(t))
 
             if (t > 1) and epsilon_stop_condition:
-                if (households.extra_spending <= epsilon_stop_condition) & \
-                   (households.consumption_loss <= epsilon_stop_condition):
-                    logging.info('Household extra spending and consumption loss are at pre-disruption value. '\
+                household_extra_spending = sum([household.extra_spending for household in household_list])
+                household_consumption_loss = sum([household.consumption_loss for household in household_list])
+                country_extra_spending = sum([country.extra_spending for country in country_list])
+                country_consumption_loss = sum([country.consumption_loss for country in country_list])
+                if (household_extra_spending <= epsilon_stop_condition) & \
+                   (household_consumption_loss <= epsilon_stop_condition) & \
+                   (country_extra_spending <= epsilon_stop_condition) & \
+                   (country_consumption_loss <= epsilon_stop_condition):
+                    logging.info('Household and conutry extra spending and consumption loss are at pre-disruption value. '\
                     +"Simulation stops.")
                     break
 
@@ -486,8 +517,8 @@ else:
         logging.info("Time loop completed, {:.02f} min".format(computation_time/60))
 
 
-        obs.evaluate_results(T, households, disruption, disruption_analysis['duration'],
-         per_firm=export['impact_per_firm'])
+        obs.evaluate_results(T, household_list, disruption, disruption_analysis['duration'],
+         epsilon_stop_condition, per_firm=export['impact_per_firm'])
 
         if export['time_series']:
             exportTimeSeries(obs, exp_folder)

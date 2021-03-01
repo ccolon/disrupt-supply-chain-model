@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def compareProductionPurchasePlans(firm_list, country_list, households):
+def compareProductionPurchasePlans(firm_list, country_list, household_list):
     # Create dictionary to map firm id and country id into sector
     dic_agent_id_to_sector = {firm.pid: firm.sector for firm in firm_list}
     for country in country_list:
@@ -21,7 +21,9 @@ def compareProductionPurchasePlans(firm_list, country_list, households):
     df_countries = df.groupby('input_sector')["tot_purchase_planned_by_countries"].sum()
  
     ## of households
-    df = pd.DataFrame({"tot_purchase_planned_by_households": households.purchase_plan})
+    df = pd.DataFrame({household.pid: household.purchase_plan for household in household_list})
+    df["tot_purchase_planned_by_households"] = df.sum(axis=1)
+    # df = pd.DataFrame({"tot_purchase_planned_by_households": households.purchase_plan})
     df['input_sector'] = df.index.map(dic_agent_id_to_sector)
     df_households = df.groupby('input_sector')["tot_purchase_planned_by_households"].sum()
 

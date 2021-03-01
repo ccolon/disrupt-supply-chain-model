@@ -35,7 +35,7 @@ def setInitialSCConditions(transport_network, sc_network, firm_list,
 
 
 def runOneTimeStep(transport_network, sc_network, firm_list, 
-    country_list, households, observer,
+    country_list, household_list, observer,
     disruption=None,
     congestion=False,
     route_optimization_weight="cost_per_ton",
@@ -60,12 +60,12 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         Transport network graph
     sc_network : networkx.DiGraph
         Supply chain network graph
-    firm_list : list of Firms
+    firm_list : list of Firm
         List of firms
-    country_list : list of Countries
+    country_list : list of Country
         List of countries
-    households : Households
-        Households
+    household_list : list of Household
+        List of households
     observer : Observer
         Observer
     disruption : dic
@@ -100,8 +100,8 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     
     allFirmsPlanPurchase(firm_list)
 
-    allAgentsSendPurchaseOrders(sc_network, firm_list, households, country_list)
-    
+    allAgentsSendPurchaseOrders(sc_network, firm_list, household_list, country_list)
+
     allFirmsProduce(firm_list)
     
     allAgentsDeliver(sc_network, firm_list, country_list, transport_network, 
@@ -143,12 +143,12 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         analyzeSupplyChainFlows(sc_network, firm_list, export_folder)
 
     
-    allAgentsReceiveProducts(sc_network, firm_list, households, 
+    allAgentsReceiveProducts(sc_network, firm_list, household_list, 
         country_list, transport_network)
     
     transport_network.update_road_state()
 
-    observer.collect_agent_data(firm_list, households, country_list, 
+    observer.collect_agent_data(firm_list, household_list, country_list, 
         time_step=time_step)
 
-    compareProductionPurchasePlans(firm_list, country_list, households)
+    compareProductionPurchasePlans(firm_list, country_list, household_list)
