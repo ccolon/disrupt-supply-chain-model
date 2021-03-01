@@ -41,6 +41,7 @@ class Observer(object):
         self.disrupted_edges = {}
         self.households_extra_spending = 0
         self.households_extra_local = 0
+        self.households_extra_spending_local = {}
         self.households_extra_spending_per_firm = {}
         self.spending_recovered = True
         self.households_consumption_loss = 0

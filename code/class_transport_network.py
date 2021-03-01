@@ -383,7 +383,7 @@ class TransportNetwork(nx.Graph):
             # If it exceeds capacity, add the capacity_burden to both the mode_weight and the capacity_weight
             if (self[edge[0]][edge[1]]['current_load'] > self[edge[0]][edge[1]]['capacity']):
                 logging.info('Edge '+str(edge)+" ("+self[edge[0]][edge[1]]['type']\
-                    +") has exceeded its capacity")
+                    +") has exceeded its capacity ("+str(self[edge[0]][edge[1]]['capacity'])+")")
                 self[edge[0]][edge[1]]["capacity_weight"] += capacity_burden
                 for mode_weight in self.mode_weights:
                     self[edge[0]][edge[1]][mode_weight] += capacity_burden

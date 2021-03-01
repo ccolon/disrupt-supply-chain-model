@@ -13,13 +13,14 @@ floodable_road_battambang = 3170
 tsubasa_bridge = 2001
 disruption_analysis = {
     "disrupt_nodes_or_edges": "edges",
+    "nodeedge_tested": "all",
     # "nodeedge_tested": ["primary", "trunk"],
     # "nodeedge_tested": [1487, 1462, 1525, 1424],
-    "nodeedge_tested": [tsubasa_bridge],
+    #"nodeedge_tested": [tsubasa_bridge],
     # "nodeedge_tested": os.path.join('input', input_folder, 'top_hh_loss_nodes.csv'),
     # "nodeedge_tested": ["Sihanoukville international port"],
     # "identified_by": "name",
-    "identified_by": "id",
+    #"identified_by": "id",
     # "identified_by": "class",
     "duration": 1
 }
@@ -43,7 +44,7 @@ export = {key: True for key in export.keys()}
 
 cost_repercussion_mode = "type1"
 
-duration_dic[1] = 1
+#duration_dic[1] = 1
 # logging_level = logging.DEBUG
 
 
@@ -76,7 +77,7 @@ export = {
     # Save firm-level impact results
     # It creates an "extra_spending.csv" file and an "extra_consumption.csv" file in the output folder
     # Each line is a simulation, it saves what was disrupted and the corresponding impact for each firm
-    "impact_per_firm": True,
+    "impact_per_firm": False,
 
     # Save aggregated time series
     # It creates an "aggregate_ts.csv" file in the output folder

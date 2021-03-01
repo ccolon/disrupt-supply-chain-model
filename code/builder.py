@@ -60,11 +60,13 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
         # Adapt capacity (given in year) to time resolution
         periods = {'day': 365, 'week': 52, 'month': 12, 'year': 1}
         time_resolution = "week"
+        edges['capacity'] = pd.to_numeric(edges['capacity'], errors="coerce")
         edges['capacity'] = edges['capacity'] / periods[time_resolution]
 
         # When there is no capacity, it means that there is no limitation
-        unlimited_capacity = 1e9 #tons per year
+        unlimited_capacity = 1e9 * periods[time_resolution] #tons per year
         edges.loc[edges['capacity'].isnull(), 'capacity'] = unlimited_capacity
+        print(edges['capacity'])
         # dic_capacity = {
         #     "roads": 1000000*52,
         #     "railways": 20000*52,
