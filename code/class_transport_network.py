@@ -206,7 +206,7 @@ class TransportNetwork(nx.Graph):
 
     
     def locate_firms_on_nodes(self, firm_list, transport_nodes):
-        firm.odpoint['firms_there'] = ""
+        transport_nodes['firms_there'] = ""
         for node_id in self.nodes:
             self.node[node_id]['firms_there'] = []
             # self.node[node_id]['households_there'] = []
@@ -223,6 +223,7 @@ class TransportNetwork(nx.Graph):
     
 
     def locate_households_on_nodes(self, household_list, transport_nodes):
+        transport_nodes['household_there'] = None
         for household in household_list:
             # self.node[household.odpoint]['household_id'] = household.pid
             self.node[household.odpoint]['household_there'] = household.pid
