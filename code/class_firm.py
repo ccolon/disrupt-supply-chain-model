@@ -804,7 +804,7 @@ class Firm(object):
             transport_network.transport_shipment(commercial_link)
             self.product_stock -= commercial_link.delivery
             # Print information
-            logging.debug("Firm "+str(self.pid)+": found an alternative route to "+
+            logging.info("Firm "+str(self.pid)+": found an alternative route to "+
                 str(commercial_link.buyer_id)+", it is costlier by "+
                 '{:.2f}'.format(100*relative_price_change_transport)+"%, price is "+
                 '{:.4f}'.format(commercial_link.price)+" instead of "+
@@ -812,7 +812,7 @@ class Firm(object):
         
         # If we do not find a route, then we do not deliver
         else:
-            logging.debug('Firm '+str(self.pid)+": because of disruption, "+
+            logging.info('Firm '+str(self.pid)+": because of disruption, "+
                 "there is no route between me and firm "+str(commercial_link.buyer_id))
             # We do not write how the input price would have changed
             commercial_link.price = commercial_link.eq_price

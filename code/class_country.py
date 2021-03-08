@@ -398,14 +398,14 @@ class Country(object):
 
             transport_network.transport_shipment(commercial_link)
             # Print information
-            logging.debug("Country "+str(self.pid)+": found an alternative route to client "+
+            logging.info("Country "+str(self.pid)+": found an alternative route to client "+
                 str(commercial_link.buyer_id)+", it is costlier by "+
                 '{:.0f}'.format(100*relative_price_change_transport)+"%, price is "+
                 '{:.4f}'.format(commercial_link.price)+" instead of "+
                 '{:.4f}'.format(commercial_link.eq_price))
         
         else:
-            logging.debug("Country "+str(self.pid)+": because of disruption, there is"+
+            logging.info("Country "+str(self.pid)+": because of disruption, there is"+
                 "no route between me and client "+str(commercial_link.buyer_id))
             # We do not write how the input price would have changed
             commercial_link.price = commercial_link.eq_price
