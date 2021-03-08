@@ -51,6 +51,7 @@ def exportFirmODPointTable(firm_list, firm_table, household_table, filepath_road
 
     if export_firm_table:
         firm_table.to_csv(os.path.join(export_folder, 'firm_table.csv'), index=False)
+        household_table.to_csv(os.path.join(export_folder, 'household_table.csv'), index=False)
     
     if export_odpoint_table:
         odpoint_table.to_csv(os.path.join(export_folder, 'odpoint_production_table.csv'), index=False)

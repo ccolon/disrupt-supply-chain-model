@@ -399,7 +399,7 @@ class Firm(object):
         self.total_order = sum([order for client_pid, order in self.order_book.items()])
         if print_info:
             if self.total_order == 0:
-                logging.warning('Firm '+str(self.pid)+' ('+self.sector+'): no one ordered to me')
+                logging.debug('Firm '+str(self.pid)+' ('+self.sector+'): no one ordered to me')
 
 
     def decide_production_plan(self):

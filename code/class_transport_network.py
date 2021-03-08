@@ -15,6 +15,7 @@ class TransportNetwork(nx.Graph):
         node_data['shipments'] = {}
         node_data['disruption_duration'] = 0
         node_data['firms_there'] = []
+        node_data['households_there'] = None
         node_data['type'] = 'road'
         self.add_node(node_id, **node_data)
         
@@ -204,20 +205,25 @@ class TransportNetwork(nx.Graph):
 
 
     
-    def locate_firms_on_nodes(self, firm_list):
+    def locate_firms_on_nodes(self, firm_list, household_list):
         for node_id in self.nodes:
             self.node[node_id]['firms_there'] = []
+            # self.node[node_id]['households_there'] = []
         for firm in firm_list:
-            if firm.odpoint != -1:
-                try:
-                    self.node[firm.odpoint]['firms_there'].append(firm.pid)
-                except KeyError:
-                    logging.error('Transport network has no node numbered: '+str(firm.odpoint))
+            self.node[firm.odpoint]['firms_there'].append(firm.pid)
+        # for household in household_list:
+        #     self.node[household.odpoint]['households_there'].append(household.pid)
+            # if firm.odpoint != -1:
+            #     try:
+            #         self.node[firm.odpoint]['firms_there'].append(firm.pid)
+            #     except KeyError:
+            #         logging.error('Transport network has no node numbered: '+str(firm.odpoint))
     
 
     def locate_households_on_nodes(self, household_list):
         for household in household_list:
-            self.node[household.odpoint]['household_id'] = household.pid
+            # self.node[household.odpoint]['household_id'] = household.pid
+            self.node[household.odpoint]['household_there'] = household.pid
 
     
     def provide_shortest_route(self, origin_node, destination_node, route_weight):
@@ -227,11 +233,11 @@ class TransportNetwork(nx.Graph):
         [(1,), (1,5), (5,), (5,8), (8,)]
         '''
         if (origin_node not in self.nodes):
-            logging.warning("Origin node "+str(origin_node)+" not in the available transport network")
+            logging.debug("Origin node "+str(origin_node)+" not in the available transport network")
             return None
 
         elif (destination_node not in self.nodes):
-            logging.warning("Destination node "+str(destination_node)+" not in the available transport network")
+            logging.debug("Destination node "+str(destination_node)+" not in the available transport network")
             return None
 
         elif nx.has_path(self, origin_node, destination_node):
@@ -241,7 +247,7 @@ class TransportNetwork(nx.Graph):
             return route
 
         else:
-            logging.warning("There is no path between "+str(origin_node)+" and "+str(destination_node))
+            logging.debug("There is no path between "+str(origin_node)+" and "+str(destination_node))
             return None
 
 

@@ -65,8 +65,8 @@ def loadTransportData(filepaths, transport_params, transport_mode, additional_ro
 
         # When there is no capacity, it means that there is no limitation
         unlimited_capacity = 1e9 * periods[time_resolution] #tons per year
-        edges.loc[edges['capacity'].isnull(), 'capacity'] = unlimited_capacity
-        print(edges['capacity'])
+        no_capacity_cond = (edges['capacity'].isnull()) | (edges['capacity'] == 0)
+        edges.loc[no_capacity_cond, 'capacity'] = unlimited_capacity
         # dic_capacity = {
         #     "roads": 1000000*52,
         #     "railways": 20000*52,
@@ -1515,12 +1515,12 @@ def defineDisruptionList(disruption_analysis, transport_network,
 
         else:
             if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
-                disruption_list = nodes.loc[
+                disruption_list = nodes.sort_values('id').loc[
                         nodes[disruption_analysis['identified_by']].isin(disruption_analysis['nodeedge_tested']), 
                         'id'
                     ].tolist()
             elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
-                disruption_list = edges.loc[
+                disruption_list = edges.sort_values('id').loc[
                         edges[disruption_analysis['identified_by']].isin(disruption_analysis['nodeedge_tested']), 
                         'id'
                     ].tolist()

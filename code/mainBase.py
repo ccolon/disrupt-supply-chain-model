@@ -108,10 +108,7 @@ logging.info("Total length of transport network is: "+
 for mode, km in km_per_mode.items():
     logging.info(mode+": {:.0f} km".format(km))
 logging.info('Nb of nodes: '+str(len(T.nodes))+', Nb of edges: '+str(len(T.edges)))
-# Export transport network
-if export['transport']:
-    transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.geojson"), driver='GeoJSON')
-    transport_edges.to_file(os.path.join(exp_folder, "transport_edges.geojson"), driver='GeoJSON')
+
 
 
 ### Create firms, households, and countries
@@ -249,7 +246,10 @@ else:
 T.locate_firms_on_nodes(firm_list)
 T.locate_households_on_nodes(firm_list)
 logging.info('Firms and household located on the transport network')
-
+# Export transport network
+if export['transport']:
+    transport_nodes.to_file(os.path.join(exp_folder, "transport_nodes.geojson"), driver='GeoJSON')
+    transport_edges.to_file(os.path.join(exp_folder, "transport_edges.geojson"), driver='GeoJSON')
 
 '''logging.info('Defining the final demand to each firm. time_resolution: '+str(time_resolution))
 firm_table = defineFinalDemand(firm_table, odpoint_table, 
