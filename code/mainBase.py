@@ -243,8 +243,8 @@ else:
 
 
 # Loacte firms and households on transport network
-T.locate_firms_on_nodes(firm_list)
-T.locate_households_on_nodes(household_list)
+T.locate_firms_on_nodes(firm_list, transport_nodes)
+T.locate_households_on_nodes(household_list, transport_nodes)
 logging.info('Firms and household located on the transport network')
 # Export transport network
 if export['transport']:

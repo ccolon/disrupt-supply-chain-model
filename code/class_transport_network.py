@@ -205,12 +205,14 @@ class TransportNetwork(nx.Graph):
 
 
     
-    def locate_firms_on_nodes(self, firm_list):
+    def locate_firms_on_nodes(self, firm_list, transport_nodes):
+        firm.odpoint['firms_there'] = ""
         for node_id in self.nodes:
             self.node[node_id]['firms_there'] = []
             # self.node[node_id]['households_there'] = []
         for firm in firm_list:
             self.node[firm.odpoint]['firms_there'].append(firm.pid)
+            transport_nodes.loc[transport_nodes['id']==firm.odpoint, "firms_there"] += (','+str(firm.pid))
         # for household in household_list:
         #     self.node[household.odpoint]['households_there'].append(household.pid)
             # if firm.odpoint != -1:
@@ -220,10 +222,11 @@ class TransportNetwork(nx.Graph):
             #         logging.error('Transport network has no node numbered: '+str(firm.odpoint))
     
 
-    def locate_households_on_nodes(self, household_list):
+    def locate_households_on_nodes(self, household_list, transport_nodes):
         for household in household_list:
             # self.node[household.odpoint]['household_id'] = household.pid
             self.node[household.odpoint]['household_there'] = household.pid
+            transport_nodes.loc[transport_nodes['id']==household.odpoint, "household_there"] = household.pid
 
     
     def provide_shortest_route(self, origin_node, destination_node, route_weight):
