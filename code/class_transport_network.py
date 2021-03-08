@@ -205,7 +205,7 @@ class TransportNetwork(nx.Graph):
 
 
     
-    def locate_firms_on_nodes(self, firm_list, household_list):
+    def locate_firms_on_nodes(self, firm_list):
         for node_id in self.nodes:
             self.node[node_id]['firms_there'] = []
             # self.node[node_id]['households_there'] = []
