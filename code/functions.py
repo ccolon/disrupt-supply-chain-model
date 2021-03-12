@@ -717,10 +717,11 @@ def agent_receive_shipment_and_pay(agent, commercial_link, transport_network):
 
     # If none is available, log it
     else:
-        logging.debug("Agent "+str(agent.pid)+
-            ": no shipment available for commercial link "+
-            str(commercial_link.pid)+' ('+commercial_link.product+')'
-        )
+        if commercial_link.delivery > 0:
+            logging.info("Agent "+str(agent.pid)+
+                ": no shipment available for commercial link "+
+                str(commercial_link.pid)+' ('+str(commercial_link.delivery)+' of '+commercial_link.product+')'
+            )
         quantity_delivered = 0
         price = 1
 

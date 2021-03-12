@@ -257,8 +257,9 @@ class Firm(object):
                 graph[supplier_object][self]['weight'] = sector_weight * supplier_weight
                 # The firm saves the name of the supplier, its sector, its weight (without I/O technical coefficient)
                 self.suppliers[supplier_id] = {'sector':sector_id, 'weight':supplier_weight}
-                # The supplier saves the name of the client, its sector. The share of sales cannot be calculated now
-                supplier_object.clients[self.pid] = {'sector':self.sector, 'share':0, 'share_transport':0}
+                # The supplier saves the name of the client, its sector, and distance to it. The share of sales cannot be calculated now
+                distance = self.distance_to_other(supplier_object)
+                supplier_object.clients[self.pid] = {'sector':self.sector, 'share':0, 'transport_share':0, 'distance':distance}
         
     
     def choose_route(self, transport_network, 
@@ -379,20 +380,30 @@ class Firm(object):
     def calculate_client_share_in_sales(self):
         # Only works if the order book was computed
         self.total_order = sum([order for client_pid, order in self.order_book.items()])
-        self.total_B2B_order = sum([order for client_pid, order in self.order_book.items() if client_pid != -1])
-        for client_pid, info in self.clients.items():
-            if self.total_order == 0:
+        total_distance = sum([info['distance'] for client_pid, info in self.clients.items()])
+        total_qty_km = sum([
+            info['distance'] * self.order_book[client_pid]
+            for client_pid, info in self.clients.items()
+        ])
+        # self.total_B2B_order = sum([order for client_pid, order in self.order_book.items() if client_pid != -1])
+        # If noone ordered to me, share is 0 (avoid division per 0)
+        if self.total_order == 0:
+            for client_pid, info in self.clients.items():
                 info['share'] = 0
-                info['share_transport'] = 0
-            else:
+                info['transport_share'] = 0
+
+        # If some clients ordered to me, but distance is 0 (no transport), then equal share of transport
+        elif total_qty_km == 0:
+            nb_active_clients = sum([order > 0 for client_pid, order in self.order_book.items()])
+            for client_pid, info in self.clients.items():
                 info['share'] = self.order_book[client_pid] / self.total_order
-            if self.total_B2B_order == 0:
-                info['share_transport'] = 0
-            else:
-                if client_pid == -1:
-                    info['share_transport'] = 0
-                else:
-                    info['share_transport'] = self.order_book[client_pid] / self.total_B2B_order
+                info['transport_share'] = 1 / nb_active_clients
+
+        # Otherwise, standard case
+        else:
+            for client_pid, info in self.clients.items():
+                info['share'] = self.order_book[client_pid] / self.total_order
+                info['transport_share'] = self.order_book[client_pid] * self.clients[client_pid]['distance'] / total_qty_km
         
     
     def aggregate_orders(self, print_info=False):
@@ -751,7 +762,7 @@ class Firm(object):
                 # Translate that into an increase in transport costs in the balance sheet
                 self.finance['costs']['transport'] += \
                     self.eq_finance['costs']['transport'] \
-                    * self.clients[commercial_link.buyer_id]['share'] \
+                    * self.clients[commercial_link.buyer_id]['transport_share'] \
                     * (1 + relative_cost_change)
                 relative_price_change_transport = \
                     self.eq_finance['costs']['transport'] \
@@ -800,16 +811,29 @@ class Firm(object):
                 total_relative_price_change = self.delta_price_input + relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
-            # With that, we deliver the shipment
-            transport_network.transport_shipment(commercial_link)
-            self.product_stock -= commercial_link.delivery
-            # Print information
-            logging.info("Firm "+str(self.pid)+": found an alternative route to "+
-                str(commercial_link.buyer_id)+", it is costlier by "+
-                '{:.2f}'.format(100*relative_price_change_transport)+"%, price is "+
-                '{:.4f}'.format(commercial_link.price)+" instead of "+
-                '{:.4f}'.format(commercial_link.eq_price*(1+self.delta_price_input)))
-        
+            # If the increase in transport is larger than 2, then we do not deliver the goods
+            if relative_price_change_transport > 2:
+                logging.info("Firm "+str(self.pid)+": found an alternative route to "+
+                    str(commercial_link.buyer_id)+", but it is costlier by "+
+                    '{:.2f}'.format(100*relative_price_change_transport)+"%, price would be "+
+                    '{:.4f}'.format(commercial_link.price)+" instead of "+
+                    '{:.4f}'.format(commercial_link.eq_price*(1+self.delta_price_input))+
+                    ' so I decide not to send it now.'
+                )
+                commercial_link.price = commercial_link.eq_price
+                commercial_link.current_route = 'none'
+                # commercial_link.delivery = 0
+            # Otherwise, we deliver
+            else:
+                transport_network.transport_shipment(commercial_link)
+                self.product_stock -= commercial_link.delivery
+                # Print information
+                logging.info("Firm "+str(self.pid)+": found an alternative route to "+
+                    str(commercial_link.buyer_id)+", it is costlier by "+
+                    '{:.2f}'.format(100*relative_price_change_transport)+"%, price is "+
+                    '{:.4f}'.format(commercial_link.price)+" instead of "+
+                    '{:.4f}'.format(commercial_link.eq_price*(1+self.delta_price_input))
+                )
         # If we do not find a route, then we do not deliver
         else:
             logging.info('Firm '+str(self.pid)+": because of disruption, "+

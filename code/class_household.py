@@ -1,5 +1,5 @@
 from functions import determine_nb_suppliers, select_supplier_from_list,\
-                agent_receive_products_and_pay
+                agent_receive_products_and_pay, calculate_distance_between_agents
 
 import random
 import pandas as pd
@@ -96,7 +96,10 @@ class Household(object):
                 graph[firm_list[retailer_id]][self]['weight'] = weight
                 self.purchase_plan[retailer_id] = weight * self.sector_consumption[sector]
                 self.retailers[retailer_id] = {'sector': sector, 'weight' : weight}
-                firm_list[retailer_id].clients[self.pid] = {'sector': "households", 'share':0} #The share of sales cannot be calculated now.
+                distance = calculate_distance_between_agents(self, firm_list[retailer_id])
+                firm_list[retailer_id].clients[self.pid] = {
+                    'sector': "households", 'share':0, 'transport_share':0, "distance": distance
+                } #The share of sales cannot be calculated now.
 
 
     def send_purchase_orders(self, graph):

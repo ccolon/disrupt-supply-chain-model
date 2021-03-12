@@ -1030,7 +1030,7 @@ def rescaleMonetaryValues(values, time_resolution="week", target_units="mUSD", i
 
 
 def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix, 
-    nodes, present_sectors, countries_to_include='all', 
+    transport_nodes, present_sectors, countries_to_include='all', 
     time_resolution="week", target_units="mUSD", input_units="USD"):
     """Create the countries
 
@@ -1108,13 +1108,18 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
         #     entry_point_table['country']==country, 'entry_point'
         # ].astype(int).tolist()
         # odpoint
-        odpoint = nodes.loc[nodes['special'] == country, "id"]
+        cond_country = transport_nodes['special'] == country
+        odpoint = transport_nodes.loc[cond_country, "id"]
+        lon = transport_nodes.geometry.x
+        lat = transport_nodes.geometry.y
         if len(odpoint) == 0:
             raise ValueError('No odpoint found for '+country)
         elif len(odpoint) > 2:
             raise ValueError('More than 1 odpoint for '+country)
         else:
             odpoint = odpoint.iloc[0]
+            lon = lon.iloc[0]
+            lat = lat.iloc[0]
 
         # imports, i.e., sales of countries
         qty_sold = import_table.loc[country,:]
@@ -1137,6 +1142,8 @@ def createCountries(filepath_imports, filepath_exports, filepath_transit_matrix,
                                 qty_sold=qty_sold,
                                 qty_purchased=qty_purchased,
                                 odpoint=odpoint,
+                                long=lon,
+                                lat=lat,
                                 transit_from=transit_from,
                                 transit_to=transit_to,
                                 supply_importance=supply_importance

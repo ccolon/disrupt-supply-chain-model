@@ -10,12 +10,12 @@ from functions import rescale_values, \
     identify_firms_in_each_sector,\
     identify_special_transport_nodes,\
     transformUSDtoTons, agent_decide_initial_routes,\
-    agent_receive_products_and_pay
+    agent_receive_products_and_pay, calculate_distance_between_agents
 
 
 class Country(object):
 
-    def __init__(self, pid=None, qty_sold=None, qty_purchased=None, odpoint=None, 
+    def __init__(self, pid=None, qty_sold=None, qty_purchased=None, odpoint=None, long=None, lat=None,
         purchase_plan=None, transit_from=None, transit_to=None, supply_importance=None, 
         usd_per_ton=None):
         # Instrinsic parameters
@@ -23,6 +23,8 @@ class Country(object):
         self.pid = pid
         self.usd_per_ton = usd_per_ton
         self.odpoint = odpoint
+        self.long = long
+        self.lat = lat
         
         # Parameter based on data
         # self.entry_points = entry_points or []
@@ -67,7 +69,7 @@ class Country(object):
                            buyer_id=self.pid))
             graph[selling_country_object][self]['weight'] = 1
             self.purchase_plan[selling_country_pid] = quantity
-            selling_country_object.clients[self.pid] = {'sector':self.pid, 'share':0}
+            selling_country_object.clients[self.pid] = {'sector':self.pid, 'share':0, 'transport_share':0}
 
 
     def select_suppliers(self, graph, firm_list, country_list, sector_table, transport_nodes):
@@ -127,7 +129,10 @@ class Country(object):
                 self.purchase_plan[supplier_id] = self.qty_purchased[sector] * weight
                 # The supplier saves the fact that it exports to this country. 
                 # The share of sales cannot be calculated now, we put 0 for the moment
-                firm_list[supplier_id].clients[self.pid] = {'sector':self.pid, 'share':0}
+                distance = calculate_distance_between_agents(self, firm_list[supplier_id])
+                firm_list[supplier_id].clients[self.pid] = {
+                    'sector':self.pid, 'share':0, 'transport_share':0, 'distance':distance
+                }
             
             
     def send_purchase_orders(self, graph):
@@ -396,14 +401,29 @@ class Country(object):
                 total_relative_price_change = relative_price_change_transport
                 commercial_link.price = commercial_link.eq_price * (1 + total_relative_price_change)
 
-            transport_network.transport_shipment(commercial_link)
-            # Print information
-            logging.info("Country "+str(self.pid)+": found an alternative route to client "+
-                str(commercial_link.buyer_id)+", it is costlier by "+
-                '{:.0f}'.format(100*relative_price_change_transport)+"%, price is "+
-                '{:.4f}'.format(commercial_link.price)+" instead of "+
-                '{:.4f}'.format(commercial_link.eq_price))
+            # If there is an alternative route but it is too expensive
+            if relative_price_change_transport > 2:
+                logging.info("Country "+str(self.pid)+": found an alternative route to "+
+                    str(commercial_link.buyer_id)+", but it is costlier by "+
+                    '{:.2f}'.format(100*relative_price_change_transport)+"%, price would be "+
+                    '{:.4f}'.format(commercial_link.price)+" instead of "+
+                    '{:.4f}'.format(commercial_link.eq_price*(1+self.delta_price_input))+
+                    ' so I decide not to send it now.'
+                )
+                commercial_link.price = commercial_link.eq_price
+                commercial_link.current_route = 'none'
+                commercial_link.delivery = 0
+
+            # If there is an alternative route which is not too expensive
+            else:
+                transport_network.transport_shipment(commercial_link)
+                logging.info("Country "+str(self.pid)+": found an alternative route to client "+
+                    str(commercial_link.buyer_id)+", it is costlier by "+
+                    '{:.0f}'.format(100*relative_price_change_transport)+"%, price is "+
+                    '{:.4f}'.format(commercial_link.price)+" instead of "+
+                    '{:.4f}'.format(commercial_link.eq_price))
         
+        # It there is no alternative route
         else:
             logging.info("Country "+str(self.pid)+": because of disruption, there is"+
                 "no route between me and client "+str(commercial_link.buyer_id))
