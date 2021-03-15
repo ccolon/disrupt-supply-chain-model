@@ -416,6 +416,7 @@ else:
 
     ### Disruption Loop
     for disruption in disruption_list:
+        logging.info(' ')
         logging.info("Simulating disruption "+str(disruption))
         t0 = time.time()
 

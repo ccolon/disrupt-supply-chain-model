@@ -78,9 +78,9 @@ class CommercialLink(object):
             self.alternative_route_time_cost = route_time_cost
             self.alternative_route_cost_per_ton = cost_per_ton
 
-            switching_cost = 0.05
-            if self.alternative_route_mode != self.route_mode:
-                self.alternative_route_cost_per_ton * (1 + switching_cost)
+            # switching_cost = 0.05
+            # if self.alternative_route_mode != self.route_mode:
+            #     self.alternative_route_cost_per_ton * (1 + switching_cost)
 
         else:
             raise ValueError("'main_or_alternative' is not in ['main', 'alternative']")

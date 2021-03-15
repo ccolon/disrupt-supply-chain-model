@@ -381,6 +381,10 @@ class Country(object):
                 new_transport_bill = commercial_link.delivery_in_tons * commercial_link.alternative_route_cost_per_ton
                 normal_transport_bill = commercial_link.delivery_in_tons * commercial_link.route_cost_per_ton
                 relative_cost_change = max(new_transport_bill - normal_transport_bill, 0)/normal_transport_bill
+                # If switched transport mode, add switching cost
+                switching_cost = 0.5
+                if commercial_link.alternative_route_mode != commercial_link.route_mode:
+                    relative_cost_change = relative_cost_change + switching_cost
                 # Translate that into an increase in transport costs in the balance sheet
                 relative_price_change_transport = 0.2 * relative_cost_change
                 total_relative_price_change = relative_price_change_transport
