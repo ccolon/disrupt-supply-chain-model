@@ -151,7 +151,7 @@ if sys.argv[2] == "0":
     n = len(firm_list)
     present_sectors = list(set([firm.sector for firm in firm_list]))
     present_sectors.sort()
-    flow_types_to_export = present_sectors+['domestic_B2B', 'transit', 'import', 'export', 'total']
+    flow_types_to_export = present_sectors+['domestic_B2C', 'domestic_B2B', 'transit', 'import', 'export', 'total']
     logging.info('Firm_list created, size is: '+str(n))
     logging.info('Sectors present are: '+str(present_sectors))
 

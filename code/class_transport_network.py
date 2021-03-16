@@ -469,17 +469,20 @@ class TransportNetwork(nx.Graph):
         for edge in self.edges():
             if self[edge[0]][edge[1]]['type'] != 'virtual':
                 for flow_type in flow_types:
+                    # either total
                     if flow_type == 'total':
                         self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
                             shipment['quantity'] 
                             for shipment in self[edge[0]][edge[1]]["shipments"].values()
                         ])
-                    elif flow_type in ['domestic_B2B', 'import', 'export', 'transit']:
+                    # or flow category
+                    elif flow_type in ['domestic_B2C', 'domestic_B2B', 'import', 'export', 'transit']:
                         self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
                             shipment['quantity'] 
                             for shipment in self[edge[0]][edge[1]]["shipments"].values() 
                             if shipment['flow_category'] == flow_type
                         ])
+                    # or product type
                     else: 
                         self[edge[0]][edge[1]]['flow_'+flow_type] = sum([
                             shipment['quantity'] 
