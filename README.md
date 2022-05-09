@@ -103,10 +103,8 @@ A yaml file `transport_parameters.yaml` with the following structure. It needs t
 	    paved: 0.053
 	    unpaved: 0.1
 	  railways: 0.04
-	  Strengthening p4-74
-	  # in Africa, according to Rail Transport and Firm Productivity Study (Martin, 2017), 0.03 - 0.06 ton/km
-	  waterways: 0.029 #from JICA (2016) International Logistics Function Strengthening.
-	  maritime: 0.0017 #see excel
+	  waterways: 0.029
+	  maritime: 0.0017
 
 	loading_cost_per_ton: #USD/ton
 	  roads-waterways: 2.2
