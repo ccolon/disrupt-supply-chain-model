@@ -345,6 +345,11 @@ logging.info('The supplier--buyer graph is now connected to the transport networ
 logging.info("Initialization completed, "+str((time.time()-t0)/60)+" min")
 
 
+
+
+######################################################
+######################################################
+######################################################
 if disruption_analysis is None:
     logging.info("No disruption. Simulation of the initial state")
     t0 = time.time()
@@ -377,7 +382,7 @@ if disruption_analysis is None:
     logging.info("Simulating the initial state")
     runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
         country_list=country_list, household_list=household_list,
-        disruption=None,
+        disruptions=None,
         congestion=congestion,
         route_optimization_weight=route_optimization_weight,
         explicit_service_firm=explicit_service_firm,
@@ -400,7 +405,143 @@ if disruption_analysis is None:
     logging.info("Simulation completed, "+str((time.time()-t0)/60)+" min")
 
 
-else:
+
+
+######################################################
+######################################################
+######################################################
+elif disruption_analysis['type'] == "compound":
+    logging.info('Compound events simulation')
+    t0 = time.time()
+
+    logging.info("Calculating the equilibrium")
+    setInitialSCConditions(transport_network=T, sc_network=G, firm_list=firm_list, 
+        country_list=country_list, household_list=household_list, initialization_mode="equilibrium")
+
+    compound_duration = max([event['start_time']+event['duration'] for event in disruption_analysis['events']])
+    Tfinal = duration_dic[compound_duration]
+    obs = Observer(firm_list, Tfinal)
+    obs.disruption_time = 1 # time of first disruption
+
+    logging.info("Simulating the initial state")
+    runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
+        country_list=country_list, household_list=household_list,
+        disruptions=None,
+        congestion=congestion,
+        route_optimization_weight=route_optimization_weight,
+        explicit_service_firm=explicit_service_firm,
+        propagate_input_price_change=propagate_input_price_change,
+        rationing_mode=rationing_mode,
+        observer=obs,
+        time_step=0,
+        export_folder=exp_folder,
+        export_flows=export['flows'], 
+        flow_types_to_export = flow_types_to_export,
+        transport_edges = transport_edges,
+        export_sc_flow_analysis=export['sc_flow_analysis'],
+        monetary_unit_transport_cost="USD", 
+        monetary_unit_flow=monetary_units_in_model,
+        cost_repercussion_mode=cost_repercussion_mode)
+
+    logging.info("Do initial exports")
+    if export['firm_table'] or export['odpoint_table']:
+        exportFirmODPointTable(firm_list, firm_table, household_table, filepaths['roads_nodes'],
+    export_firm_table=export['firm_table'], export_odpoint_table=export['odpoint_table'], 
+    export_folder=exp_folder)
+
+    if export['country_table']:
+        exportCountryTable(country_list, export_folder=exp_folder)
+
+    if export['edgelist_table']:
+        exportEdgelistTable(supply_chain_network=G, export_folder=exp_folder)
+
+    if export['inventories']:
+        exportInventories(firm_list, export_folder=exp_folder)
+
+    logging.info(str(len(disruption_analysis['events']))+' disruption events will occur.')
+    logging.info('Simulation will last at max '+str(Tfinal)+' time steps.')
+
+    compound_disruption = [
+        defineDisruptionList(event, transport_network=T, 
+                nodes=transport_nodes, edges=transport_edges,
+                nodeedge_tested_topn=nodeedge_tested_topn, nodeedge_tested_skipn=nodeedge_tested_skipn
+            )[0]
+        for event in disruption_analysis['events']
+    ]
+
+    for disruption in compound_disruption:
+        logging.info('A disruption will occur at time '+str(disruption['start_time'])+', it will affect '+
+                     str(len(disruption['node']))+' nodes and '+
+                     str(len(disruption['edge']))+' edges for '+
+                     str(disruption['duration']) +' time steps.')
+
+    logging.info("Starting time loop")
+    for t in range(1, Tfinal+1):
+        logging.info('Time t='+str(t))
+        runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
+            country_list=country_list, household_list=household_list,
+            disruptions=compound_disruption,
+            congestion=congestion,
+            route_optimization_weight=route_optimization_weight,
+            explicit_service_firm=explicit_service_firm,
+            propagate_input_price_change=propagate_input_price_change,
+            rationing_mode=rationing_mode,
+            observer=obs,
+            time_step=t,
+            export_folder=exp_folder,
+            export_flows=export['flows'], 
+            flow_types_to_export=flow_types_to_export,
+            transport_edges = transport_edges,
+            export_sc_flow_analysis=False,
+            monetary_unit_transport_cost="USD", 
+            monetary_unit_flow=monetary_units_in_model,
+            cost_repercussion_mode=cost_repercussion_mode)
+        logging.debug('End of t='+str(t))
+
+        if (t > max([event['start_time'] for event in compound_disruption])) and epsilon_stop_condition:
+            household_extra_spending = sum([household.extra_spending for household in household_list])
+            household_consumption_loss = sum([household.consumption_loss for household in household_list])
+            country_extra_spending = sum([country.extra_spending for country in country_list])
+            country_consumption_loss = sum([country.consumption_loss for country in country_list])
+            if (household_extra_spending <= epsilon_stop_condition) & \
+               (household_consumption_loss <= epsilon_stop_condition) & \
+               (country_extra_spending <= epsilon_stop_condition) & \
+               (country_consumption_loss <= epsilon_stop_condition):
+                logging.info('Household and conutry extra spending and consumption loss are at pre-disruption value. '\
+                +"Simulation stops.")
+                break
+
+    computation_time = time.time()-t0
+    logging.info("Time loop completed, {:.02f} min".format(computation_time/60))
+
+    disrupted_nodes = [event['node'] for event in compound_disruption]
+    disrupted_nodes = [item for sublist in disrupted_nodes for item in sublist]
+    obs.evaluate_results(T, household_list, disrupted_nodes,
+     epsilon_stop_condition, per_firm=export['impact_per_firm'])
+
+    if export['time_series']:
+        exportTimeSeries(obs, exp_folder)
+
+    if export['criticality']:
+        writeCriticalityResults(criticality_export_file, obs, disruption, 
+            disruption_analysis['duration'], computation_time)
+
+    if export['impact_per_firm']:
+        writeResPerFirmResults(extra_spending_export_file, 
+            missing_consumption_export_file, obs, disruption)
+
+    # if export['agent_data']:
+    #     exportAgentData(obs, export_folder=exp_folder)
+
+    del obs
+
+    exit()
+
+
+######################################################
+######################################################
+######################################################
+elif disruption_analysis['type'] == 'criticality':
     logging.info("Criticality analysis. Defining the list of disruptions")
     disruption_list = defineDisruptionList(disruption_analysis, transport_network=T, 
         nodes=transport_nodes, edges=transport_edges,
@@ -436,7 +577,7 @@ else:
         logging.info("Simulating the initial state")
         runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
             country_list=country_list, household_list=household_list,
-            disruption=None,
+            disruptions=None,
             congestion=congestion,
             route_optimization_weight=route_optimization_weight,
             explicit_service_firm=explicit_service_firm,
@@ -471,9 +612,9 @@ else:
             if export['inventories']:
                 exportInventories(firm_list, export_folder=exp_folder)
 
-        obs.disruption_time = 1
+        obs.disruption_time = disruption['start_time']
         logging.info('Simulation will last '+str(Tfinal)+' time steps.')
-        logging.info('A disruption will occur at time 1, it will affect '+
+        logging.info('A disruption will occur at time '+str(disruption['start_time'])+', it will affect '+
                      str(len(disruption['node']))+' nodes and '+
                      str(len(disruption['edge']))+' edges for '+
                      str(disruption['duration']) +' time steps.')
@@ -483,7 +624,7 @@ else:
             logging.info('Time t='+str(t))
             runOneTimeStep(transport_network=T, sc_network=G, firm_list=firm_list, 
                 country_list=country_list, household_list=household_list,
-                disruption=disruption,
+                disruptions=[disruption],
                 congestion=congestion,
                 route_optimization_weight=route_optimization_weight,
                 explicit_service_firm=explicit_service_firm,
@@ -518,8 +659,10 @@ else:
         logging.info("Time loop completed, {:.02f} min".format(computation_time/60))
 
 
-        obs.evaluate_results(T, household_list, disruption, disruption_analysis['duration'],
-         epsilon_stop_condition, per_firm=export['impact_per_firm'])
+        # obs.evaluate_results(T, household_list, disruption, disruption_analysis['duration'],
+        #  epsilon_stop_condition, per_firm=export['impact_per_firm'])
+        obs.evaluate_results(T, household_list, disruption['node'],
+        epsilon_stop_condition, per_firm=export['impact_per_firm'])
 
         if export['time_series']:
             exportTimeSeries(obs, exp_folder)

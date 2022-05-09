@@ -36,7 +36,7 @@ def setInitialSCConditions(transport_network, sc_network, firm_list,
 
 def runOneTimeStep(transport_network, sc_network, firm_list, 
     country_list, household_list, observer,
-    disruption=None,
+    disruptions=None,
     congestion=False,
     route_optimization_weight="cost_per_ton",
     explicit_service_firm=True,
@@ -68,7 +68,7 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
         List of households
     observer : Observer
         Observer
-    disruption : dic
+    disruptions : list of dic
         Dictionary {'node':disrupted node id, 'node':disrupted edge id, 'duration':disruption duration}
     congestion : Boolean
         Whether or not to measure congestion
@@ -91,8 +91,10 @@ def runOneTimeStep(transport_network, sc_network, firm_list,
     """
     transport_network.reset_current_loads(route_optimization_weight)
 
-    if (disruption is not None) and (time_step == 1):
-        transport_network.disrupt_roads(disruption)
+    if (disruptions is not None):
+        for event in disruptions:
+            if time_step == event['start_time']:
+                transport_network.disrupt_roads(event)
 
     allFirmsRetrieveOrders(sc_network, firm_list)
 

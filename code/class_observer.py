@@ -16,7 +16,7 @@ class Observer(object):
         self.households = []
         self.countries = []
         sector_list = list(set([firm.sector for firm in firm_list]))
-        self.disruption_time = 1
+        self.disruption_time = 1 #time of first disruption
         self.production = pd.DataFrame(index=range(0,Tfinal+1), 
                                    columns=["firm_"+str(firm.pid) for firm in firm_list]+['total'], 
                                    data=0)
@@ -280,7 +280,7 @@ class Observer(object):
     
         
     def evaluate_results(self, transport_network, household_list, 
-        disruption, disruption_duration, epsilon_stop_condition, per_firm=False):
+        disrupted_nodes, epsilon_stop_condition, per_firm=False):
 
         # parameter (should be in input)
         initial_time_step = 0
@@ -364,7 +364,8 @@ class Observer(object):
         if per_firm:
             epsilon = 1e-6
             firm_id_in_disrupted_nodes = [
-                firm_id for disrupted_node in disruption['node'] 
+                # firm_id for disrupted_node in disruption['node'] 
+                firm_id for disrupted_node in disrupted_nodes
                 for firm_id in transport_network.node[disrupted_node]['firms_there']
             ]
             # spending

@@ -1483,9 +1483,36 @@ def extractEdgeList(graph):
     return dic_commercial_links
 
 
+
+def identifyNodeEdgeIds(nodes, edges, node_or_edge, attribute, values):
+    if node_or_edge == "nodes":
+        return nodes.sort_values('id').loc[
+                nodes[attribute].isin(values), 
+                'id'
+            ].tolist()
+    elif node_or_edge == "edges":
+        return edges.sort_values('id').loc[
+                edges[attribute].isin(values), 
+                'id'
+            ].tolist()
+    else:
+        raise ValueError("node_or_edge should be 'nodes' or 'edges'")
+
+
+
 def defineDisruptionList(disruption_analysis, transport_network, 
     nodes, edges, nodeedge_tested_topn=None, nodeedge_tested_skipn=None):
     """Create list of infrastructure to disrupt
+
+    disruption_analysis should contain "nodeedge_tested". It can be of different kind.
+    - if it is a string, it should be the filepath to a csv with the ids of the nodeedge to test
+      in that case, one line = one disruption
+    - if it is 'all', we go and take all nodeedge id. One id = one disruption.
+    - if it is a list, then it depends on the items.
+        - if the list is made of string or ids, then it is used to select the appropriate nodeedge
+          each nodeedge is a different disruption
+        - if the list is made of list, then everyinthing within a sublist will be disrupted together.
+          that means one sublist = one disruption
 
     Parameters
     ----------
@@ -1514,25 +1541,30 @@ def defineDisruptionList(disruption_analysis, transport_network,
     if disruption_analysis is None:
         raise ValueError("'disruption_analysis' is None, cannot define the disruption list")
 
-    # if a list is directly provided, then it is the list
+    # If 
+    # If a list is provided, we suppose that it is the list of ids to be disrupted
     if isinstance(disruption_analysis['nodeedge_tested'], list):
-        # if a list of list, then it is group of id to be disrupted together
+        # If each item of the list is a list itself, it is the group of ids to be disrupted together
         if isinstance(disruption_analysis['nodeedge_tested'][0], list):
-            disruption_list = disruption_analysis['nodeedge_tested']
+            disruption_list = [
+                identifyNodeEdgeIds(
+                    nodes, edges, 
+                    node_or_edge=disruption_analysis['disrupt_nodes_or_edges'], 
+                    attribute=disruption_analysis['identified_by'], 
+                    values=item
+                )
+                for item in disruption_analysis["nodeedge_tested"]
+            ]
 
+        # Otherwise, we selected the corresponding ids based on what is used to identify them
+        # (sorry very badly explained)
         else:
-            if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
-                disruption_list = nodes.sort_values('id').loc[
-                        nodes[disruption_analysis['identified_by']].isin(disruption_analysis['nodeedge_tested']), 
-                        'id'
-                    ].tolist()
-            elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
-                disruption_list = edges.sort_values('id').loc[
-                        edges[disruption_analysis['identified_by']].isin(disruption_analysis['nodeedge_tested']), 
-                        'id'
-                    ].tolist()
-            else:
-                raise ValueError("disruption_analysis['disrupt_nodes_or_edges'] should be 'nodes' or 'edges'")
+            disruption_list = identifyNodeEdgeIds(
+                nodes, edges, 
+                node_or_edge=disruption_analysis['disrupt_nodes_or_edges'], 
+                attribute=disruption_analysis['identified_by'], 
+                values=disruption_analysis["nodeedge_tested"]
+            )
 
     # if 'all' is indicated, need to retrieve all node or edge ids from the transport network
     elif disruption_analysis['nodeedge_tested'] == 'all':
@@ -1569,20 +1601,41 @@ def defineDisruptionList(disruption_analysis, transport_network,
     if isinstance(nodeedge_tested_skipn, int):
         disruption_list = disruption_list[nodeedge_tested_skipn:]
 
-    # reformat disruption list. It is a list of dic
-    # [{"node":[1,2,3], "edge"=[], "duration"=2}, {"node":[4], "edge"=[], "duration"=1}]
+    #######
+    # Then we reformat the disruption list. It is a list of dic
+    # [{"node":[1,2,3], "edge":[], "duration":2, "start_time":1}, {"node":[4], "edge":[], "duration":1, "start_time":1}]
     if disruption_analysis['disrupt_nodes_or_edges'] == "nodes":
         disruption_list = [
-            {"node":disrupted_stuff, "edge":[], "duration":disruption_analysis["duration"]}
+            {
+                "node": disrupted_stuff, 
+                "edge": [], 
+                "duration": disruption_analysis["duration"], 
+                "start_time": disruption_analysis["start_time"]
+            }
             if isinstance(disrupted_stuff, list)
-            else {"node":[disrupted_stuff], "edge":[], "duration":disruption_analysis["duration"]}
+            else {
+                "node": [disrupted_stuff],
+                "edge":[], 
+                "duration":disruption_analysis["duration"], 
+                "start_time": disruption_analysis["start_time"]
+            }
             for disrupted_stuff in disruption_list
         ]
     elif disruption_analysis['disrupt_nodes_or_edges'] == "edges":
         disruption_list = [
-            {"node":[], "edge":disrupted_stuff, "duration":disruption_analysis["duration"]}
+            {
+                "node": [], 
+                "edge": disrupted_stuff, 
+                "duration": disruption_analysis["duration"], 
+                "start_time": disruption_analysis["start_time"]
+            }
             if isinstance(disrupted_stuff, list)
-            else {"node":[], "edge":[disrupted_stuff], "duration":disruption_analysis["duration"]}
+            else {
+                "node": [], 
+                "edge": [disrupted_stuff], 
+                "duration": disruption_analysis["duration"], 
+                "start_time": disruption_analysis["start_time"]
+            }
             for disrupted_stuff in disruption_list
         ]
 
