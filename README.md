@@ -1,4 +1,4 @@
-# DisruptSC Model: Tanzania version
+# DisruptSC Model: Tanzania 2020 version
 
 This is the first version of the DisruptSC model. It was applied to the United Republic of Tanzania; see [this report](https://openknowledge.worldbank.org/handle/10986/31909) and [this paper](https://www.nature.com/articles/s41893-020-00649-4).
 
