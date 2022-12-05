@@ -7,11 +7,12 @@ from class_commerciallink import CommercialLink
 
 class Households(object):
 
-    def __init__(self, purchase_plan=None, final_demand_per_sector=None):
+    def __init__(self, final_demand=1, purchase_plan=None, final_demand_per_sector=None):
         # Intrinsic parameters
         self.pid = -1
-        self.odpoint = -1
+        self.location = -1
         # Parameters depending on data and network
+        self.final_demand = final_demand
         self.final_demand_per_sector = final_demand_per_sector or {}
         self.purchase_plan = purchase_plan or {}
         self.retailers = {}
@@ -39,20 +40,6 @@ class Households(object):
         self.consumption_loss_per_sector = {key: 0 for key, val in self.final_demand_per_sector.items()}
     
     
-    def initialize_var_on_purchase_plan(self):
-        if len(self.purchase_plan) == 0:
-            logging.warn("Households initialize variables based on purchase plan, "
-                +"but it is empty.")
-
-        self.consumption = self.purchase_plan
-        self.tot_consumption = sum(list(self.purchase_plan.values()))
-        self.spending = self.consumption
-        self.tot_spending = self.tot_consumption
-        self.extra_spending_per_sector = {
-            sector: 0 for sector in self.extra_spending_per_sector.keys()
-        }
-
-
     def select_suppliers(self, graph, firm_list, mode='inputed'):
         if mode=='equal':
             for firm in firm_list:
@@ -60,7 +47,6 @@ class Households(object):
                                object=CommercialLink(
                                    pid=str(firm.pid)+'to'+str(self.pid),
                                    product=firm.sector,
-                                   category="domestic_B2C",
                                    supplier_id=firm.pid,
                                    buyer_id=self.pid)
                               )
@@ -143,29 +129,26 @@ class Households(object):
             quantity_delivered = graph[edge[0]][self]['object'].delivery
             self.consumption[edge[0].pid] = quantity_delivered
             self.tot_consumption += quantity_delivered
-            # Update the price and pay
+            # Get the price and pay
             price = graph[edge[0]][self]['object'].price
             graph[edge[0]][self]['object'].payment = quantity_delivered * price
-            # Measure spending
             self.spending[edge[0].pid] = quantity_delivered * price
             self.tot_spending += quantity_delivered * price
-            # Increment extra spending and consumption loss
-            self.extra_spending += quantity_delivered * \
-                                (price - graph[edge[0]][self]['object'].eq_price)
+            # Increment extra spending
+            self.extra_spending += quantity_delivered * (price - graph[edge[0]][self]['object'].eq_price)
             # Increment consumption loss
-            consum_loss = (self.purchase_plan[edge[0].pid] - quantity_delivered) * \
-                        (graph[edge[0]][self]['object'].eq_price)
-            self.consumption_loss += consum_loss
-            # Log if there is undelivered goods
+            consum_loss = (self.purchase_plan[edge[0].pid] - quantity_delivered) * (graph[edge[0]][self]['object'].eq_price)
             if consum_loss >= 1e-6:
-                logging.debug("Household: Firm "+str(edge[0].pid)+" supposed to deliver "+
-                    str(self.purchase_plan[edge[0].pid])+ " but delivered "+
-                    str(quantity_delivered))
+                if True:
+                    logging.debug("Household: Firm "+str(edge[0].pid)+" supposed to deliver "+str(self.purchase_plan[edge[0].pid])+ " but delivered "+str(quantity_delivered))
+                self.consumption_loss += consum_loss
 
         
 
     def print_info(self):
         print("\nHouseholds:")
-        print("final_demand_per_sector:", str(self.final_demand_per_sector))
+        print("final_demand:", self.final_demand)
         print("purchase_plan:", self.purchase_plan)
         print("consumption:", self.consumption)
+
+        
