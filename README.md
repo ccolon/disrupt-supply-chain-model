@@ -1,5 +1,7 @@
 # DisruptSC Model: Tanzania 2020 version
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7401053.svg)](https://doi.org/10.5281/zenodo.7401053)
+
 This is the first version of the DisruptSC model. It was applied to the United Republic of Tanzania; see [this report](https://openknowledge.worldbank.org/handle/10986/31909) and [this paper](https://www.nature.com/articles/s41893-020-00649-4).
 
 ## License
