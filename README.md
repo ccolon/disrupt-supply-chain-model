@@ -1,6 +1,6 @@
 # DisruptSC Model: Cambodia 2022 version
 
-This is the second version of the DisruptSC model. It was applied to Cambodia.
+This is the second version of the DisruptSC model. It was applied to Cambodia. Note that input files are not provided with this release.
 
 ## License
 
@@ -40,12 +40,24 @@ In this version, the user can create different sets of inputs files by creating 
 
 By setting the parameter `input_folder` to, say, `tanzania_2020`, the model will read the input files from the corresponding directory, following the filepaths.
 
-Each directory should have the following subdirectories
+Each input directory should have the following subdirectories
 - Demand
 - Disruption (optional)
 - Supply
 - Trade
 - Transport
+
+E.g.,
+- input
+  - cambodia
+    - Demand
+      - *input files* 
+    - Supply
+      - *input files* 
+    - Trade
+      - *input files* 
+    - Transport
+      - *input files* 
 
 For each simulation, a subfolder is automatically created in the `output` folder, in a subdirectory with the same name as the `input_folder`, e.g., `tanzania_2020`, and filled with the output files. E.g.,
 - output
