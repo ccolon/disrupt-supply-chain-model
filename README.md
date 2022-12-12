@@ -4,7 +4,7 @@ This is the second version of the DisruptSC model. It was applied to Cambodia. N
 
 ## License
 
-This model is published under the CC BY-NC License. The text of this license can be found [here](https://creativecommons.org/licenses/by-nc/4.0/legalcode). The explanation of the license can be found [here](https://creativecommons.org/licenses/by-nc/4.0/deed.en).
+This model is published under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International Public License, **CC BY-NC** License. The text of this license can be found [here](https://creativecommons.org/licenses/by-nc/4.0/legalcode). The explanation of the license can be found [here](https://creativecommons.org/licenses/by-nc/4.0/deed.en).
 
 ## Installation
 
