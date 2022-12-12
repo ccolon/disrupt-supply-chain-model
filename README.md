@@ -1,5 +1,7 @@
 # DisruptSC Model: Cambodia 2022 version
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7427207.svg)](https://doi.org/10.5281/zenodo.7427207)
+
 This is the second version of the DisruptSC model. It was applied to Cambodia. Note that input files are not provided with this release.
 
 ## License
